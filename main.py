@@ -1,9 +1,9 @@
+from Config.config import POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH
 from Excecute_Power_Shell_Script import ExecPsCode as ps
 from BusinessLogic.Business_Logic import BusinessLogic as bl
 from Report.Excel_Writer import ExcelWriter as ew
 
-run_ps = ps(r'C:\Users\ciro.andreano\Desktop\doValueExcelExplorer\doValueExcelExplorer\ExportMCode.ps1')
-
+run_ps = ps(POWERSHELL_SCRIPT_PATH)
 return_code, output, error = run_ps.run()
 
 if return_code == 0:
@@ -14,8 +14,9 @@ else:
     print("PowerShell script execution failed.")
     print("Error:")
     print(error)
-
-bl_obj = bl(r'C:\Users\ciro.andreano\Desktop\doValue', r'C:\Users\ciro.andreano\Desktop\Export M Code')
+    
+run_ps = ps(POWERSHELL_SCRIPT_PATH)
+bl_obj = bl(EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
 
 aggregated_info = bl_obj.get_aggregated_info()
 

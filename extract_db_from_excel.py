@@ -1,3 +1,4 @@
+from Config.config import EXCEL_INPUT_PATH, EXCEL_OUTPUT_PATH
 import pandas as pd
 import re
 from sqlalchemy import create_engine, text
@@ -6,8 +7,8 @@ from sqlalchemy import create_engine, text
 DRIVER = 'ODBC+Driver+17+for+SQL+Server'
 
 # Leggi l'Excel di output
-excel_path = r'C:\Users\ciro.andreano\Desktop\Connessioni Trovate.xlsx'
-output_path = r'C:\Users\ciro.andreano\Desktop\Risultati_SQL.xlsx'
+excel_path = EXCEL_INPUT_PATH
+output_path = EXCEL_OUTPUT_PATH
 df = pd.read_excel(excel_path)
 
 results = []
