@@ -11,8 +11,8 @@ class GetSqlConnection(IConnection):
             content = f.read()
 
         # Source (riga con Source = Sql.Databases("...") oppure Sql.Database("...", "..."))
-        source_match = re.search(r'Source\s*=\s*(Sql\.Databases\([^\)]+\)|Sql\.Database\([^\)]+\))', content)
-        self.source = source_match.group(1).strip() if source_match else None
+        source_match = re.search(r'(Source|Origine)\s*=\s*(Sql\.Databases\([^)]+\)|Sql\.Database\([^)]+\))', content)
+        self.source = source_match.group(2).strip() if source_match else None
 
         # Server e Database
         # self.server = None
@@ -23,9 +23,9 @@ class GetSqlConnection(IConnection):
             if dbs_match:
                 self.server = dbs_match.group(1)
                 # Cerca la riga che accede al database
-                db_line = re.search(r'Source\{\[Name="([^"]+)"\]\}\[Data\]', content)
+                db_line = re.search(r'(Source|Origine)\{\[Name="([^"]+)"\]\}\[Data\]', content)
                 if db_line:
-                    self.database = db_line.group(1)
+                    self.database = db_line.group(2)
             elif db_match:
                 self.server = db_match.group(1)
                 self.database = db_match.group(2)
