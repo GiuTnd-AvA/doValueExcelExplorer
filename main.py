@@ -32,8 +32,9 @@ columns = ['File_Name',
            'Server',
            'Database',
            'Schema',
-           'Table']
+           'Table',
+           'Type']
 
-stampa_report_connessioni = ew(EXCEL_ROOT_PATH,'Report_Connessioni.xlsx')
+stampa_report_connessioni = ew(r'C:\Users\ciro.andreano\Desktop','Report_Connessioni.xlsx')
 stampa_report_connessioni.write_excel(columns, aggregated_info)
 print("Report connessioni creato correttamente.")

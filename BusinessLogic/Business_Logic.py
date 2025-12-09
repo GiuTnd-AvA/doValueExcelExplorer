@@ -72,6 +72,17 @@ class BusinessLogic:
             matched = False
             for conn in connection_info:
                 if name_wo_extension in conn.txt_file:
+                    # Usa l'attributo type se presente, altrimenti deduci dal nome classe
+                    conn_type = getattr(conn, 'type', None)
+                    if not conn_type:
+                        if conn.__class__.__name__ == 'GetSqlConnection':
+                            conn_type = 'Sql'
+                        elif conn.__class__.__name__ == 'GetSharePointConnection':
+                            conn_type = 'SharePoint'
+                        elif conn.__class__.__name__ == 'GetExcelConnection':
+                            conn_type = 'Excel'
+                        else:
+                            conn_type = 'Unknown'
                     print_string.append([
                         data.nome_file,
                         data.creatore_file,
@@ -83,7 +94,8 @@ class BusinessLogic:
                         getattr(conn, 'server', None),
                         getattr(conn, 'database', None),
                         getattr(conn, 'schema', None),
-                        getattr(conn, 'table', None)
+                        getattr(conn, 'table', None),
+                        conn_type
                     ])
                     matched = True
             if not matched:
@@ -98,6 +110,7 @@ class BusinessLogic:
                     None,
                     None,
                     None,
-                    None
+                    None,
+                    'Unknown'  # Type sempre valorizzato
                 ])
         return print_string
