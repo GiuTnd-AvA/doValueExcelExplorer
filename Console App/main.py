@@ -1,11 +1,8 @@
-# from Excecute_Power_Shell_Script import ExecPsCode as ps
+from Excecute_Power_Shell_Script import ExecPsCode as ps
 from BusinessLogic.Business_Logic import BusinessLogic as bl
 from Report.Excel_Writer import ExcelWriter as ew
-import os
 
-
-user_folder = os.path.expanduser("~")
-run_ps = ps(rf'{user_folder}\Desktop\doValue\doValueExcelExplorer\ExportMCode.ps1')
+run_ps = ps(r'C:\Users\giuseppe.tanda\Desktop\doValue\doValueExcelExplorer\ExportMCode.ps1')
 
 return_code, output, error = run_ps.run()
 
@@ -18,7 +15,7 @@ else:
     print("Error:")
     print(error)
 
-bl_obj = bl(rf'{user_folder}\Desktop\doValue', rf'{user_folder}\Desktop\doValue\Export M Code')
+bl_obj = bl(r'C:\Users\giuseppe.tanda\Desktop\doValue', r'C:\Users\giuseppe.tanda\Desktop\doValue\Export M Code')
 
 aggregated_info = bl_obj.get_aggregated_info()
 
@@ -34,6 +31,6 @@ columns = ['File_Name',
            'Schema',
            'Table']
 
-stampa_report_connessioni = ew(rf'{user_folder}\Desktop','Report_Connessioni.xlsx')
+stampa_report_connessioni = ew(r'C:\Users\giuseppe.tanda\Desktop','Report_Connessioni.xlsx')
 stampa_report_connessioni.write_excel(columns, aggregated_info)
 print("Report connessioni creato correttamente.")
