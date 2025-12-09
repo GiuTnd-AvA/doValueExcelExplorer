@@ -6,6 +6,7 @@ from Connection.IConnection import IConnection
 from Connection.Get_SQL_Connection import GetSqlConnection
 from Connection.Get_SharePoint_Connection import GetSharePointConnection
 from Connection.Get_Excel_Connection import GetExcelConnection
+from Connection.IConnection import EmptyConnection
 from typing import List
 
 class BusinessLogic:
@@ -37,10 +38,8 @@ class BusinessLogic:
             txt_splitter.get_txt_contents()
             source = txt_splitter.source
             if source is None:
-                # Create an IConnection object with error info
-                conn = IConnection()
-                conn.txt_file = file_path
-                conn.error = 'Sorgente non trovata'
+                # Create an EmptyConnection object with error info
+                conn = EmptyConnection(file_path, error='Sorgente non trovata')
                 results.append(conn)
                 continue
             if 'Sql.Database' in source:
@@ -57,9 +56,7 @@ class BusinessLogic:
                 conn.get_connection()
                 results.append(conn)
             else:
-                conn = IConnection()
-                conn.txt_file = file_path
-                conn.error = f"Get connection non ancora implementata per la sorgente: {source}"
+                conn = EmptyConnection(file_path, error=f"Get connection non ancora implementata per la sorgente: {source}")
                 results.append(conn)
         return results
     
@@ -68,7 +65,10 @@ class BusinessLogic:
         connection_info = self._get_connection_info()
         print_string = []
         for data in metadata:
-            name_wo_extension = data.nome_file.replace('.xlsx', '')
+            if data.nome_file:
+                name_wo_extension = data.nome_file.replace('.xlsx', '')
+            else:
+                name_wo_extension = ''
             matched = False
             for conn in connection_info:
                 if name_wo_extension in conn.txt_file:
