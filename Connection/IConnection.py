@@ -9,7 +9,7 @@ class IConnection(ABC):
         self.database = None
         self.schema = None
         self.table = None
-
+        self.type = None
     @abstractmethod
     def get_connection(self):
         """

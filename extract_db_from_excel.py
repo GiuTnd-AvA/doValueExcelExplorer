@@ -13,27 +13,21 @@ df = pd.read_excel(excel_path)
 
 results = []
 
-# Funzione per estrarre il server dalla stringa ConnessioneSorgente
-
-def extract_server(sorgente):
-    s = str(sorgente)
-    # Cerca sia Sql.Database("server", ...) che Sql.Databases("server")
-    match = re.search(r'Sql\.(?:Database|Databases)\(["\'](.*?)["\']', s)
-    return match.group(1) if match else None
-
 for idx, row in df.iterrows():
-    server = extract_server(row.get('ConnessioneSorgente'))
-    schema = row.get('Schema')
-    table = row.get('TableName')
-    db_name = row.get('Sorgente')
-    file_name = row.get('FileName')
-    # Salta se db_name è vuoto, None o nan
-    if not db_name or str(db_name).strip().lower() in ('', 'nan', 'none'):
+    # Esegui solo se Type == 'Sql'
+    if row.get('Type', '').lower() != 'sql':
         continue
-    # Normalizza schema e table
-    schema_valid = schema and schema not in ['Schema non individuato', '', None]
-    table_valid = table and table not in ['Tabella non individuata', 'Item non individuato', '', None]
-    if server and table_valid:
+    server = row.get('Server')
+    db_name = row.get('Database')
+    schema = row.get('Schema')
+    table = row.get('Table')
+    file_name = row.get('FileName')
+    # Salta se server, db_name o table sono vuoti
+    if not server or not db_name or not table:
+        continue
+    schema_valid = schema not in ['', None]
+    table_valid = table not in ['', None]
+    if table_valid:
         conn_str = f"mssql+pyodbc://@{server}/{db_name}?driver={DRIVER}&trusted_connection=yes"
         engine = create_engine(conn_str)
         if schema_valid:
@@ -68,6 +62,7 @@ for idx, row in df.iterrows():
                         "Server": server,
                         "Database": db_name,
                         "Table": table_label,
+                        "Type": row.get('Type'),
                         "ObjectName": r[0],
                         "ObjectType": r[1],
                         "SQLDefinition": r[2]
