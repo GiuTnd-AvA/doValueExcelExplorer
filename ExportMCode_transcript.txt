@@ -1,0 +1,24 @@
+﻿**********************
+Inizio trascrizione Windows PowerShell
+Ora di inizio: 20251203172605
+Nome utente: AVANADE-CORP\giuseppe.tanda
+Esegui come utente: AVANADE-CORP\giuseppe.tanda
+Nome configurazione: 
+Computer WINAPL2VWBJCQTY (Microsoft Windows NT 10.0.26100.0)
+Applicazione host: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -noexit -command try { . "c:\Users\giuseppe.tanda\AppData\Local\Programs\Microsoft VS Code\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1" } catch {}
+ID processo: 8836
+PSVersion: 5.1.26100.7019
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.7019
+BuildVersion: 10.0.26100.7019
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Trascrizione avviata. File di output: C:\Users\giuseppe.tanda\Downloads\Python_per_test_conn_string 2\Python_per_test_conn_string\ExportMCode_transcript.txt
+\nEsportazione completata. File M salvati in: C:\Users\giuseppe.tanda\Desktop\doValue\Export M Code
+**********************
+Fine trascrizione Windows PowerShell
+Ora di fine: 20251203172629
+**********************
