@@ -21,7 +21,7 @@ for idx, row in df.iterrows():
     db_name = row.get('Database')
     schema = row.get('Schema')
     table = row.get('Table')
-    file_name = row.get('FileName')
+    file_name = row.get('File_Name')
     # Salta se server, db_name o table sono vuoti
     if not server or not db_name or not table:
         continue
