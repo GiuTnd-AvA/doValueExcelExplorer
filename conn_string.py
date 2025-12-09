@@ -7,7 +7,7 @@ import re
  
 def full_path(path, file_name):
     return file_name  # Funzione placeholder, non usata
-folder_path = r"C:\Users\giuseppe.tanda\Desktop\doValue"
+folder_path = r"C:\Users\ciro.andreano\Desktop\doValue"
 
 # Trova tutti i file .xlsx nella cartella radice e sottocartelle
 files_name = []

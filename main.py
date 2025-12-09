@@ -15,7 +15,7 @@ else:
     print("Error:")
     print(error)
 
-bl_obj = bl(r'C:\Users\giuseppe.tanda\Desktop\doValue', r'C:\Users\giuseppe.tanda\Desktop\doValue\Export M Code')
+bl_obj = bl(r'C:\Users\ciro.andreano\Desktop\doValue', r'C:\Users\ciro.andreano\Desktop\Export M Code')
 
 aggregated_info = bl_obj.get_aggregated_info()
 
@@ -31,6 +31,6 @@ columns = ['File_Name',
            'Schema',
            'Table']
 
-stampa_report_connessioni = ew(r'C:\Users\giuseppe.tanda\Desktop','Report_Connessioni.xlsx')
+stampa_report_connessioni = ew(r'C:\Users\ciro.andreano\Desktop','Report_Connessioni.xlsx')
 stampa_report_connessioni.write_excel(columns, aggregated_info)
 print("Report connessioni creato correttamente.")
