@@ -1,6 +1,6 @@
-from .IConnection import IConnection
+from .IDBConnection import IDBConnection
 
-class SqlServerDatabaseConnection(IConnection):
+class SqlServerDatabaseConnection(IDBConnection):
     DRIVER = 'SQL Server'
 
 def find_table_items(connection, schema, table):
