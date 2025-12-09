@@ -6,8 +6,8 @@ from sqlalchemy import create_engine, text
 DRIVER = 'ODBC+Driver+17+for+SQL+Server'
 
 # Leggi l'Excel di output
-excel_path = r'C:\Users\giuseppe.tanda\Desktop\doValue\Connessioni Trovate.xlsx'
-output_path = r'C:\Users\giuseppe.tanda\Desktop\doValue\Risultati_SQL.xlsx'
+excel_path = r'C:\Users\ciro.andreano\Desktop\Connessioni Trovate.xlsx'
+output_path = r'C:\Users\ciro.andreano\Desktop\Risultati_SQL.xlsx'
 df = pd.read_excel(excel_path)
 
 results = []
