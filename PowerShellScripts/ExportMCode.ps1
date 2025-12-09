@@ -5,8 +5,9 @@
 
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
-$folder = "C:\Users\ciro.andreano\Desktop\doValue"  # <-- Cartella radice
-$exportFolder = "C:\Users\ciro.andreano\Desktop\Export M Code"
+$user = $env:USERNAME
+$folder = "C:\Users\$user\Desktop\doValue"  # <-- Cartella radice
+$exportFolder = "C:\Users\$user\Desktop\Export M Code"
 New-Item -ItemType Directory -Force -Path $exportFolder | Out-Null
 
 # Ricerca ricorsiva di tutti i file .xlsx
