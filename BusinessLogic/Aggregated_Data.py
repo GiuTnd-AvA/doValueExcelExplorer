@@ -5,6 +5,6 @@ class AggregatedData:
         self.excel_metadata = excel_metadata
         self.connection_info = connection_info
 
-    def aggregated_data():
+    def aggregated_data(self):
         pass
 
