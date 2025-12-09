@@ -2,7 +2,7 @@ from Excecute_Power_Shell_Script import ExecPsCode as ps
 from BusinessLogic.Business_Logic import BusinessLogic as bl
 from Report.Excel_Writer import ExcelWriter as ew
 
-run_ps = ps(r'C:\Users\ciro.andreano\Desktop\doValueExcelExplorer\ExportMCode.ps1')
+run_ps = ps(r'C:\Users\ciro.andreano\Desktop\doValueExcelExplorer\doValueExcelExplorer\ExportMCode.ps1')
 
 return_code, output, error = run_ps.run()
 
