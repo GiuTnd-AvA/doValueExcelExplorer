@@ -1,4 +1,5 @@
-from .DatabaseConnection import DatabaseConnection
+from .IConnection import IConnection
 
-class SqlServerDatabaseConnection(DatabaseConnection):
+class SqlServerDatabaseConnection(IConnection):
     DRIVER = 'SQL Server'
+
