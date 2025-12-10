@@ -11,8 +11,8 @@ excel_path = EXCEL_INPUT_PATH
 output_path = EXCEL_OUTPUT_PATH
 df = pd.read_excel(excel_path)
 
-results = []
 
+results = []
 for idx, row in df.iterrows():
     # Esegui solo se Type == 'Sql'
     if row.get('Type', '').lower() != 'sql':
@@ -71,7 +71,6 @@ for idx, row in df.iterrows():
             print(f"Errore su {file_name} ({db_name}) tabella {table_label}: {e}")
     else:
         print(f"[SKIP] Riga non valida: File={file_name}, Server={server}, Database={db_name}, Schema={schema}, Table={table}")
-
 
 
 # Estrai dipendenze reali tramite sys.sql_expression_dependencies
