@@ -7,10 +7,10 @@ class ExcelWriter:
         self.folder_path = folder_path
         self.file_name = file_name
 
-    def write_excel(self, columns, data):
+    def write_excel(self, columns, data, sheet_name='Sheet1'):
         output_path = os.path.join(self.folder_path, self.file_name)
         df = pd.DataFrame(data, columns=columns)
-        df.to_excel(output_path, index=False)
+        df.to_excel(output_path, index=False, sheet_name=sheet_name)
 
         
 
