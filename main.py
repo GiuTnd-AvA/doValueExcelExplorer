@@ -21,19 +21,19 @@ bl_obj = bl(EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
 
 aggregated_info = bl_obj.get_aggregated_info()
 
-columns = ['File_Name',
-           'Creatore_file',
-           'Ultimo_modificatore_file',
-           'Data_creazione_file',
-           'Data_ultima_modifica_file',
-           'Collegamento_esterno',
-           'Source',
-           'Server',
-           'Database',
-           'Schema',
-           'Table',
-           'Type']
+columns_connessioni = ['File_Name',
+                       'Creatore_file',
+                       'Ultimo_modificatore_file',
+                       'Data_creazione_file',
+                       'Data_ultima_modifica_file',
+                       'Collegamento_esterno',
+                       'Source',
+                       'Server',
+                       'Database',
+                       'Schema',
+                       'Table',
+                       'Type']
 
 stampa_report_connessioni = ew(EXCEL_OUTPUT_PATH,'Report_Connessioni.xlsx')
-stampa_report_connessioni.write_excel(columns, aggregated_info)
+stampa_report_connessioni.write_excel(columns_connessioni, aggregated_info)
 print("Report connessioni creato correttamente.")
