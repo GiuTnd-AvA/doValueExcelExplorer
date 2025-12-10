@@ -3,19 +3,18 @@ from Config.config import POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_
 from BusinessLogic.Business_Logic import BusinessLogic as bl
 from Report.Excel_Writer import ExcelWriter as ew
 
-# run_ps = ps(POWERSHELL_SCRIPT_PATH)
-# return_code, output, error = run_ps.run()
+run_ps = ps(POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
+return_code, output, error = run_ps.run()
 
-# if return_code == 0:
-#     print("PowerShell script executed successfully.")
-#     print("Output:")
-#     print(output)
-# else:
-#     print("PowerShell script execution failed.")
-#     print("Error:")
-#     print(error)
+if return_code == 0:
+    print("PowerShell script executed successfully.")
+    print("Output:")
+    print(output)
+else:
+    print("PowerShell script execution failed.")
+    print("Error:")
+    print(error)
 
-# run_ps = ps(POWERSHELL_SCRIPT_PATH)
 bl_obj = bl(EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
 
 
