@@ -10,11 +10,24 @@ $folder = "C:\Users\$user\Desktop\doValue"  # <-- Cartella radice
 $exportFolder = "C:\Users\$user\Desktop\Export M Code"
 New-Item -ItemType Directory -Force -Path $exportFolder | Out-Null
 
+# Transcript dei file già esportati
+$transcriptPath = Join-Path $exportFolder "ExportMCode_transcript.txt"
+if (-not (Test-Path $transcriptPath)) {
+    New-Item -ItemType File -Force -Path $transcriptPath | Out-Null
+}
+$_processed = Get-Content -Path $transcriptPath -ErrorAction SilentlyContinue
+if (-not $_processed) { $_processed = @() }
+
 # Ricerca ricorsiva di tutti i file .xlsx
 $files = Get-ChildItem -Path $folder -Filter *.xlsx -Recurse
 
 $errorLog = Join-Path $exportFolder "ExportMCode_errors.txt"
 foreach ($file in $files) {
+    # Salta se il file è già stato esportato
+    if ($_processed -contains $file.FullName) {
+        Write-Host "Skip: $($file.FullName) già esportato"
+        continue
+    }
     try {
         # Open workbook senza aggiornare connessioni (UpdateLinks=0)
         $wb = $excel.Workbooks.Open($file.FullName, 0)
@@ -34,6 +47,8 @@ foreach ($file in $files) {
             }
         }
         $wb.Close($false)
+        # Segna il file come esportato
+        Add-Content -Path $transcriptPath -Value $file.FullName
     } catch {
         $errMsg = "[$(Get-Date -Format o)] Errore apertura file $($file.FullName): $($_.Exception.Message)"
         Add-Content -Path $errorLog -Value $errMsg
