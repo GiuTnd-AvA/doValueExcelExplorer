@@ -36,5 +36,4 @@ columns_connessioni = ['File_Name',
 
 stampa_report_connessioni = ew(EXCEL_OUTPUT_PATH,'Report_Connessioni.xlsx')
 stampa_report_connessioni.write_excel(columns_connessioni, aggregated_info, sheet_name='Connessioni')
-stampa_report_connessioni.write_excel(columns_connessioni, aggregated_info, sheet_name='Connessioni_2')
 print("Report connessioni creato correttamente.")
