@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 import pyodbc
 
-class IConnection(ABC):
+class IDBConnection(ABC):
     DRIVER: str  # Contratto: ogni sottoclasse deve specificare il driver
 
     def __init__(self, server, database, schema=None, table=None):

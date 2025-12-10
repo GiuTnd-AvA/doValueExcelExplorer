@@ -12,4 +12,4 @@ FOLDER = rf'{user_folder}\Desktop\doValue'  # Cartella radice
 
 # extract_db_from_excel.py paths
 EXCEL_INPUT_PATH = rf'{user_folder}\Desktop\Connessioni Trovate.xlsx'
-EXCEL_OUTPUT_PATH = rf'{user_folder}\Desktop\Risultati_SQL.xlsx'
+EXCEL_OUTPUT_PATH = rf'{user_folder}\Desktop'
