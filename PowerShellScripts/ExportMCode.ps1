@@ -4,7 +4,7 @@
 # Esegui da PowerShell prima di lanciare lo script Python
 
 # Importa le variabili di configurazione
-. "$PSScriptRoot\config.ps1"
+. "$PSScriptRoot\..\Config\config.ps1"
 
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
