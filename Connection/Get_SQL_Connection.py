@@ -12,59 +12,51 @@ class GetSqlConnection(IConnection):
 
 
         # Source (riga con Source = Sql.Databases("...") oppure Sql.Database("...", "...") oppure Sql.Database("...", "...", [Query=...]))
-        source_match = re.search(r'(Source|Origine)\s*=\s*(Sql\.Databases\([^)]+\)|Sql\.Database\([^)]+\))', content)
+        # Migliorato per gestire spazi e caratteri speciali
+        source_match = re.search(r'(Source|Origine)\s*=\s*(Sql\.Databases\(([^)]*)\)|Sql\.Database\(([^)]*)\))', content)
         self.source = source_match.group(2).strip() if source_match else None
 
         # Server, Database, Query
         if self.source:
-            dbs_match = re.match(r'Sql\.Databases\("([^"]+)"\)', self.source)
-            db_match = re.match(r'Sql\.Database\("([^"]+)",\s*"([^"]+)"\)', self.source)
-            db_query_match = re.match(r'Sql\.Database\("([^"]+)",\s*"([^"]+)",\s*\[Query="([\s\S]*)"\]\)', self.source)
-            if dbs_match:
-                self.server = dbs_match.group(1)
-                db_line = re.search(r'(Source|Origine)\{\[Name="([^"]+)"\]\}\[Data\]', content)
-                if db_line:
-                    self.database = db_line.group(2)
-            elif db_match:
-                self.server = db_match.group(1)
-                self.database = db_match.group(2)
-            elif db_query_match:
-                self.server = db_query_match.group(1)
-                self.database = db_query_match.group(2)
-                query_sql = db_query_match.group(3)
-                # Estrai tutte le tabelle da FROM o JOIN nella query SQL
-                table_matches = re.findall(r'(?:FROM|JOIN)\s+([\w\.\[\]"`]+)', query_sql, re.IGNORECASE)
-                if table_matches:
-                    # Estrai tutte le tabelle e separa con ;
-                    tables = []
-                    schemas = []
-                    for table_full in table_matches:
-                        table_full = table_full.strip('[]"`')
-                        if '.' in table_full:
-                            parts = table_full.split('.')
-                            if len(parts) == 2:
-                                schemas.append(parts[0])
-                                tables.append(parts[1])
+            # Estrai argomenti tra parentesi, gestendo anche spazi e escape
+            args_match = re.match(r"Sql\.Database\((.*)\)", self.source)
+            if args_match:
+                # Split robusto sugli argomenti, gestisce anche [Query=...]
+                args = [a.strip().strip('"') for a in re.split(r',\s*(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)', args_match.group(1))]
+                if len(args) >= 2:
+                    self.server = args[0]
+                    self.database = args[1]
+                # Cerca Query
+                query_match = re.search(r'Query\s*=\s*"([\s\S]*?)"', self.source)
+                if query_match:
+                    query_sql = query_match.group(1)
+                    # Estrai tutte le tabelle da FROM o JOIN nella query SQL, gestendo anche escape, variabili e temp table
+                    table_matches = re.findall(r'(?:FROM|JOIN)\s+((?:\[.*?\]|#\(.*?\)|##?\w+|\w+)(?:\.\w+){0,2})', query_sql, re.IGNORECASE)
+                    if table_matches:
+                        tables = []
+                        schemas = []
+                        for table_full in table_matches:
+                            table_full = table_full.strip('[]"`')
+                            # Variabili Power Query (#(...)), temp table (##), table semplice
+                            if table_full.startswith('##') or table_full.startswith('#'):
+                                schemas.append('')
+                                tables.append(table_full)
                             else:
-                                schemas.append(parts[0])
-                                tables.append('.'.join(parts[1:]))
-                        else:
-                            schemas.append('')
-                            tables.append(table_full)
-                    self.schema = ';'.join(schemas)
-                    self.table = ';'.join(tables)
+                                parts = table_full.split('.')
+                                if len(parts) == 3:
+                                    schemas.append(parts[1])
+                                    tables.append(parts[2])
+                                elif len(parts) == 2:
+                                    schemas.append(parts[0])
+                                    tables.append(parts[1])
+                                else:
+                                    schemas.append('')
+                                    tables.append(table_full)
+                        self.schema = ';'.join(schemas)
+                        self.table = ';'.join(tables)
 
-        # Schema e Table
-        # self.schema = None
-        # self.table = None
-        # Cerca la riga che accede alla tabella
+        # Schema e Table da accesso diretto
         table_match = re.search(r'\{\[Schema="([^"]+)",\s*Item="([^"]+)"\]\}\[Data\]', content)
         if table_match:
             self.schema = table_match.group(1)
             self.table = table_match.group(2)
-        else:
-            # Prova con schema "dbo" (alcuni file potrebbero non avere lo schema esplicito)
-            table_match = re.search(r'\{\[Schema="([^"]+)",\s*Item="([^"]+)"\]\}\[Data\]', content)
-            if table_match:
-                self.schema = table_match.group(1)
-                self.table = table_match.group(2)
