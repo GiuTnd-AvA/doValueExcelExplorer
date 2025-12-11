@@ -10,25 +10,49 @@ class GetSqlConnection(IConnection):
         with open(self.txt_file, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Source (riga con Source = Sql.Databases("...") oppure Sql.Database("...", "..."))
+
+        # Source (riga con Source = Sql.Databases("...") oppure Sql.Database("...", "...") oppure Sql.Database("...", "...", [Query=...]))
         source_match = re.search(r'(Source|Origine)\s*=\s*(Sql\.Databases\([^)]+\)|Sql\.Database\([^)]+\))', content)
         self.source = source_match.group(2).strip() if source_match else None
 
-        # Server e Database
-        # self.server = None
-        # self.database = None
+        # Server, Database, Query
         if self.source:
             dbs_match = re.match(r'Sql\.Databases\("([^"]+)"\)', self.source)
             db_match = re.match(r'Sql\.Database\("([^"]+)",\s*"([^"]+)"\)', self.source)
+            db_query_match = re.match(r'Sql\.Database\("([^"]+)",\s*"([^"]+)",\s*\[Query="([\s\S]*)"\]\)', self.source)
             if dbs_match:
                 self.server = dbs_match.group(1)
-                # Cerca la riga che accede al database
                 db_line = re.search(r'(Source|Origine)\{\[Name="([^"]+)"\]\}\[Data\]', content)
                 if db_line:
                     self.database = db_line.group(2)
             elif db_match:
                 self.server = db_match.group(1)
                 self.database = db_match.group(2)
+            elif db_query_match:
+                self.server = db_query_match.group(1)
+                self.database = db_query_match.group(2)
+                query_sql = db_query_match.group(3)
+                # Estrai tutte le tabelle da FROM o JOIN nella query SQL
+                table_matches = re.findall(r'(?:FROM|JOIN)\s+([\w\.\[\]"`]+)', query_sql, re.IGNORECASE)
+                if table_matches:
+                    # Estrai tutte le tabelle e separa con ;
+                    tables = []
+                    schemas = []
+                    for table_full in table_matches:
+                        table_full = table_full.strip('[]"`')
+                        if '.' in table_full:
+                            parts = table_full.split('.')
+                            if len(parts) == 2:
+                                schemas.append(parts[0])
+                                tables.append(parts[1])
+                            else:
+                                schemas.append(parts[0])
+                                tables.append('.'.join(parts[1:]))
+                        else:
+                            schemas.append('')
+                            tables.append(table_full)
+                    self.schema = ';'.join(schemas)
+                    self.table = ';'.join(tables)
 
         # Schema e Table
         # self.schema = None
