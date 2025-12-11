@@ -34,7 +34,3 @@ class ExcelWriter:
 
         with pd.ExcelWriter(output_path, **writer_kwargs) as writer:
             df.to_excel(writer, index=False, sheet_name=sheet_name)
-
-        
-
-    
