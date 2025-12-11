@@ -7,6 +7,7 @@ from Connection.Get_SQL_Connection import GetSqlConnection
 from Connection.Get_SharePoint_Connection import GetSharePointConnection
 from Connection.Get_Excel_Connection import GetExcelConnection
 from Connection.IConnection import EmptyConnection
+from Connection.Connessione_Senza_Txt import ConnessioniSenzaTxt
 from typing import List
 import os
 
@@ -71,6 +72,16 @@ class BusinessLogic:
                 results.append(conn)
         return results
     
+    def get_excel_connections_without_txt(self) -> List[ConnessioniSenzaTxt]:
+        excel_files = self._excel_file_list()
+        connections = []
+        for file_path in excel_files:
+            conn = ConnessioniSenzaTxt(file_path)
+            conn.estrai_connessioni()
+            if conn.server != None:
+                connections.append([conn.file_name, conn.server, conn.database, conn.schema, conn.table])
+        return connections
+
     def get_aggregated_info(self) -> List[list]:
         metadata = self._excel_metadata()
         connection_info = self._get_connection_info()
