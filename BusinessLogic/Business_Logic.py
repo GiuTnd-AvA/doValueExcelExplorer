@@ -8,6 +8,7 @@ from Connection.Get_SharePoint_Connection import GetSharePointConnection
 from Connection.Get_Excel_Connection import GetExcelConnection
 from Connection.IConnection import EmptyConnection
 from typing import List
+import os
 
 class BusinessLogic:
 
@@ -17,6 +18,16 @@ class BusinessLogic:
 
     def _excel_file_list(self) -> list[str]:
         return self.excel_finder.file_finder()
+
+    def split_excel_root_path(self) -> List[str]:
+        excel_list = self._excel_file_list()
+        
+        excel_file_list = []
+
+        for file in excel_list:
+            path = file.split('\\')
+            excel_file_list.append(['\\'.join(path[0:len(path)-1]),path[-1]])
+        return excel_file_list   
 
     def _txt_file_list(self) -> list[str]:
         return self.txt_finder.file_finder()

@@ -11,7 +11,7 @@ $excel.Visible = $false
 New-Item -ItemType Directory -Force -Path $exportFolder | Out-Null
 
 # Ricerca ricorsiva di tutti i file .xlsx
-$files = Get-ChildItem -Path $folder -Filter *.xlsx -Recurse
+$files = Get-ChildItem -Path $folder -Include *.xlsx, *.xls, *.xlsb, *.xlsm -Recurse
 
 $errorLog = Join-Path $exportFolder "ExportMCode_errors.txt"
 foreach ($file in $files) {
