@@ -1,4 +1,10 @@
 import win32com.client
+import os
+import zipfile
+try:
+    import pywintypes
+except Exception:
+    pywintypes = None
 
 class ConnessioniSenzaTxt:
     def __init__(self, percorso_excel):
@@ -32,15 +38,49 @@ class ConnessioniSenzaTxt:
         except Exception:
             pass
 
+        # Verifiche preliminari sul file per prevenire errori COM
+        if not os.path.exists(self.percorso_excel):
+            # Chiudi Excel se avviato
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+            return []
+
+        # Un file .xlsx valido è un archivio ZIP: se non lo è, evita di aprirlo
+        _, ext = os.path.splitext(self.percorso_excel)
+        if ext.lower() == ".xlsx" and not zipfile.is_zipfile(self.percorso_excel):
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+            return []
+
         # Apri il workbook senza aggiornare link e in sola lettura per ridurre UI
-        wb = excel.Workbooks.Open(
-            self.percorso_excel,
-            UpdateLinks=0,  # non aggiornare link esterni
-            ReadOnly=True,
-            Editable=False,
-            IgnoreReadOnlyRecommended=True,
-            Notify=False
-        )
+        try:
+            wb = excel.Workbooks.Open(
+                self.percorso_excel,
+                UpdateLinks=0,  # non aggiornare link esterni
+                ReadOnly=True,
+                Editable=False,
+                IgnoreReadOnlyRecommended=True,
+                Notify=False
+            )
+        except Exception as e:
+            # Gestione esplicita di pywintypes.com_error se disponibile
+            if pywintypes and isinstance(e, pywintypes.com_error):
+                # Errore tipico: formato non valido/estensione errata/file corrotto o bloccato
+                try:
+                    excel.Quit()
+                except Exception:
+                    pass
+                return []
+            # Qualsiasi altro errore durante l'apertura
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+            return []
 
         # Se ci sono query asincrone (Power Query/connessioni), attendi che finiscano
         try:
@@ -130,8 +170,3 @@ class ConnessioniSenzaTxt:
         except Exception:
             pass
         return None
-
-# Esempio d'uso:
-# cs = ConnessioniSenzaTxt("C:\\percorso\\file.xlsx")
-# info = cs.estrai_connessioni()
-# print(info)
