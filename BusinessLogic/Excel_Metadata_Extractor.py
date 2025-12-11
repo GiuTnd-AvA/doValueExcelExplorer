@@ -37,3 +37,4 @@ class ExcelMetadataExtractor():
         self.data_creazione = created
         self.data_ultima_modifica = modified
         self.collegamento_esterno = connessione_esterna
+
