@@ -33,24 +33,29 @@ class GetSqlConnection(IConnection):
                 self.database = db_query_match.group(2)
                 query_sql = db_query_match.group(3)
                 # Estrai tutte le tabelle da FROM o JOIN nella query SQL
-                table_matches = re.findall(r'(?:FROM|JOIN)\s+([\w\.\[\]"`]+)', query_sql, re.IGNORECASE)
+                table_matches = re.findall(r'(?:FROM|JOIN)\s+([^\s,;]+)', query_sql, re.IGNORECASE)
                 if table_matches:
-                    # Estrai tutte le tabelle e separa con ;
                     tables = []
                     schemas = []
                     for table_full in table_matches:
                         table_full = table_full.strip('[]"`')
-                        if '.' in table_full:
+                        # Gestione temp table (##) o variabili Power Query (#)
+                        if table_full.startswith('##') or table_full.startswith('#'):
+                            schemas.append('')
+                            tables.append(table_full)
+                        else:
                             parts = table_full.split('.')
-                            if len(parts) == 2:
+                            if len(parts) == 3:
+                                # db.schema.table
+                                # Puoi scegliere se salvare anche il db, qui prendo solo schema e table
+                                schemas.append(parts[1])
+                                tables.append(parts[2])
+                            elif len(parts) == 2:
                                 schemas.append(parts[0])
                                 tables.append(parts[1])
                             else:
-                                schemas.append(parts[0])
-                                tables.append('.'.join(parts[1:]))
-                        else:
-                            schemas.append('')
-                            tables.append(table_full)
+                                schemas.append('')
+                                tables.append(table_full)
                     self.schema = ';'.join(schemas)
                     self.table = ';'.join(tables)
 
