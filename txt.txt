@@ -1,0 +1,4 @@
+let
+    Origine = Sql.Database("dobboproddb01", "master", [Query="DECLARE @Datainizioperiodo date;#(lf)SET @Datainizioperiodo = '2017-01-01';--------------DATA INIZIO PERIODO#(lf)DECLARE @Datafineperiodo date;#(lf)SET @Datafineperiodo = '2022-01-31';--------------DATA FINE PERIODO#(lf)#(lf)select distinct#(lf)rs.Protocollo, #(lf)rs.bip, #(lf)'' as 'NDG',#(lf)'' as 'ABI',#(lf)rs.Stato,#(lf)rs.Data_Stato,#(lf)rs.Amount,#(lf)'' as 'IVA',#(lf)rs.Amount as 'Fattura + IVA',#(lf)rs.Fornitore,#(lf)rs.Sottotipo_Documento,#(lf)cat.Descrizione_I#(lf)from dwh..Report_Spese rs #(lf)left join ams..loansaid ls on ls.bip=rs.BIP#(lf)left join ams..dat_INV_DocumentiProtocollo as doc on doc.DocumentiProtocolloID=rs.Documenti_Protocollo_ID#(lf)left join ams..cat_SpeseAutorizzate as cat on cat.ID_SpesaAut=doc.ID_SpesaAut#(lf)where rs.Tipo_Spesa='Pagata'#(lf)and rs.Data_Stato between @Datainizioperiodo and @Datafineperiodo#(lf)and ls.Port_ID in (3015)#(lf)"])
+in
+    Origine
