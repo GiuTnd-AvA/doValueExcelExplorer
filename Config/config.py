@@ -10,3 +10,6 @@ EXPORT_MCODE_PATH = rf'{user_folder}\Desktop\Export M Code'
 # extract_db_from_excel.py paths
 EXCEL_INPUT_PATH = rf'{user_folder}\Desktop\Connessioni Trovate.xlsx'
 EXCEL_OUTPUT_PATH = rf'{user_folder}\Desktop'
+
+# Report chunk size: number of files per Excel output
+CHUNK_SIZE = 50
