@@ -35,8 +35,10 @@ class BusinessLogic:
     
     def _excel_metadata(self) -> list[ExcelMetadataExtractor]:
         excel_files = self._excel_file_list()
+        total = len(excel_files)
         metadata_list = []
-        for file_path in excel_files:
+        for idx, file_path in enumerate(excel_files, start=1):
+            print(f"[Excel] Elaborazione file {idx}/{total}: {file_path}")
             extractor = ExcelMetadataExtractor(file_path)
             extractor.get_metadata(file_path)
             metadata_list.append(extractor)
@@ -74,12 +76,21 @@ class BusinessLogic:
     
     def get_excel_connections_without_txt(self) -> List[ConnessioniSenzaTxt]:
         excel_files = self._excel_file_list()
+        total = len(excel_files)
         connections = []
-        for file_path in excel_files:
+        for idx, file_path in enumerate(excel_files, start=1):
+            print(f"[Connessioni] Elaborazione file {idx}/{total}: {file_path}")
             conn = ConnessioniSenzaTxt(file_path)
-            conn.estrai_connessioni()
-            if conn.server != None:
-                connections.append([conn.file_name, conn.server, conn.database, conn.schema, conn.table])
+            conn_list = conn.estrai_connessioni()
+            # Aggiungi tutte le connessioni trovate per questo file
+            for info in conn_list:
+                connections.append([
+                    conn.file_name,
+                    info.get('Server'),
+                    info.get('Database'),
+                    info.get('Schema'),
+                    info.get('Tabella')
+                ])
         return connections
 
     def get_aggregated_info(self) -> List[list]:
