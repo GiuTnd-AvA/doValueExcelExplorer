@@ -177,7 +177,6 @@ class GetXmlConnection:
                     results.append(tup)
 
         return results
-
     def _infer_server_database_from_name(self, name_attr):
         if not name_attr:
             return None, None
