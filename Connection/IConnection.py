@@ -10,6 +10,7 @@ class IConnection(ABC):
         self.schema = None
         self.table = None
         self.type = None
+        self.query = None
     @abstractmethod
     def get_connection(self):
         """
