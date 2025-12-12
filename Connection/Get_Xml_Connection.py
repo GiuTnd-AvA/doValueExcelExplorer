@@ -68,7 +68,19 @@ class GetXmlConnection:
                         info['Schema'] = schema
                         info['Tabella'] = table
 
-                        #print(f"[GetXmlConnection] Parsed connection for {self.file_name}: {info}")
+                        print("\n"+
+                            f"[GetXmlConnection] {self.file_name} -> "
+                            f"Server={info['Server']}, Database={info['Database']}, "
+                            f"Schema={info['Schema']}, Tabella={info['Tabella']}" +"\n"
+                        )
+                        # In caso di SELECT con JOIN, mostra anche tutte le tabelle rilevate
+                        for sch, tab in self._parse_all_tables(command):
+                            if sch == info['Schema'] and tab == info['Tabella']:
+                                continue
+                            print(
+                                f"[GetXmlConnection] {self.file_name} -> Tabelle aggiuntive da JOIN/SELECT: "
+                                f"Schema={sch}, Tabella={tab}"
+                            )
                         if info['Server'] and info['Database']:
                             results.append(info)
 
@@ -82,6 +94,10 @@ class GetXmlConnection:
                         tables = self._tables_from_workbook(z, name_attr)
                         srv, db = self._infer_server_database_from_name(name_attr)
                         for t in tables:
+                            print("\n"+
+                                f"[GetXmlConnection] {self.file_name} (Multiple Tables '{name_attr}') -> "
+                                f"Server={srv or '.'}, Database={db}, Schema=dbo, Tabella={t}"+"\n"
+                            )
                             results.append({
                                 'Server': srv or '.',
                                 'Database': db,
@@ -129,6 +145,38 @@ class GetXmlConnection:
                 if len(parts) == 2:
                     return parts[0], parts[1]
         return None, None
+
+    def _parse_all_tables(self, command):
+        import re
+        results = []
+        if not command:
+            return results
+        cmd = command.replace('&quot;', '"')
+        # Normalizza separatori e rimuove quoting [] e "
+        def split_parts(token):
+            token = token.strip()
+            token = token.replace('[', '').replace(']', '').replace('"', '')
+            # Rimuovi eventuali alias: es. schema.tabella AS t -> prendi prima parola
+            token = token.split()[0]
+            parts = [p for p in token.split('.') if p]
+            return parts
+
+        # FROM principale
+        mfrom = re.search(r'\bfrom\b\s+([^\s;]+)', cmd, flags=re.IGNORECASE)
+        if mfrom:
+            parts = split_parts(mfrom.group(1))
+            if len(parts) >= 2:
+                results.append((parts[-2], parts[-1]))
+
+        # Tutte le JOIN
+        for m in re.finditer(r'\bjoin\b\s+([^\s;]+)', cmd, flags=re.IGNORECASE):
+            parts = split_parts(m.group(1))
+            if len(parts) >= 2:
+                tup = (parts[-2], parts[-1])
+                if tup not in results:
+                    results.append(tup)
+
+        return results
 
     def _infer_server_database_from_name(self, name_attr):
         if not name_attr:
