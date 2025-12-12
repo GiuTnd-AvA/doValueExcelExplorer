@@ -1,0 +1,4 @@
+let
+    Source = Sql.Database("epcp3", "analisi", [Query="SELECT * FROM #(tab)##PIVOT_BUDGET_FEE"])
+in
+    Source
