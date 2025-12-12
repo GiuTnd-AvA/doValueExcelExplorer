@@ -167,8 +167,19 @@ class BusinessLogic:
             if meta.collegamento_esterno != 'Si':
                 continue
             xml = GetXmlConnection(meta.file_path)
-            xml.extract_connection_info()
-            connessioni_xml.append([xml.file_name, xml.server, xml.database, xml.schema, xml.table])
-            print("\n"+str(connessioni_xml)+"\n")
+            infos = xml.extract_connection_info()
+            if not infos:
+                print(f"[Connessioni] Nessuna connessione rilevata: {meta.file_path}")
+            for info in infos:
+                server = info.get('Server')
+                database = info.get('Database')
+                schema = info.get('Schema')
+                table = info.get('Tabella')
+                # Skip completely empty/placeholder entries
+                if not any([server, database, schema, table]):
+                    continue
+                row = [xml.file_name, server, database, schema, table]
+                print("\n"+str(row)+"\n")
+                connessioni_xml.append(row)
             print(f"[Connessioni] Elaborazione file {idx}/{total}: {meta.file_path}")
         return connessioni_xml

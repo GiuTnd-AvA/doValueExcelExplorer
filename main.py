@@ -4,7 +4,8 @@ from BusinessLogic.Business_Logic import BusinessLogic as bl
 from Report.Excel_Writer import ExcelWriter as ew
 from datetime import datetime
 
-print(f'start at: {datetime.now()}')
+start = datetime.now()
+print(f'start at: {start}')
 # run_ps = ps(POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
 # return_code, output, error = run_ps.run()
 
@@ -61,15 +62,15 @@ columns_connessioni = ['File_Name',
 
 ranges = _chunk_ranges(len(excel_files_list), CHUNK_SIZE)
 
-for start, end in ranges:
-    suffix = f"{start}-{end}"
+for r_start, r_end in ranges:
+    suffix = f"{r_start}-{r_end}"
     out_name = f"Report_Connessioni_{suffix}.xlsx"
     writer = ew(EXCEL_OUTPUT_PATH, out_name)
     # Lista file per range
-    files_chunk = excel_files_list[start:end+1]
+    files_chunk = excel_files_list[r_start:r_end+1]
     writer.write_excel(columns_file_list, files_chunk, sheet_name='Lista file')
     # Paths chunk to analyze and export only this batch
-    paths_chunk = excel_file_paths[start:end+1]
+    paths_chunk = excel_file_paths[r_start:r_end+1]
     aggregated_info_chunk = bl_obj.get_aggregated_info_for_files(paths_chunk)
     writer.write_excel(columns_connessioni, aggregated_info_chunk, sheet_name='Connessioni')
     #connection_list_No_Power_Query_chunk = bl_obj.get_excel_connections_without_txt_for_files(paths_chunk)
@@ -77,4 +78,7 @@ for start, end in ranges:
     writer.write_excel(columns_connection_no_power_query, connection_list_No_Power_Query_chunk, sheet_name='Connessioni_Senza_Power_Query')
     print(f"Creato: {out_name} per range {suffix}")
 
-print(f'end at: {datetime.now()}')
+end = datetime.now()
+diff = end - start
+print(f'end at: {end}')
+print(f'duration: {round(diff.total_seconds() / 60, 2)} minutes')

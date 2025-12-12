@@ -44,6 +44,8 @@ class GetXmlConnection:
 
                     for conn in connections:
                         info = {
+                            'ConnectionId': conn.attrib.get('id'),
+                            'Name': conn.attrib.get('name'),
                             'Server': None,
                             'Database': None,
                             'Schema': None,
@@ -81,8 +83,9 @@ class GetXmlConnection:
                             #     f"[GetXmlConnection] {self.file_name} -> Tabelle aggiuntive da JOIN/SELECT: "
                             #     f"Schema={sch}, Tabella={tab}"
                             # )
-                        if info['Server'] and info['Database']:
-                            results.append(info)
+                        # Accetta e restituisce tutte le connessioni trovate,
+                        # anche se alcune informazioni non sono presenti.
+                        results.append(info)
 
                     # Multiple Tables: connection type 100 o name contenente 'Multiple Tables'
                     for conn in connections:
@@ -99,6 +102,8 @@ class GetXmlConnection:
                             #     f"Server={srv or '.'}, Database={db}, Schema=dbo, Tabella={t}"+"\n"
                             # )
                             results.append({
+                                'ConnectionId': conn.attrib.get('id'),
+                                'Name': name_attr,
                                 'Server': srv or '.',
                                 'Database': db,
                                 'Schema': 'dbo',
