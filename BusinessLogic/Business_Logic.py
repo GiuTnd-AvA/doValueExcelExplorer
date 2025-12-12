@@ -159,17 +159,16 @@ class BusinessLogic:
                 ])
         return print_string
     
-    def connessioni_xml(self) -> List[GetXmlConnection]:
-        paths = self._excel_file_list()
+    def connessioni_xml(self, excel_files: list[str]) -> List[list]:
+        metadata_list = self._excel_metadata_for_files(excel_files)
         connessioni_xml = []
-        total = len(paths)
-        for idx, path in enumerate(paths, start=1):
-            meta = ExcelMetadataExtractor(path)
-            meta.get_metadata(path)
+        total = len(metadata_list)
+        for idx, meta in enumerate(metadata_list, start=1):
             if meta.collegamento_esterno != 'Si':
                 continue
-            xml = GetXmlConnection(path)
+            xml = GetXmlConnection(meta.file_path)
             xml.extract_connection_info()
             connessioni_xml.append([xml.file_name, xml.server, xml.database, xml.schema, xml.table])
-            print(f"[Connessioni] Elaborazione file {idx}/{total}: {path}")
+            print("\n"+str(connessioni_xml)+"\n")
+            print(f"[Connessioni] Elaborazione file {idx}/{total}: {meta.file_path}")
         return connessioni_xml

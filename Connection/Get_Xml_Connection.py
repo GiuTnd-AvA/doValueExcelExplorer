@@ -68,19 +68,19 @@ class GetXmlConnection:
                         info['Schema'] = schema
                         info['Tabella'] = table
 
-                        print("\n"+
-                            f"[GetXmlConnection] {self.file_name} -> "
-                            f"Server={info['Server']}, Database={info['Database']}, "
-                            f"Schema={info['Schema']}, Tabella={info['Tabella']}" +"\n"
-                        )
+                        # print("\n"+
+                        #     f"[GetXmlConnection] {self.file_name} -> "
+                        #     f"Server={info['Server']}, Database={info['Database']}, "
+                        #     f"Schema={info['Schema']}, Tabella={info['Tabella']}" +"\n"
+                        # )
                         # In caso di SELECT con JOIN, mostra anche tutte le tabelle rilevate
                         for sch, tab in self._parse_all_tables(command):
                             if sch == info['Schema'] and tab == info['Tabella']:
                                 continue
-                            print(
-                                f"[GetXmlConnection] {self.file_name} -> Tabelle aggiuntive da JOIN/SELECT: "
-                                f"Schema={sch}, Tabella={tab}"
-                            )
+                            # print(
+                            #     f"[GetXmlConnection] {self.file_name} -> Tabelle aggiuntive da JOIN/SELECT: "
+                            #     f"Schema={sch}, Tabella={tab}"
+                            # )
                         if info['Server'] and info['Database']:
                             results.append(info)
 
@@ -94,10 +94,10 @@ class GetXmlConnection:
                         tables = self._tables_from_workbook(z, name_attr)
                         srv, db = self._infer_server_database_from_name(name_attr)
                         for t in tables:
-                            print("\n"+
-                                f"[GetXmlConnection] {self.file_name} (Multiple Tables '{name_attr}') -> "
-                                f"Server={srv or '.'}, Database={db}, Schema=dbo, Tabella={t}"+"\n"
-                            )
+                            # print("\n"+
+                            #     f"[GetXmlConnection] {self.file_name} (Multiple Tables '{name_attr}') -> "
+                            #     f"Server={srv or '.'}, Database={db}, Schema=dbo, Tabella={t}"+"\n"
+                            # )
                             results.append({
                                 'Server': srv or '.',
                                 'Database': db,

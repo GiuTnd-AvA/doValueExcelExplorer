@@ -72,8 +72,8 @@ for start, end in ranges:
     paths_chunk = excel_file_paths[start:end+1]
     aggregated_info_chunk = bl_obj.get_aggregated_info_for_files(paths_chunk)
     writer.write_excel(columns_connessioni, aggregated_info_chunk, sheet_name='Connessioni')
-    connection_list_No_Power_Query_chunk = bl_obj.get_excel_connections_without_txt_for_files(paths_chunk)
-    connection_list_No_Power_Query_chunk = bl_obj.connessioni_xml()
+    #connection_list_No_Power_Query_chunk = bl_obj.get_excel_connections_without_txt_for_files(paths_chunk)
+    connection_list_No_Power_Query_chunk = bl_obj.connessioni_xml(paths_chunk)
     writer.write_excel(columns_connection_no_power_query, connection_list_No_Power_Query_chunk, sheet_name='Connessioni_Senza_Power_Query')
     print(f"Creato: {out_name} per range {suffix}")
 
