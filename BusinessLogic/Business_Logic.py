@@ -8,6 +8,7 @@ from Connection.Get_SharePoint_Connection import GetSharePointConnection
 from Connection.Get_Excel_Connection import GetExcelConnection
 from Connection.IConnection import EmptyConnection
 from Connection.Connessione_Senza_Txt import ConnessioniSenzaTxt
+from Connection.Get_Xml_Connection import GetXmlConnection
 from typing import List
 import os
 
@@ -82,10 +83,11 @@ class BusinessLogic:
         connections = []
         total = len(excel_files)
         for idx, file_path in enumerate(excel_files, start=1):
-            # Pre-check: evita log e apertura se non ha connections.xml
+            # Pre-check: salta file senza connections.xml
             meta = ExcelMetadataExtractor(file_path)
             meta.get_metadata(file_path)
             if meta.collegamento_esterno != 'Si':
+                # opzionale: log leggero di skip
                 # print(f"[Connessioni] Skip {idx}/{total}: nessuna connections.xml -> {file_path}")
                 continue
             print(f"[Connessioni] Elaborazione file {idx}/{total}: {file_path}")
@@ -156,3 +158,18 @@ class BusinessLogic:
                     'Unknown'  # Type sempre valorizzato
                 ])
         return print_string
+    
+    def connessioni_xml(self) -> List[GetXmlConnection]:
+        paths = self._excel_file_list()
+        connessioni_xml = []
+        total = len(paths)
+        for idx, path in enumerate(paths, start=1):
+            meta = ExcelMetadataExtractor(path)
+            meta.get_metadata(path)
+            if meta.collegamento_esterno != 'Si':
+                continue
+            xml = GetXmlConnection(path)
+            xml.extract_connection_info()
+            connessioni_xml.append([xml.file_name, xml.server, xml.database, xml.schema, xml.table])
+            print(f"[Connessioni] Elaborazione file {idx}/{total}: {path}")
+        return connessioni_xml
