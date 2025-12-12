@@ -21,7 +21,7 @@ class BusinessLogic:
         return self.excel_finder.file_finder()
 
     def get_excel_file_paths(self) -> list[str]:
-        # Public accessor to list full Excel file paths
+        # Accessor pubblico per i percorsi completi dei file Excel
         return self._excel_file_list()
 
     def split_excel_root_path(self) -> List[str]:
@@ -37,17 +37,6 @@ class BusinessLogic:
     def _txt_file_list(self) -> list[str]:
         return self.txt_finder.file_finder()
     
-    def _excel_metadata(self) -> list[ExcelMetadataExtractor]:
-        excel_files = self._excel_file_list()
-        total = len(excel_files)
-        metadata_list = []
-        for idx, file_path in enumerate(excel_files, start=1):
-            print(f"[Excel] Elaborazione file {idx}/{total}: {file_path}")
-            extractor = ExcelMetadataExtractor(file_path)
-            extractor.get_metadata(file_path)
-            metadata_list.append(extractor)
-        return metadata_list
-
     def _excel_metadata_for_files(self, excel_files: list[str]) -> list[ExcelMetadataExtractor]:
         total = len(excel_files)
         metadata_list = []
@@ -57,6 +46,7 @@ class BusinessLogic:
             extractor.get_metadata(file_path)
             metadata_list.append(extractor)
         return metadata_list
+
     
     def _get_connection_info(self) -> List[IConnection]:
         txt_files = self._txt_file_list()
@@ -88,29 +78,16 @@ class BusinessLogic:
                 results.append(conn)
         return results
     
-    def get_excel_connections_without_txt(self) -> List[ConnessioniSenzaTxt]:
-        excel_files = self._excel_file_list()
-        total = len(excel_files)
-        connections = []
-        for idx, file_path in enumerate(excel_files, start=1):
-            print(f"[Connessioni] Elaborazione file {idx}/{total}: {file_path}")
-            conn = ConnessioniSenzaTxt(file_path)
-            conn_list = conn.estrai_connessioni()
-            # Aggiungi tutte le connessioni trovate per questo file
-            for info in conn_list:
-                connections.append([
-                    conn.file_name,
-                    info.get('Server'),
-                    info.get('Database'),
-                    info.get('Schema'),
-                    info.get('Tabella')
-                ])
-        return connections
-
     def get_excel_connections_without_txt_for_files(self, excel_files: list[str]) -> List[list]:
         connections = []
         total = len(excel_files)
         for idx, file_path in enumerate(excel_files, start=1):
+            # Pre-check: evita log e apertura se non ha connections.xml
+            meta = ExcelMetadataExtractor(file_path)
+            meta.get_metadata(file_path)
+            if meta.collegamento_esterno != 'Si':
+                # print(f"[Connessioni] Skip {idx}/{total}: nessuna connections.xml -> {file_path}")
+                continue
             print(f"[Connessioni] Elaborazione file {idx}/{total}: {file_path}")
             conn = ConnessioniSenzaTxt(file_path)
             conn_list = conn.estrai_connessioni()
@@ -124,8 +101,9 @@ class BusinessLogic:
                 ])
         return connections
 
-    def get_aggregated_info(self) -> List[list]:
-        metadata = self._excel_metadata()
+
+    def get_aggregated_info_for_files(self, excel_files: list[str]) -> List[list]:
+        metadata = self._excel_metadata_for_files(excel_files)
         connection_info = self._get_connection_info()
         print_string = []
         for data in metadata:
@@ -176,59 +154,5 @@ class BusinessLogic:
                     None,
                     None,
                     'Unknown'  # Type sempre valorizzato
-                ])
-        return print_string
-
-    def get_aggregated_info_for_files(self, excel_files: list[str]) -> List[list]:
-        metadata = self._excel_metadata_for_files(excel_files)
-        connection_info = self._get_connection_info()
-        print_string = []
-        for data in metadata:
-            if data.nome_file:
-                name_wo_extension = data.nome_file.replace('.xlsx', '')
-            else:
-                name_wo_extension = ''
-            matched = False
-            for conn in connection_info:
-                if name_wo_extension in conn.txt_file:
-                    conn_type = getattr(conn, 'type', None)
-                    if not conn_type:
-                        if conn.__class__.__name__ == 'GetSqlConnection':
-                            conn_type = 'Sql'
-                        elif conn.__class__.__name__ == 'GetSharePointConnection':
-                            conn_type = 'SharePoint'
-                        elif conn.__class__.__name__ == 'GetExcelConnection':
-                            conn_type = 'Excel'
-                        else:
-                            conn_type = 'Unknown'
-                    print_string.append([
-                        data.nome_file,
-                        data.creatore_file,
-                        data.ultimo_modificatore,
-                        data.data_creazione,
-                        data.data_ultima_modifica,
-                        data.collegamento_esterno,
-                        getattr(conn, 'source', None),
-                        getattr(conn, 'server', None),
-                        getattr(conn, 'database', None),
-                        getattr(conn, 'schema', None),
-                        getattr(conn, 'table', None),
-                        conn_type
-                    ])
-                    matched = True
-            if not matched:
-                print_string.append([
-                    data.nome_file,
-                    data.creatore_file,
-                    data.ultimo_modificatore,
-                    data.data_creazione,
-                    data.data_ultima_modifica,
-                    data.collegamento_esterno,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    'Unknown'
                 ])
         return print_string
