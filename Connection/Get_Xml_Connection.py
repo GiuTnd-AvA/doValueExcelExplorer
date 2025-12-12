@@ -1,7 +1,7 @@
 import zipfile
 import os
-
 import xml.etree.ElementTree as ET
+
 
 class GetXmlConnection:
     def __init__(self, excel_path):
@@ -14,55 +14,91 @@ class GetXmlConnection:
         self.xml_text = None
 
     def extract_connection_info(self):
+        """
+        Legge xl/connections.xml dentro l'Excel e restituisce una lista di
+        dict con chiavi: Server, Database, Schema, Tabella. Popola anche
+        gli attributi della classe con la prima connessione valida.
+        Gestisce namespace OpenXML e il caso "Multiple Tables" cercando in
+        xl/workbook.xml i nomi delle tabelle collegate alla connection.
+        """
         results = []
         try:
             with zipfile.ZipFile(self.excel_path, 'r') as z:
-                connections_path = 'xl/connections.xml'
                 names = z.namelist()
-                # Verifica robusta: presenza esatta o suffisso del percorso
-                has_connections = any(n.endswith(connections_path) for n in names)
-                if not has_connections:
-                    return results  # no connections.xml, skip gracefully
-                # Trova il nome esatto nel zip
-                exact_name = next((n for n in names if n.endswith(connections_path)), connections_path)
-                with z.open(exact_name) as f:
-                    xml_data = f.read()
-                    self.xml_text = xml_data.decode('utf-8', errors='ignore')
-                    root = ET.fromstring(self.xml_text)
-                    # Iterate all <connection> entries
-                    for conn in root.findall('.//connection'):
+                conn_path = next((n for n in names if n.endswith('xl/connections.xml')), None)
+                if not conn_path:
+                    return results
+                with z.open(conn_path) as f:
+                    xml_text = f.read().decode('utf-8', errors='ignore')
+                    self.xml_text = xml_text
+                    #print(f"[GetXmlConnection] File: {self.file_name} - xl/connections.xml content (len={len(xml_text)}):\n{xml_text}\n--- END connections.xml ---\n")
+                    try:
+                        root = ET.fromstring(xml_text)
+                    except ET.ParseError:
+                        return results
+
+                    ns = {'ns': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                    connections = list(root.findall('.//ns:connection', ns))
+                    if not connections:
+                        connections = list(root.findall('.//connection'))
+
+                    for conn in connections:
                         info = {
                             'Server': None,
                             'Database': None,
                             'Schema': None,
                             'Tabella': None
                         }
-                        conn_str = conn.attrib.get('connection', '')
+                        # dbPr con namespace
+                        db_pr = conn.find('ns:dbPr', ns)
+                        if db_pr is None:
+                            db_pr = conn.find('dbPr')
+                        conn_str = ''
+                        command = ''
+                        if db_pr is not None:
+                            conn_str = db_pr.attrib.get('connection', '') or ''
+                            command = db_pr.attrib.get('command', '') or ''
+
+                        # Server/Database
                         info['Server'] = self._extract_value(conn_str, ['Data Source', 'Server'])
                         info['Database'] = self._extract_value(conn_str, ['Initial Catalog', 'Database'])
-                        # dbPr often paired within the connection node
-                        db_pr = conn.find('.//dbPr') if conn is not None else None
-                        if db_pr is None:
-                            db_pr = root.find('.//dbPr')
-                        if db_pr is not None:
-                            info['Schema'] = db_pr.attrib.get('sschema')
-                            info['Tabella'] = db_pr.attrib.get('table')
-                        # Solo connessioni SQL valide: richiede almeno Server e Database
-                        if (info['Server'] and info['Database']):
+
+                        # Schema/Tabella dal command
+                        schema, table = self._parse_command(command)
+                        info['Schema'] = schema
+                        info['Tabella'] = table
+
+                        #print(f"[GetXmlConnection] Parsed connection for {self.file_name}: {info}")
+                        if info['Server'] and info['Database']:
                             results.append(info)
+
+                    # Multiple Tables: connection type 100 o name contenente 'Multiple Tables'
+                    for conn in connections:
+                        name_attr = conn.attrib.get('name', '') or ''
+                        conn_type = conn.attrib.get('type', '') or ''
+                        looks_multiple = ('multiple' in name_attr.lower()) or (conn_type == '100')
+                        if not looks_multiple:
+                            continue
+                        tables = self._tables_from_workbook(z, name_attr)
+                        srv, db = self._infer_server_database_from_name(name_attr)
+                        for t in tables:
+                            results.append({
+                                'Server': srv or '.',
+                                'Database': db,
+                                'Schema': 'dbo',
+                                'Tabella': t
+                            })
+
         except zipfile.BadZipFile:
-            # Not a valid Excel zip; return no results
             return results
-        except ET.ParseError:
-            # Malformed XML; skip silently
-            return results
-        # Also set top-level attributes to the first connection for compatibility
+
         if results:
             first = results[0]
             self.server = first['Server']
             self.database = first['Database']
             self.schema = first['Schema']
             self.table = first['Tabella']
+        #print(f"[GetXmlConnection] Results for {self.file_name}: {results}")
         return results
 
     def _extract_value(self, conn_str, keys):
@@ -71,3 +107,66 @@ class GetXmlConnection:
                 if part.strip().startswith(key + '='):
                     return part.split('=', 1)[1].strip()
         return None
+
+    def _parse_command(self, command):
+        import re
+        if not command:
+            return None, None
+        cmd = command.replace('&quot;', '"').strip()
+        m3 = re.match(r'^"([^"]+)"\."([^"]+)"\."([^"]+)"$', cmd)
+        if m3:
+            return m3.group(2), m3.group(3)
+        m2 = re.match(r'^"([^"]+)"\."([^"]+)"$', cmd)
+        if m2:
+            return m2.group(1), m2.group(2)
+        if re.search(r'\bselect\b', cmd, flags=re.IGNORECASE):
+            mfrom = re.search(r'\bfrom\b\s+([^\s;]+)', cmd, flags=re.IGNORECASE)
+            if mfrom:
+                token = mfrom.group(1).replace('[', '').replace(']', '').replace('"', '')
+                parts = [p for p in token.split('.') if p]
+                if len(parts) == 3:
+                    return parts[1], parts[2]
+                if len(parts) == 2:
+                    return parts[0], parts[1]
+        return None, None
+
+    def _infer_server_database_from_name(self, name_attr):
+        if not name_attr:
+            return None, None
+        parts = [p for p in name_attr.replace('\\',' ').replace('/',' ').split() if p]
+        server = None
+        database = None
+        if parts:
+            first = parts[0]
+            if first.startswith('.\\'):
+                server = '.'
+            elif first.lower().startswith('localhost'):
+                server = 'localhost'
+            else:
+                server = first
+        for token in parts[1:]:
+            low = token.lower()
+            if low in ('multiple','tables'):
+                continue
+            database = token
+            break
+        return server, database
+
+    def _tables_from_workbook(self, zip_obj, connection_name):
+        try:
+            names = zip_obj.namelist()
+            target = next((n for n in names if n.endswith('xl/workbook.xml')), None)
+            if not target:
+                return []
+            with zip_obj.open(target) as f:
+                xml_text = f.read().decode('utf-8', errors='ignore')
+        except Exception:
+            return []
+        import re
+        pattern = re.compile(r'name\s*=\s*"([^"]+)"\s+[^>]*connection\s*=\s*"' + re.escape(connection_name) + r'"', re.IGNORECASE)
+        names = [m.group(1) for m in pattern.finditer(xml_text)]
+        return [n for n in names if n and n != 'ThisWorkbookDataModel']
+
+    
+        
+

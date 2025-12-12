@@ -61,25 +61,20 @@ columns_connessioni = ['File_Name',
 
 ranges = _chunk_ranges(len(excel_files_list), CHUNK_SIZE)
 
-bl_obj = bl(EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
-xml = bl_obj.connessioni_xml()
-
-for i in xml:
-    print(i) 
-# for start, end in ranges:
-#     suffix = f"{start}-{end}"
-#     out_name = f"Report_Connessioni_{suffix}.xlsx"
-#     writer = ew(EXCEL_OUTPUT_PATH, out_name)
-#     # Lista file per range
-#     files_chunk = excel_files_list[start:end+1]
-#     writer.write_excel(columns_file_list, files_chunk, sheet_name='Lista file')
-#     # Paths chunk to analyze and export only this batch
-#     paths_chunk = excel_file_paths[start:end+1]
-#     aggregated_info_chunk = bl_obj.get_aggregated_info_for_files(paths_chunk)
-#     writer.write_excel(columns_connessioni, aggregated_info_chunk, sheet_name='Connessioni')
-#     #connection_list_No_Power_Query_chunk = bl_obj.get_excel_connections_without_txt_for_files(paths_chunk)
-#     connection_list_No_Power_Query_chunk = bl_obj.connessioni_xml()
-#     writer.write_excel(columns_connection_no_power_query, connection_list_No_Power_Query_chunk, sheet_name='Connessioni_Senza_Power_Query')
-#     print(f"Creato: {out_name} per range {suffix}")
+for start, end in ranges:
+    suffix = f"{start}-{end}"
+    out_name = f"Report_Connessioni_{suffix}.xlsx"
+    writer = ew(EXCEL_OUTPUT_PATH, out_name)
+    # Lista file per range
+    files_chunk = excel_files_list[start:end+1]
+    writer.write_excel(columns_file_list, files_chunk, sheet_name='Lista file')
+    # Paths chunk to analyze and export only this batch
+    paths_chunk = excel_file_paths[start:end+1]
+    aggregated_info_chunk = bl_obj.get_aggregated_info_for_files(paths_chunk)
+    writer.write_excel(columns_connessioni, aggregated_info_chunk, sheet_name='Connessioni')
+    connection_list_No_Power_Query_chunk = bl_obj.get_excel_connections_without_txt_for_files(paths_chunk)
+    connection_list_No_Power_Query_chunk = bl_obj.connessioni_xml()
+    writer.write_excel(columns_connection_no_power_query, connection_list_No_Power_Query_chunk, sheet_name='Connessioni_Senza_Power_Query')
+    print(f"Creato: {out_name} per range {suffix}")
 
 print(f'end at: {datetime.now()}')
