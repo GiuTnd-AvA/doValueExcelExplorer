@@ -68,8 +68,11 @@ class GetXmlConnection:
                             info['Server'] = self._extract_value(conn_str, ['DSN'])
                         info['Database'] = self._extract_value(conn_str, ['Initial Catalog', 'Database'])
 
-                        # Schema/Tabella dal command
-                        schema, table = self._parse_command(command)
+                        # Database/Schema/Tabella dal command (priorità al DB del command)
+                        cmd_db, schema, table = self._parse_command(command)
+                        # Se il DB è presente nel command, sovrascrive quello da Initial Catalog
+                        if cmd_db:
+                            info['Database'] = cmd_db
                         info['Schema'] = schema
                         info['Tabella'] = table
 
@@ -139,26 +142,56 @@ class GetXmlConnection:
         return None
 
     def _parse_command(self, command):
+        """
+        Prova a estrarre (database, schema, tabella) dal valore di `command`.
+        Supporta forme:
+          - "DB"."Schema"."Tabella"
+          - [DB].[Schema].[Tabella]
+          - Schema.Tabella
+          - SELECT ... FROM DB.Schema.Tabella [AS t]
+        Se non trova il database, ritorna (None, schema, tabella).
+        Se non riesce a riconoscere, ritorna (None, None, None).
+        """
         import re
         if not command:
-            return None, None
+            return None, None, None
+
         cmd = command.replace('&quot;', '"').strip()
-        m3 = re.match(r'^"([^"]+)"\."([^"]+)"\."([^"]+)"$', cmd)
-        if m3:
-            return m3.group(2), m3.group(3)
-        m2 = re.match(r'^"([^"]+)"\."([^"]+)"$', cmd)
-        if m2:
-            return m2.group(1), m2.group(2)
+
+        def split_qualified(token: str):
+            # Normalizza [x] in "x" e spazi attorno al punto
+            token = re.sub(r'\[([^\]]+)\]', r'"\1"', token)
+            token = re.sub(r'\s*\.\s*', '.', token)
+            parts = [p for p in token.split('.') if p]
+            clean = []
+            for p in parts:
+                p = p.strip()
+                if len(p) >= 2 and p[0] == '"' and p[-1] == '"':
+                    p = p[1:-1]
+                clean.append(p)
+            return [c for c in clean if c]
+
+        # Caso semplice: il command è solo un identificatore qualificato (nessuno spazio/parola chiave)
+        cmd_lower = cmd.lower()
+        if not re.search(r'\s', cmd_lower) and all(k not in cmd_lower for k in ('select', 'from', 'join', 'where')):
+            simple_parts = split_qualified(cmd)
+            if len(simple_parts) == 3:
+                return simple_parts[0], simple_parts[1], simple_parts[2]
+            if len(simple_parts) == 2:
+                return None, simple_parts[0], simple_parts[1]
+
+        # Caso SELECT ... FROM ...
         if re.search(r'\bselect\b', cmd, flags=re.IGNORECASE):
             mfrom = re.search(r'\bfrom\b\s+([^\s;]+)', cmd, flags=re.IGNORECASE)
             if mfrom:
-                token = mfrom.group(1).replace('[', '').replace(']', '').replace('"', '')
-                parts = [p for p in token.split('.') if p]
+                token = mfrom.group(1)
+                parts = split_qualified(token)
                 if len(parts) == 3:
-                    return parts[1], parts[2]
+                    return parts[0], parts[1], parts[2]
                 if len(parts) == 2:
-                    return parts[0], parts[1]
-        return None, None
+                    return None, parts[0], parts[1]
+
+        return None, None, None
 
     def _parse_all_tables(self, command):
         import re
