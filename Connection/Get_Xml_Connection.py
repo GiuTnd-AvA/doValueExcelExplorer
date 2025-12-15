@@ -71,14 +71,28 @@ class GetXmlConnection:
                             # Fallback: usa DSN come identificatore "server" quando non presente Data Source/Server
                             info['Server'] = self._extract_value(conn_str, ['DSN'])
                         conn_db = self._extract_value(conn_str, ['Initial Catalog', 'Database'])
-                        info['Database'] = conn_db
                         info['DatabaseFromConn'] = conn_db
 
                         # Database/Schema/Tabella dal command (priorità al DB del command)
                         cmd_db, schema, table = self._parse_command(command)
-                        # Manteniamo Database come da connection per compatibilità,
-                        # ma esponiamo anche DatabaseFromQuery e mismatch diagnostico.
+                        # Decidi il Database finale rispettando le regole richieste:
+                        # - Se conn_db è "ANALISI" (o manca), dai priorità al DB trovato nel command
+                        # - Altrimenti usa conn_db, salvo che nel command ci sia un esplicito USE <db>
+                        #   o un riferimento qualificato a un DB diverso, nel qual caso preferisci quello del command
                         info['DatabaseFromQuery'] = cmd_db
+                        chosen_db = conn_db
+                        if cmd_db:
+                            if not conn_db:
+                                chosen_db = cmd_db
+                            else:
+                                c_low = conn_db.strip().lower()
+                                q_low = cmd_db.strip().lower()
+                                if c_low == 'analisi' or c_low.startswith('analisi_'):
+                                    chosen_db = cmd_db
+                                elif c_low != q_low:
+                                    # mismatch: preferisci il DB del command
+                                    chosen_db = cmd_db
+                        info['Database'] = chosen_db
                         if conn_db and cmd_db and conn_db.strip().lower() != cmd_db.strip().lower():
                             info['DatabaseMismatch'] = True
                         info['Schema'] = schema
@@ -157,6 +171,7 @@ class GetXmlConnection:
           - [DB].[Schema].[Tabella]
           - Schema.Tabella
           - SELECT ... FROM DB.Schema.Tabella [AS t]
+          - USE <DB>
         Se non trova il database, ritorna (None, schema, tabella).
         Se non riesce a riconoscere, ritorna (None, None, None).
         """
@@ -179,6 +194,14 @@ class GetXmlConnection:
                 clean.append(p)
             return [c for c in clean if c]
 
+        # Esplicito USE <db>
+        muse = re.search(r'\buse\b\s+([A-Za-z0-9_\[\]"]+)', cmd, flags=re.IGNORECASE)
+        if muse:
+            token = muse.group(1)
+            token = token.replace('[', '').replace(']', '').replace('"', '').strip()
+            if token:
+                return token, None, None
+
         # Caso semplice: il command è solo un identificatore qualificato (nessuno spazio/parola chiave)
         cmd_lower = cmd.lower()
         if not re.search(r'\s', cmd_lower) and all(k not in cmd_lower for k in ('select', 'from', 'join', 'where')):
@@ -190,8 +213,8 @@ class GetXmlConnection:
 
         # Caso SELECT ... FROM ...
         if re.search(r'\bselect\b', cmd, flags=re.IGNORECASE):
-            # cattura il primo token dopo FROM, ignorando parentesi/virgole finali
-            mfrom = re.search(r'\bfrom\b\s+([^\s,);]+)', cmd, flags=re.IGNORECASE)
+            # cattura il primo token dopo FROM, includendo parti tra [] o "" che possono contenere spazi
+            mfrom = re.search(r'\bfrom\b\s+((?:\[[^\]]+\]|\"[^\"]+\"|[^\s,);])+)', cmd, flags=re.IGNORECASE)
             if mfrom:
                 token = mfrom.group(1)
                 parts = split_qualified(token)

@@ -33,7 +33,8 @@ class TestGetXmlConnectionDSN(unittest.TestCase):
             self.assertTrue(results, 'No connections found')
             self.assertEqual(len(results), 1)
             r = results[0]
-            self.assertEqual(r['Database'], 'ANALISI')
+            # Ora il database deve seguire quello indicato nel command (priorità al command rispetto ad ANALISI)
+            self.assertEqual(r['Database'], 's1057b')
             self.assertEqual(r['Server'], 'ANALISI_H3')
             self.assertEqual(r['Schema'], 'dbo')
             self.assertEqual(r['Tabella'], 'pmor_SVG_in_redazione')
