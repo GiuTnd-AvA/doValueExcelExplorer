@@ -63,6 +63,9 @@ class GetXmlConnection:
 
                         # Server/Database
                         info['Server'] = self._extract_value(conn_str, ['Data Source', 'Server'])
+                        if not info['Server']:
+                            # Fallback: usa DSN come identificatore "server" quando non presente Data Source/Server
+                            info['Server'] = self._extract_value(conn_str, ['DSN'])
                         info['Database'] = self._extract_value(conn_str, ['Initial Catalog', 'Database'])
 
                         # Schema/Tabella dal command
@@ -123,10 +126,16 @@ class GetXmlConnection:
         return results
 
     def _extract_value(self, conn_str, keys):
-        for key in keys:
-            for part in conn_str.split(';'):
-                if part.strip().startswith(key + '='):
-                    return part.split('=', 1)[1].strip()
+        if not conn_str:
+            return None
+        keys_lower = {k.lower() for k in keys}
+        for part in conn_str.split(';'):
+            part = part.strip()
+            if '=' not in part:
+                continue
+            left, right = part.split('=', 1)
+            if left.strip().lower() in keys_lower:
+                return right.strip()
         return None
 
     def _parse_command(self, command):
