@@ -49,7 +49,11 @@ class GetXmlConnection:
                             'Server': None,
                             'Database': None,
                             'Schema': None,
-                            'Tabella': None
+                            'Tabella': None,
+                            # Extra campi diagnostici senza rompere la compatibilità
+                            'DatabaseFromConn': None,
+                            'DatabaseFromQuery': None,
+                            'DatabaseMismatch': False
                         }
                         # dbPr con namespace
                         db_pr = conn.find('ns:dbPr', ns)
@@ -66,13 +70,17 @@ class GetXmlConnection:
                         if not info['Server']:
                             # Fallback: usa DSN come identificatore "server" quando non presente Data Source/Server
                             info['Server'] = self._extract_value(conn_str, ['DSN'])
-                        info['Database'] = self._extract_value(conn_str, ['Initial Catalog', 'Database'])
+                        conn_db = self._extract_value(conn_str, ['Initial Catalog', 'Database'])
+                        info['Database'] = conn_db
+                        info['DatabaseFromConn'] = conn_db
 
                         # Database/Schema/Tabella dal command (priorità al DB del command)
                         cmd_db, schema, table = self._parse_command(command)
-                        # Se il DB è presente nel command, sovrascrive quello da Initial Catalog
-                        if cmd_db:
-                            info['Database'] = cmd_db
+                        # Manteniamo Database come da connection per compatibilità,
+                        # ma esponiamo anche DatabaseFromQuery e mismatch diagnostico.
+                        info['DatabaseFromQuery'] = cmd_db
+                        if conn_db and cmd_db and conn_db.strip().lower() != cmd_db.strip().lower():
+                            info['DatabaseMismatch'] = True
                         info['Schema'] = schema
                         info['Tabella'] = table
 
@@ -156,7 +164,7 @@ class GetXmlConnection:
         if not command:
             return None, None, None
 
-        cmd = command.replace('&quot;', '"').strip()
+        cmd = self._normalize_sql(command)
 
         def split_qualified(token: str):
             # Normalizza [x] in "x" e spazi attorno al punto
@@ -182,16 +190,39 @@ class GetXmlConnection:
 
         # Caso SELECT ... FROM ...
         if re.search(r'\bselect\b', cmd, flags=re.IGNORECASE):
-            mfrom = re.search(r'\bfrom\b\s+([^\s;]+)', cmd, flags=re.IGNORECASE)
+            # cattura il primo token dopo FROM, ignorando parentesi/virgole finali
+            mfrom = re.search(r'\bfrom\b\s+([^\s,);]+)', cmd, flags=re.IGNORECASE)
             if mfrom:
                 token = mfrom.group(1)
                 parts = split_qualified(token)
+                # Gestisci forme: db.schema.table | schema.table | db..table (schema implicito)
                 if len(parts) == 3:
                     return parts[0], parts[1], parts[2]
                 if len(parts) == 2:
                     return None, parts[0], parts[1]
+                if len(parts) == 1:
+                    return None, 'dbo', parts[0]
 
         return None, None, None
+
+    def _normalize_sql(self, s: str) -> str:
+        """Normalizza il testo SQL estratto da `command` in connections.xml.
+        - sostituisce codifiche Excel tipo _x000d__x000a_ con spazi
+        - rimuove CR/LF, normalizza doppi spazi
+        - decodifica &quot;
+        """
+        import re
+        if not s:
+            return ''
+        # replace XML-encoded quotes
+        s = s.replace('&quot;', '"')
+        # replace Excel newline placeholders (case-insensitive)
+        s = re.sub(r'_x000[dD]__x000[aA]_', ' ', s)
+        # replace real newlines
+        s = s.replace('\r', ' ').replace('\n', ' ')
+        # collapse spaces
+        s = re.sub(r'\s+', ' ', s).strip()
+        return s
 
     def _parse_all_tables(self, command):
         import re
