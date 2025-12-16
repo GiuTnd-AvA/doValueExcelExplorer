@@ -43,12 +43,9 @@ struttura_colonne = []
 
 for idx, row in df.iterrows():
     params = get_conn_params(row)
+    print(f"DEBUG PARAMS: {params}")
     # --- CONNESSIONE E VALIDAZIONE PARAMETRI ---
-    if (
-        not params["type"]
-        or str(params["type"]).lower() != "sql"
-        or not (params["server"] and params["db_name"] and params["table"])
-    ):
+    if not (params["server"] and params["db_name"] and params["table"]):
         continue
     conn_str = f"mssql+pyodbc://@{params['server']}/{params['db_name']}?driver={DRIVER}&trusted_connection=yes"
     engine = create_engine(conn_str)
