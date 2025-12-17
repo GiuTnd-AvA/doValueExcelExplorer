@@ -27,6 +27,8 @@ class SqlExplorer:
     def _strip_comments(self, sql: str) -> str:
         sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.S)
         sql = re.sub(r"--.*?$", " ", sql, flags=re.M)
+        # Remove batch separators like GO on their own line
+        sql = re.sub(r"^\s*go\s*$", " ", sql, flags=re.I | re.M)
         return sql
 
     def _clean_name(self, name: str) -> str:
@@ -89,11 +91,20 @@ class SqlExplorer:
 
     def _split_select_blocks(self, sql: str) -> list:
         blocks = []
-        for m in re.finditer(r"\bselect\b", sql, flags=re.I):
+        selects = list(re.finditer(r"\bselect\b", sql, flags=re.I))
+        for i, m in enumerate(selects):
             start = m.start()
-            # End at next SELECT or end of string
-            nm = re.search(r"\bselect\b", sql[start + 6:], flags=re.I)
-            end = (start + 6 + nm.start()) if nm else len(sql)
+            next_select_pos = selects[i + 1].start() if i + 1 < len(selects) else None
+            # Prefer terminating at the first semicolon after start, if it appears before the next SELECT
+            semi_m = re.search(r";", sql[start:])
+            if semi_m:
+                semi_pos = start + semi_m.start() + 1
+            else:
+                semi_pos = None
+            if semi_pos and (next_select_pos is None or semi_pos <= next_select_pos):
+                end = semi_pos
+            else:
+                end = next_select_pos if next_select_pos is not None else len(sql)
             blocks.append(sql[start:end])
         return blocks
 
@@ -123,8 +134,8 @@ class SqlExplorer:
             rows.append([
                 self.file_name,
                 into_table,
-                ", ".join(from_tables) if from_tables else "",
-                ", ".join(join_tables) if join_tables else "",
+                "; ".join(from_tables) if from_tables else "",
+                "; ".join(join_tables) if join_tables else "",
             ])
         # Also parse INSERT INTO statements (e.g., INSERT INTO dbo.T ... VALUES ... or SELECT ... FROM ...)
         for iblock in self._split_insert_blocks(sql):
@@ -137,8 +148,8 @@ class SqlExplorer:
                 rows.append([
                     self.file_name,
                     into_table,
-                    ", ".join(from_tables) if from_tables else "",
-                    ", ".join(join_tables) if join_tables else "",
+                    "; ".join(from_tables) if from_tables else "",
+                    "; ".join(join_tables) if join_tables else "",
                 ])
         return rows
     
