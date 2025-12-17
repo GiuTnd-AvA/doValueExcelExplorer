@@ -85,7 +85,6 @@ for idx, row in df.iterrows():
                 "Server": params['server'],
                 "Database": params['db_name'],
                 "Table": table_label,
-                "Type": params['type'],
                 "ObjectName": r[0],
                 "ObjectType": r[1],
                 "SQLDefinition": r[2]
