@@ -90,6 +90,12 @@ class GetSqlConnection(IConnection):
                             elif len(parts) == 3:
                                 self.schema = parts[1]
                                 self.table = parts[2]
+                    # Nuova logica: se non è stata trovata una table, cerca temp table (# o ##)
+                    if not getattr(self, 'table', None):
+                        temp_table_match = re.search(r'(?:FROM|JOIN)\s+(#\#?[\w_]+)', cleaned_query, re.IGNORECASE)
+                        if temp_table_match:
+                            self.schema = ''
+                            self.table = temp_table_match.group(1)
             if dbs_match:
                 self.server = dbs_match.group(1)
                 db_line = re.search(r'(Source|Origine)\{\[Name="([^"]+)"\]\}\[Data\]', content)
