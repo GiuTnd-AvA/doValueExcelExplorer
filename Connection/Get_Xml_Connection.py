@@ -11,12 +11,13 @@ class GetXmlConnection:
         self.database = None
         self.schema = None
         self.table = None
+        self.join = None
         self.xml_text = None
 
     def extract_connection_info(self):
         """
         Legge xl/connections.xml dentro l'Excel e restituisce una lista di
-        dict con chiavi: Server, Database, Schema, Tabella. Popola anche
+        dict con chiavi: Server, Database, Schema, Tabella, Join. Popola anche
         gli attributi della classe con la prima connessione valida.
         Gestisce namespace OpenXML e il caso "Multiple Tables" cercando in
         xl/workbook.xml i nomi delle tabelle collegate alla connection.
@@ -50,6 +51,7 @@ class GetXmlConnection:
                             'Database': None,
                             'Schema': None,
                             'Tabella': None,
+                            'Join': None,
                             # Extra campi diagnostici senza rompere la compatibilità
                             'DatabaseFromConn': None,
                             'DatabaseFromQuery': None,
@@ -97,6 +99,20 @@ class GetXmlConnection:
                             info['DatabaseMismatch'] = True
                         info['Schema'] = schema
                         info['Tabella'] = table
+
+                        # JOIN tables: estrae tutte le tabelle nelle JOIN, formattate come schema.tabella
+                        join_pairs = self._parse_join_tables(command)
+                        if join_pairs:
+                            join_list = []
+                            for sch, tab in join_pairs:
+                                if not sch or not tab:
+                                    continue
+                                # Evita di ripetere la tabella principale del FROM
+                                if sch == info['Schema'] and tab == info['Tabella']:
+                                    continue
+                                join_list.append(f"{sch}.{tab}")
+                            if join_list:
+                                info['Join'] = ';'.join(join_list)
 
                         # print("\n"+
                         #     f"[GetXmlConnection] {self.file_name} -> "
@@ -147,6 +163,7 @@ class GetXmlConnection:
             self.database = first['Database']
             self.schema = first['Schema']
             self.table = first['Tabella']
+            self.join = first.get('Join')
         #print(f"[GetXmlConnection] Results for {self.file_name}: {results}")
         return results
 
@@ -278,6 +295,28 @@ class GetXmlConnection:
                     results.append(tup)
 
         return results
+    def _parse_join_tables(self, command):
+        """Ritorna solo le coppie (schema, tabella) presenti nelle JOIN del command."""
+        import re
+        joins = []
+        if not command:
+            return joins
+        cmd = command.replace('&quot;', '"')
+
+        def split_parts(token):
+            token = token.strip()
+            token = token.replace('[', '').replace(']', '').replace('"', '')
+            token = token.split()[0]
+            parts = [p for p in token.split('.') if p]
+            return parts
+
+        for m in re.finditer(r'\bjoin\b\s+([^\s;]+)', cmd, flags=re.IGNORECASE):
+            parts = split_parts(m.group(1))
+            if len(parts) >= 2:
+                tup = (parts[-2], parts[-1])
+                if tup not in joins:
+                    joins.append(tup)
+        return joins
     def _infer_server_database_from_name(self, name_attr):
         if not name_attr:
             return None, None

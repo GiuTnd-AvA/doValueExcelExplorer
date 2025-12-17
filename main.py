@@ -1,22 +1,22 @@
 from Config.config import POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH, EXCEL_OUTPUT_PATH, CHUNK_SIZE
-from PowerShellScripts.Excecute_Power_Shell_Script import ExecPsCode as ps
+#from PowerShellScripts.Excecute_Power_Shell_Script import ExecPsCode as ps
 from BusinessLogic.Business_Logic import BusinessLogic as bl
 from Report.Excel_Writer import ExcelWriter as ew
 from datetime import datetime
 
 start = datetime.now()
 print(f'start at: {start}')
-# run_ps = ps(POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
-# return_code, output, error = run_ps.run()
-
-# if return_code == 0:
-#     print("PowerShell script executed successfully.")
-#     print("Output:")
-#     print(output)
-# else:
-#     print("PowerShell script execution failed.")
-#     print("Error:")
-#     print(error)
+# try:
+#     run_ps = ps(POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
+#     return_code, output, error = run_ps.run()
+#     print("PowerShell export eseguito con codice:", return_code)
+#     if output:
+#         print(output)
+#     if error:
+#         print(error)
+# except Exception as e:
+#     # Non bloccare la pipeline se l'export fallisce; logghiamo e proseguiamo
+#     print(f"[ExportMCode] Avviso: esecuzione script PowerShell non riuscita: {e}")
 
 bl_obj = bl(EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
 excel_file_paths = bl_obj.get_excel_file_paths()
@@ -59,6 +59,8 @@ columns_connessioni = ['File_Name',
                        'Schema',
                        'Table',
                        'Type']
+columns_sql_list = ['Percorsi', 'File']
+columns_sql_into_from_join = ['File_Name','Into','From','Join']
 
 ranges = _chunk_ranges(len(excel_files_list), CHUNK_SIZE)
 
@@ -71,11 +73,20 @@ for r_start, r_end in ranges:
     writer.write_excel(columns_file_list, files_chunk, sheet_name='Lista file')
     # Paths chunk to analyze and export only this batch
     paths_chunk = excel_file_paths[r_start:r_end+1]
-    aggregated_info_chunk = bl_obj.get_aggregated_info_for_files(paths_chunk)
-    writer.write_excel(columns_connessioni, aggregated_info_chunk, sheet_name='Connessioni')
+    #aggregated_info_chunk = bl_obj.get_aggregated_info_for_files(paths_chunk)
+    #writer.write_excel(columns_connessioni, aggregated_info_chunk, sheet_name='Connessioni')
     #connection_list_No_Power_Query_chunk = bl_obj.get_excel_connections_without_txt_for_files(paths_chunk)
     connection_list_No_Power_Query_chunk = bl_obj.connessioni_xml(paths_chunk)
     writer.write_excel(columns_connection_no_power_query, connection_list_No_Power_Query_chunk, sheet_name='Connessioni_Senza_Power_Query')
+    # Foglio aggiuntivo con le informazioni di JOIN (solo File e Join)
+    columns_connection_with_join = ['File_Name','Join']
+    connection_list_with_join_chunk = bl_obj.connessioni_xml_with_join(paths_chunk)
+    writer.write_excel(columns_connection_with_join, connection_list_with_join_chunk, sheet_name='Connessioni_Join')
+    sql_file_list_chunk = bl_obj.sql_file_list()
+    writer.write_excel(columns_sql_list, sql_file_list_chunk, sheet_name='Lista file SQL')
+    # SQL INTO/FROM/JOIN summary (all SQL files scanned)
+    sql_into_from_join_rows = bl_obj.sql_into_from_join()
+    writer.write_excel(columns_sql_into_from_join, sql_into_from_join_rows, sheet_name='SQL_Into_From_Join')
     print(f"Creato: {out_name} per range {suffix}")
 
 end = datetime.now()

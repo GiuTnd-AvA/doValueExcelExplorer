@@ -46,9 +46,7 @@ class GetXlsConnection(IConnection):
                 re.compile(rb"(Table|TABLENAME)\s*=\s*([^;\r\n]+)", re.IGNORECASE),
             ]
 
-            # Accumula valori attraverso tutti gli stream (server/database/schema/table)
-            g_server = g_database = g_schema = g_table = None
-
+            found_any = False
             for path in streams:
                 # path è una tupla di componenti (es. ('Workbook',))
                 try:
@@ -56,9 +54,12 @@ class GetXlsConnection(IConnection):
                 except Exception:
                     continue
 
-                # 1) Ricerca pattern di connessione in raw bytes
+                server = database = schema = table = None
+
+                # Cerca pattern di connessione in raw bytes
                 for pat in patterns:
                     for m in pat.finditer(data):
+                        # Alcuni pattern hanno due gruppi (chiave, valore), altri solo valore
                         try:
                             if m.lastindex and m.lastindex >= 2:
                                 key = m.group(1).decode(errors='ignore').lower()
@@ -69,65 +70,29 @@ class GetXlsConnection(IConnection):
                         except Exception:
                             continue
 
-                        if (('server' in key or 'data source' in key) and not g_server):
-                            g_server = val
-                        elif (('database' in key or 'initial catalog' in key) and not g_database):
-                            g_database = val
-                        elif ('schema' in key and not g_schema):
-                            g_schema = val
-                        elif ('table' in key and not g_table):
-                            g_table = val
-                        elif key == 'dsn' and not g_server:
-                            g_server = val
+                        if 'server' in key or 'data source' in key:
+                            server = val
+                        elif 'database' in key or 'initial catalog' in key:
+                            database = val
+                        elif 'schema' in key:
+                            schema = val
+                        elif 'table' in key:
+                            table = val
+                        elif key == 'dsn' and not server:
+                            # DSN presente: lo salviamo come server/alias
+                            server = val
 
-                # 2) Decodifica testo per cercare Command text con DB.Schema.Table
-                # Proviamo sia UTF-8/Latin-1 che UTF-16LE (spesso usato nei flussi OLE)
-                try:
-                    text = data.decode('utf-8', errors='ignore')
-                except Exception:
-                    text = ''
-                try:
-                    text16 = data.decode('utf-16le', errors='ignore')
-                except Exception:
-                    text16 = ''
-
-                import re as _re
-                # Pattern con virgolette doppie: "DB"."schema"."table"
-                pat_trip_quotes = _re.compile(r'\"(?P<db>[^\"\\]+)\"\s*\.\s*\"(?P<schema>[^\"\\]+)\"\s*\.\s*\"(?P<table>[^\"\\]+)\"')
-                # Pattern SQL classico: FROM [schema].[table] oppure FROM schema.table
-                pat_from = _re.compile(r'FROM\s+(?:\"(?P<db2>[^\"]+)\"\.)?\[?(?P<schema2>[A-Za-z0-9_]+)\]?\s*\.\s*\[?(?P<table2>[A-Za-z0-9_]+)\]?', _re.IGNORECASE)
-
-                for txt in (text, text16):
-                    if not txt:
-                        continue
-                    m1 = pat_trip_quotes.search(txt)
-                    if m1:
-                        if not g_database:
-                            g_database = m1.group('db')
-                        if not g_schema:
-                            g_schema = m1.group('schema')
-                        if not g_table:
-                            g_table = m1.group('table')
-                    if not g_table or not g_schema:
-                        m2 = pat_from.search(txt)
-                        if m2:
-                            if not g_schema:
-                                g_schema = m2.group('schema2')
-                            if not g_table:
-                                g_table = m2.group('table2')
-
-                # Se abbiamo già tutto il necessario, possiamo fermarci
-                if g_server and g_database and (g_schema or g_table):
+                if any([server, database, schema, table]):
+                    self.source = 'Excel.Workbook'
+                    self.server = server
+                    self.database = database
+                    self.schema = schema
+                    self.table = table
+                    found_any = True
                     break
 
-            if not any([g_server, g_database, g_schema, g_table]):
+            if not found_any:
                 print(f"[Excel XLS] Nessuna connessione rilevata in: {self.txt_file}")
-            else:
-                self.source = 'Excel.Workbook'
-                self.server = g_server
-                self.database = g_database
-                self.schema = g_schema
-                self.table = g_table
 
             return self
 
