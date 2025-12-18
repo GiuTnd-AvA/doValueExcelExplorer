@@ -23,6 +23,7 @@ class PowerQueryTxtSourceExtractor:
     def __init__(self, root_dir: str) -> None:
         self.root_dir = root_dir
         self.rows: List[Tuple[str, str]] = []  # (file_name, source_line)
+        self.missing_files: List[str] = []     # relative paths of .txt without 'Source ='
 
     @staticmethod
     def _read_text_best_effort(path: str) -> Optional[str]:
@@ -49,6 +50,7 @@ class PowerQueryTxtSourceExtractor:
         Returns the rows list.
         """
         self.rows.clear()
+        self.missing_files.clear()
 
         # First pass: count total .txt files
         total_txt = 0
@@ -80,9 +82,19 @@ class PowerQueryTxtSourceExtractor:
                 if src_line:
                     self.rows.append((fname, src_line))
                     found += 1
+                else:
+                    # Store relative path of files missing 'Source ='
+                    rel = os.path.relpath(full_path, self.root_dir)
+                    self.missing_files.append(rel)
 
         if verbose:
             print(f"Scan complete: processed {processed}/{total_txt} .txt files, found {found} with 'Source ='.")
+            if self.missing_files:
+                print(f"Files without 'Source =': {len(self.missing_files)}")
+                for mf in self.missing_files:
+                    print(f" - {mf}")
+            else:
+                print("All processed .txt files contain a 'Source =' line.")
         return self.rows
 
     def write_report(self, output_path: str) -> str:
