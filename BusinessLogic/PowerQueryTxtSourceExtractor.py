@@ -23,7 +23,8 @@ class PowerQueryTxtSourceExtractor:
 
     def __init__(self, root_dir: str) -> None:
         self.root_dir = root_dir
-        self.rows: List[Tuple[str, str]] = []  # (file_name, source_line)
+        # rows: (full_path, file_name, source_line)
+        self.rows: List[Tuple[str, str, str]] = []
         self.missing_files: List[str] = []     # relative paths of .txt without 'Source ='
 
     @staticmethod
@@ -46,7 +47,7 @@ class PowerQueryTxtSourceExtractor:
         line = m.group(0).strip()
         return line
 
-    def scan(self, verbose: bool = True) -> List[Tuple[str, str]]:
+    def scan(self, verbose: bool = True) -> List[Tuple[str, str, str]]:
         """Populate self.rows with (file_name, source_line) for each .txt file.
         Returns the rows list.
         """
@@ -81,7 +82,7 @@ class PowerQueryTxtSourceExtractor:
 
                 src_line = self.extract_source_line(content)
                 if src_line:
-                    self.rows.append((fname, src_line))
+                    self.rows.append((full_path, fname, src_line))
                     found += 1
                 else:
                     # Store relative path of files missing 'Source ='
@@ -105,21 +106,24 @@ class PowerQueryTxtSourceExtractor:
         wb = Workbook()
         ws = wb.active
         ws.title = "PowerQuery Sources"
-        ws.cell(row=1, column=1, value="File")
-        ws.cell(row=1, column=2, value="Source")
+        ws.cell(row=1, column=1, value="Path")
+        ws.cell(row=1, column=2, value="File")
+        ws.cell(row=1, column=3, value="Source")
 
         wrap = Alignment(wrap_text=True, vertical="top")
         max_cell_len = 32767
 
-        for idx, (fname, source) in enumerate(self.rows, start=2):
+        for idx, (full_path, fname, source) in enumerate(self.rows, start=2):
             val = source if len(source) <= max_cell_len else (source[:max_cell_len - 15] + "... [TRUNCATED]")
-            ws.cell(row=idx, column=1, value=fname)
-            c2 = ws.cell(row=idx, column=2, value=val)
-            c2.alignment = wrap
+            ws.cell(row=idx, column=1, value=full_path)
+            ws.cell(row=idx, column=2, value=fname)
+            c3 = ws.cell(row=idx, column=3, value=val)
+            c3.alignment = wrap
 
         # Set widths
-        ws.column_dimensions['A'].width = 50
-        ws.column_dimensions['B'].width = 120
+        ws.column_dimensions['A'].width = 80  # Path
+        ws.column_dimensions['B'].width = 40  # File
+        ws.column_dimensions['C'].width = 120 # Source
 
         # Ensure directory exists
         out_dir = os.path.dirname(output_path)
