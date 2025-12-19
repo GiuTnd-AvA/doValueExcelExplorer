@@ -6,6 +6,7 @@ class GetSqlConnection(IConnection):
 
     def __init__(self, txt_file):
         super().__init__(txt_file)
+        self.join_tables = []  # Nuovo attributo: lista di tutte le tabelle di JOIN trovate
 
     def get_connection(self):
         try:
@@ -69,8 +70,30 @@ class GetSqlConnection(IConnection):
                     cleaned_query = re.sub(r'/\*.*?\*/', ' ', cleaned_query, flags=re.DOTALL)
                     # Normalizza spazi multipli
                     cleaned_query = re.sub(r'\s+', ' ', cleaned_query)
+
+                    # Estrai tutte le tabelle coinvolte nei JOIN (oltre a FROM)
+                    join_matches = re.findall(r'JOIN\s+((?:[\w\[\]]+\.){0,2}\[?[\w]+\]?)(?:\s+AS\s+\w+|\s+\w+)?', cleaned_query, re.IGNORECASE)
+                    self.join_tables = []
+                    for jm in join_matches:
+                        table_full = jm.strip('[]"`()')
+                        parts = re.split(r'\.', table_full)
+                        parts = [p.strip('[]') for p in parts if p.strip('[]')]
+                        if len(parts) == 2:
+                            schema = parts[0]
+                            table = parts[1]
+                        elif len(parts) == 1:
+                            schema = ''
+                            table = parts[0]
+                        elif len(parts) == 3:
+                            schema = parts[1]
+                            table = parts[2]
+                        else:
+                            schema = ''
+                            table = table_full
+                        self.join_tables.append(f"{schema}.{table}" if schema else table)
+
                     # Regex aggiornata: gestisce anche schema..[table] e parentesi quadre, accetta caratteri speciali tra FROM/JOIN e la tabella
-                    table_matches = re.findall(r'(?:FROM|JOIN)[^a-zA-Z]+([\w]+)\.\.\[?([\w]+)\]?', cleaned_query, re.IGNORECASE)
+                    table_matches = re.findall(r'(?:FROM|JOIN)[^a-zA-Z]+([\w]+)\.\.[\[]?([\w]+)\]?', cleaned_query, re.IGNORECASE)
                     if table_matches:
                         self.schema = table_matches[0][0]
                         self.table = table_matches[0][1]
@@ -121,9 +144,10 @@ class GetSqlConnection(IConnection):
                 self.table = table_match.group(2)
 
         # DEBUG: stampa i valori estratti
-        print(f"Server: {self.server}")
-        print(f"Database: {self.database}")
-        print(f"Schema: {self.schema}")
-        print(f"Table: {self.table}")
-        print(f"Query: {self.query}")
-        print(f"Source: {self.source}")
+        # print(f"Server: {self.server}")
+        # print(f"Database: {self.database}")
+        # print(f"Schema: {self.schema}")
+        # print(f"Table: {self.table}")
+        # print(f"Query: {self.query}")
+        # print(f"Source: {self.source}")
+        print(f"File: {self.txt_file} | Table: {self.table}")

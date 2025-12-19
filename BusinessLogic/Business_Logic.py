@@ -12,6 +12,52 @@ import os
 
 class BusinessLogic:
 
+    def get_txt_only_connection_info(self) -> list:
+        """
+        Estrae tutte le connessioni PowerQuery dai file .txt, senza richiedere la presenza dei file Excel.
+        Restituisce una lista di liste con tutte le colonne di dettaglio, Join e N_Connessioni_PQ (conteggio per file txt).
+        """
+        connection_info = self._get_connection_info()
+        # Conta le connessioni per ogni file txt
+        conn_count_map = {}
+        for conn in connection_info:
+            if hasattr(conn, 'txt_file'):
+                base = os.path.basename(conn.txt_file)
+                base = base.replace('.txt', '').replace('.xlsx', '')
+                conn_count_map[base] = conn_count_map.get(base, 0) + 1
+        output = []
+        for conn in connection_info:
+            if hasattr(conn, 'txt_file'):
+                base = os.path.basename(conn.txt_file)
+                base = base.replace('.txt', '').replace('.xlsx', '')
+                n_connessioni = conn_count_map.get(base, 0)
+            else:
+                n_connessioni = 0
+            conn_type = getattr(conn, 'type', None)
+            if not conn_type:
+                if conn.__class__.__name__ == 'GetSqlConnection':
+                    conn_type = 'Sql'
+                elif conn.__class__.__name__ == 'GetSharePointConnection':
+                    conn_type = 'SharePoint'
+                elif conn.__class__.__name__ == 'GetExcelConnection':
+                    conn_type = 'Excel'
+                else:
+                    conn_type = 'Unknown'
+            join_tables = getattr(conn, 'join_tables', [])
+            join_tables_str = ', '.join(join_tables) if join_tables else ''
+            output.append([
+                os.path.basename(getattr(conn, 'txt_file', '')),
+                getattr(conn, 'source', None),
+                getattr(conn, 'server', None),
+                getattr(conn, 'database', None),
+                getattr(conn, 'schema', None),
+                getattr(conn, 'table', None),
+                join_tables_str,
+                conn_type,
+                n_connessioni
+            ])
+        return output
+
     def __init__(self, root_path_excel: str, root_path_txt: str):
         self.excel_finder = ExcelFinder(root_path_excel)
         self.txt_finder = TxtFinder(root_path_txt)
@@ -75,12 +121,21 @@ class BusinessLogic:
         metadata = self._excel_metadata()
         connection_info = self._get_connection_info()
         print_string = []
+        # Mappa file excel base name (senza estensione) -> numero connessioni PQ
+        conn_count_map = {}
+        for conn in connection_info:
+            # Ricava il nome base del file excel associato (senza estensione)
+            if hasattr(conn, 'txt_file'):
+                base = os.path.basename(conn.txt_file)
+                base = base.replace('.txt', '').replace('.xlsx', '')
+                conn_count_map[base] = conn_count_map.get(base, 0) + 1
         for data in metadata:
             if data.nome_file:
                 name_wo_extension = data.nome_file.replace('.xlsx', '')
             else:
                 name_wo_extension = ''
             matched = False
+            n_connessioni = conn_count_map.get(name_wo_extension, 0)
             for conn in connection_info:
                 if name_wo_extension in conn.txt_file:
                     # Usa l'attributo type se presente, altrimenti deduci dal nome classe
@@ -94,6 +149,9 @@ class BusinessLogic:
                             conn_type = 'Excel'
                         else:
                             conn_type = 'Unknown'
+                    # Colonna Join: tutte le tabelle di JOIN trovate (solo per SQL)
+                    join_tables = getattr(conn, 'join_tables', [])
+                    join_tables_str = ', '.join(join_tables) if join_tables else ''
                     print_string.append([
                         data.nome_file,
                         data.creatore_file,
@@ -106,7 +164,9 @@ class BusinessLogic:
                         getattr(conn, 'database', None),
                         getattr(conn, 'schema', None),
                         getattr(conn, 'table', None),
-                        conn_type
+                        join_tables_str,
+                        conn_type,
+                        n_connessioni
                     ])
                     matched = True
             if not matched:
@@ -122,6 +182,8 @@ class BusinessLogic:
                     None,
                     None,
                     None,
-                    'Unknown'  # Type sempre valorizzato
+                    '',
+                    'Unknown',
+                    n_connessioni
                 ])
         return print_string
