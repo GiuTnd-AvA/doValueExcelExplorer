@@ -72,9 +72,16 @@ def filter_duplicates(records):
     seen = set()
     filtered = []
     for row in records:
-        if row and row[0] not in seen:
-            filtered.append(row)
-            seen.add(row[0])
+        if row:
+            # Prendi solo il nome file senza percorso ed estensione
+            file_name = row[0]
+            base_name = file_name.split("\\")[-1].split("/")[-1]
+            base_name = base_name.replace('.txt', '').replace('.xlsx', '')
+            # Usa anche la tabella principale per deduplicare (se vuoi deduplicare per file+table)
+            key = (base_name, row[10])  # row[10] è la colonna Table
+            if key not in seen:
+                filtered.append(row)
+                seen.add(key)
     return filtered
 
 # Prima di esportare in Excel:
