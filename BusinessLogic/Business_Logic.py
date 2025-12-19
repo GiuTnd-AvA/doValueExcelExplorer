@@ -160,44 +160,26 @@ class BusinessLogic:
                 else:
                     conn_type = 'Unknown'
 
+            # Tabella principale (FROM)
+            main_table = getattr(conn, 'table', None)
+            # Tutte le tabelle di JOIN
             join_tables = getattr(conn, 'join_tables', [])
             join_tables_str = ', '.join(join_tables) if join_tables else ''
 
-            # Se ci sono più tabelle, esporta una riga per ciascuna
-            tables = getattr(conn, 'tables', None)
-            if tables and isinstance(tables, list) and tables:
-                for table in tables:
-                    print_string.append([
-                        getattr(conn, 'txt_file', ''),
-                        creatore_file,
-                        ultimo_modificatore,
-                        data_creazione,
-                        data_ultima_modifica,
-                        collegamento_esterno,
-                        getattr(conn, 'source', None),
-                        getattr(conn, 'server', None),
-                        getattr(conn, 'database', None),
-                        getattr(conn, 'schema', None),
-                        table,
-                        join_tables_str,
-                        conn_type,
-                        conn_count_map.get(os.path.basename(getattr(conn, 'txt_file', '')).replace('.txt', '').replace('.xlsx', ''), 0)
-                    ])
-            else:
-                print_string.append([
-                    getattr(conn, 'txt_file', ''),
-                    creatore_file,
-                    ultimo_modificatore,
-                    data_creazione,
-                    data_ultima_modifica,
-                    collegamento_esterno,
-                    getattr(conn, 'source', None),
-                    getattr(conn, 'server', None),
-                    getattr(conn, 'database', None),
-                    getattr(conn, 'schema', None),
-                    getattr(conn, 'table', None),
-                    join_tables_str,
-                    conn_type,
-                    conn_count_map.get(os.path.basename(getattr(conn, 'txt_file', '')).replace('.txt', '').replace('.xlsx', ''), 0)
-                ])
+            print_string.append([
+                getattr(conn, 'txt_file', ''),
+                creatore_file,
+                ultimo_modificatore,
+                data_creazione,
+                data_ultima_modifica,
+                collegamento_esterno,
+                getattr(conn, 'source', None),
+                getattr(conn, 'server', None),
+                getattr(conn, 'database', None),
+                getattr(conn, 'schema', None),
+                main_table,
+                join_tables_str,
+                conn_type,
+                conn_count_map.get(os.path.basename(getattr(conn, 'txt_file', '')).replace('.txt', '').replace('.xlsx', ''), 0)
+            ])
         return print_string
