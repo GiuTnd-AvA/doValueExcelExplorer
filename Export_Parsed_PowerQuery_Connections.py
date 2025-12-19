@@ -31,19 +31,20 @@ def read_sources_from_excel(input_path: str) -> List[Tuple[str, str, str]]:
     return rows
 
 
-def write_parsed_excel(entries: List[Tuple[str, str, str, str, str]], output_path: str) -> None:
+def write_parsed_excel(entries: List[Tuple[str, str, str, str, str, str, str]], output_path: str) -> None:
     wb = Workbook()
     ws = wb.active
     ws.title = "ParsedConnections"
 
-    headers = ["File", "Server", "Database", "Schema", "Table"]
+    # Include file path and original Source for verification
+    headers = ["Path", "File", "Server", "Database", "Schema", "Table", "Source"]
     ws.append(headers)
 
-    for file, server, database, schema, table in entries:
-        ws.append([file, server, database, schema, table])
+    for path, file, server, database, schema, table, source in entries:
+        ws.append([path, file, server, database, schema, table, source])
 
     # Simple sizing
-    widths = [40, 20, 20, 16, 48]
+    widths = [60, 28, 20, 20, 16, 40, 100]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -62,10 +63,18 @@ def main():
     rows = read_sources_from_excel(args.input)
     parser = PowerQuerySourceConnectionParser()
 
-    parsed: List[Tuple[str, str, str, str, str]] = []
-    for _, file, source in rows:
+    parsed: List[Tuple[str, str, str, str, str, str, str]] = []
+    for path, file, source in rows:
         info = parser.parse(source)
-        parsed.append((file, info.get("server"), info.get("database"), info.get("schema"), info.get("table")))
+        parsed.append((
+            path,
+            file,
+            info.get("server"),
+            info.get("database"),
+            info.get("schema"),
+            info.get("table"),
+            source,
+        ))
 
     write_parsed_excel(parsed, args.output)
     print(f"Parsed {len(parsed)} entries. Report written: {os.path.abspath(args.output)}")
