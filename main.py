@@ -54,8 +54,9 @@ def convert_txt_to_xlsx(records):
     for row in records:
         if isinstance(row, (list, tuple)) and row:
             file_txt = row[0]
-            # Sostituisci solo l'estensione .txt con .xlsx, mantenendo il nome completo
+            # Usa il percorso completo se presente, altrimenti solo il nome file
             if file_txt.lower().endswith('.txt'):
+                # Se il file_txt contiene subfolders, mantieni tutto
                 file_xlsx = file_txt[:-4] + '.xlsx'
                 new_row = (file_xlsx,) + tuple(row[1:])
                 new_records.append(new_row)

@@ -124,66 +124,80 @@ class BusinessLogic:
         # Mappa file excel base name (senza estensione) -> numero connessioni PQ
         conn_count_map = {}
         for conn in connection_info:
-            # Ricava il nome base del file excel associato (senza estensione)
             if hasattr(conn, 'txt_file'):
                 base = os.path.basename(conn.txt_file)
                 base = base.replace('.txt', '').replace('.xlsx', '')
                 conn_count_map[base] = conn_count_map.get(base, 0) + 1
-        for data in metadata:
-            if data.nome_file:
-                name_wo_extension = data.nome_file.replace('.xlsx', '')
+
+        for conn in connection_info:
+            # Trova la corrispondenza con il file Excel
+            excel_file_name = None
+            for data in metadata:
+                if data.nome_file and data.nome_file.replace('.xlsx', '') in conn.txt_file:
+                    excel_file_name = data.nome_file
+                    creatore_file = data.creatore_file
+                    ultimo_modificatore = data.ultimo_modificatore
+                    data_creazione = data.data_creazione
+                    data_ultima_modifica = data.data_ultima_modifica
+                    collegamento_esterno = data.collegamento_esterno
+                    break
             else:
-                name_wo_extension = ''
-            matched = False
-            n_connessioni = conn_count_map.get(name_wo_extension, 0)
-            for conn in connection_info:
-                if name_wo_extension in conn.txt_file:
-                    # Usa l'attributo type se presente, altrimenti deduci dal nome classe
-                    conn_type = getattr(conn, 'type', None)
-                    if not conn_type:
-                        if conn.__class__.__name__ == 'GetSqlConnection':
-                            conn_type = 'Sql'
-                        elif conn.__class__.__name__ == 'GetSharePointConnection':
-                            conn_type = 'SharePoint'
-                        elif conn.__class__.__name__ == 'GetExcelConnection':
-                            conn_type = 'Excel'
-                        else:
-                            conn_type = 'Unknown'
-                    # Colonna Join: tutte le tabelle di JOIN trovate (solo per SQL)
-                    join_tables = getattr(conn, 'join_tables', [])
-                    join_tables_str = ', '.join(join_tables) if join_tables else ''
+                excel_file_name = os.path.basename(getattr(conn, 'txt_file', ''))
+                creatore_file = None
+                ultimo_modificatore = None
+                data_creazione = None
+                data_ultima_modifica = None
+                collegamento_esterno = None
+
+            conn_type = getattr(conn, 'type', None)
+            if not conn_type:
+                if conn.__class__.__name__ == 'GetSqlConnection':
+                    conn_type = 'Sql'
+                elif conn.__class__.__name__ == 'GetSharePointConnection':
+                    conn_type = 'SharePoint'
+                elif conn.__class__.__name__ == 'GetExcelConnection':
+                    conn_type = 'Excel'
+                else:
+                    conn_type = 'Unknown'
+
+            join_tables = getattr(conn, 'join_tables', [])
+            join_tables_str = ', '.join(join_tables) if join_tables else ''
+
+            # Se ci sono più tabelle, esporta una riga per ciascuna
+            tables = getattr(conn, 'tables', None)
+            if tables and isinstance(tables, list) and tables:
+                for table in tables:
                     print_string.append([
-                        data.nome_file,
-                        data.creatore_file,
-                        data.ultimo_modificatore,
-                        data.data_creazione,
-                        data.data_ultima_modifica,
-                        data.collegamento_esterno,
+                        getattr(conn, 'txt_file', ''),
+                        creatore_file,
+                        ultimo_modificatore,
+                        data_creazione,
+                        data_ultima_modifica,
+                        collegamento_esterno,
                         getattr(conn, 'source', None),
                         getattr(conn, 'server', None),
                         getattr(conn, 'database', None),
                         getattr(conn, 'schema', None),
-                        getattr(conn, 'table', None),
+                        table,
                         join_tables_str,
                         conn_type,
-                        n_connessioni
+                        conn_count_map.get(os.path.basename(getattr(conn, 'txt_file', '')).replace('.txt', '').replace('.xlsx', ''), 0)
                     ])
-                    matched = True
-            if not matched:
+            else:
                 print_string.append([
-                    data.nome_file,
-                    data.creatore_file,
-                    data.ultimo_modificatore,
-                    data.data_creazione,
-                    data.data_ultima_modifica,
-                    data.collegamento_esterno,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    '',
-                    'Unknown',
-                    n_connessioni
+                    getattr(conn, 'txt_file', ''),
+                    creatore_file,
+                    ultimo_modificatore,
+                    data_creazione,
+                    data_ultima_modifica,
+                    collegamento_esterno,
+                    getattr(conn, 'source', None),
+                    getattr(conn, 'server', None),
+                    getattr(conn, 'database', None),
+                    getattr(conn, 'schema', None),
+                    getattr(conn, 'table', None),
+                    join_tables_str,
+                    conn_type,
+                    conn_count_map.get(os.path.basename(getattr(conn, 'txt_file', '')).replace('.txt', '').replace('.xlsx', ''), 0)
                 ])
         return print_string
