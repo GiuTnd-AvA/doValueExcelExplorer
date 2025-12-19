@@ -166,8 +166,10 @@ class BusinessLogic:
             join_tables = getattr(conn, 'join_tables', [])
             join_tables_str = ', '.join(join_tables) if join_tables else ''
 
+            # Solo nome file senza percorso
+            file_name_only = os.path.basename(getattr(conn, 'txt_file', ''))
             print_string.append([
-                getattr(conn, 'txt_file', ''),
+                file_name_only,
                 creatore_file,
                 ultimo_modificatore,
                 data_creazione,
@@ -180,6 +182,6 @@ class BusinessLogic:
                 main_table,
                 join_tables_str,
                 conn_type,
-                conn_count_map.get(os.path.basename(getattr(conn, 'txt_file', '')).replace('.txt', '').replace('.xlsx', ''), 0)
+                conn_count_map.get(file_name_only.replace('.txt', '').replace('.xlsx', ''), 0)
             ])
         return print_string
