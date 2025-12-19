@@ -17,8 +17,9 @@ class PowerQueryTxtSourceExtractor:
     write results to an Excel report.
     """
 
-    # Match any line containing 'Source =', even if preceded by 'let' or whitespace
-    SOURCE_PATTERN = re.compile(r"^.*\bSource\s*=.*$", re.MULTILINE)
+    # Match any line containing 'Source =' (EN) or 'Origine =' (IT),
+    # even if preceded by 'let' or other characters on the same line
+    SOURCE_PATTERN = re.compile(r"^.*\b(Source|Origine)\s*=.*$", re.MULTILINE | re.IGNORECASE)
 
     def __init__(self, root_dir: str) -> None:
         self.root_dir = root_dir
@@ -38,7 +39,7 @@ class PowerQueryTxtSourceExtractor:
 
     @classmethod
     def extract_source_line(cls, content: str) -> Optional[str]:
-        """Return the first line containing 'Source =' from content, if any."""
+        """Return the first line containing 'Source =' or 'Origine =' from content, if any."""
         m = cls.SOURCE_PATTERN.search(content)
         if not m:
             return None
@@ -88,13 +89,13 @@ class PowerQueryTxtSourceExtractor:
                     self.missing_files.append(rel)
 
         if verbose:
-            print(f"Scan complete: processed {processed}/{total_txt} .txt files, found {found} with 'Source ='.")
+            print(f"Scan complete: processed {processed}/{total_txt} .txt files, found {found} with 'Source/Origine ='.")
             if self.missing_files:
-                print(f"Files without 'Source =': {len(self.missing_files)}")
+                print(f"Files without 'Source/Origine =': {len(self.missing_files)}")
                 for mf in self.missing_files:
                     print(f" - {mf}")
             else:
-                print("All processed .txt files contain a 'Source =' line.")
+                print("All processed .txt files contain a 'Source/Origine =' line.")
         return self.rows
 
     def write_report(self, output_path: str) -> str:
