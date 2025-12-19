@@ -44,6 +44,41 @@ class TestPowerQuerySourceParser(unittest.TestCase):
         self.assertEqual(info["schema"].lower(), "dbo")
         self.assertEqual(info["table"], "DB_TOTALE")
 
+    def test_parse_temp_table_double_hash(self):
+        src = (
+            'Source = Sql.Database("EPCP3", "ANALISI", '
+            '[Query="select * from ##PIVOT_BUDGET#(lf)"])'
+        )
+        info = self.parser.parse(src)
+        self.assertEqual(info["server"].lower(), "epcp3")
+        # DB not specified in FROM, fallback to parameter
+        self.assertEqual(info["database"].lower(), "analisi")
+        self.assertEqual(info["schema"].lower(), "temp")
+        self.assertEqual(info["table"], "PIVOT_BUDGET")
+
+    def test_parse_temp_table_with_tab_token(self):
+        src = (
+            'Source = Sql.Database("epcp3", "analisi", '
+            '[Query="SELECT * FROM #(tab)##PIVOT_BUDGET_FEE"])'
+        )
+        info = self.parser.parse(src)
+        self.assertEqual(info["schema"].lower(), "temp")
+        self.assertEqual(info["table"], "PIVOT_BUDGET_FEE")
+
+    def test_parse_all_with_join_and_db_schema(self):
+        src = (
+            'Source = Sql.Database("EPCP3", "S1057B", '
+            '[Query="select * from S1057B.dbo.PM_contacting_OUTPUT as pm '
+            'left join CORESQL7.[dbo].[proposte_di_delibera_tipo] pdt on pm.id=pdt.id '
+            'inner join [S1057B].[dbo].[DB_TOTALE] dt on pm.x=dt.x"])'
+        )
+        infos = self.parser.parse_all(src)
+        # Expect three tables extracted
+        names = {(i.get("database"), i.get("schema"), i.get("table")) for i in infos}
+        self.assertIn(("S1057B", "dbo", "PM_contacting_OUTPUT"), names)
+        self.assertIn(("CORESQL7", "dbo", "proposte_di_delibera_tipo"), names)
+        self.assertIn(("S1057B", "dbo", "DB_TOTALE"), names)
+
 
 if __name__ == "__main__":
     unittest.main()
