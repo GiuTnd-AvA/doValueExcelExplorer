@@ -136,11 +136,11 @@ class BusinessLogic:
             # Trova la corrispondenza con il file Excel
             excel_file_name = None
             for data in metadata:
-                # Match su .xls, .xlsm, .xlsx senza estensione
-                if data.nome_file:
+                # Match su .xls, .xlsm, .xlsx, .xlsb senza estensione
+                if hasattr(data, 'file_path') and data.nome_file:
                     base_excel = os.path.splitext(data.nome_file)[0]
                     if base_excel in conn.txt_file:
-                        excel_file_name = data.nome_file
+                        excel_file_name = data.file_path
                         creatore_file = data.creatore_file
                         ultimo_modificatore = data.ultimo_modificatore
                         data_creazione = data.data_creazione
@@ -177,10 +177,10 @@ class BusinessLogic:
             # Trova il file xlsx di origine associato al txt
             xlsx_file = None
             for data in metadata:
-                if data.nome_file:
+                if hasattr(data, 'file_path') and data.nome_file:
                     base_excel = os.path.splitext(data.nome_file)[0]
                     if base_excel in file_name_only:
-                        xlsx_file = data.nome_file
+                        xlsx_file = data.file_path
                         break
             print_string.append([
                 file_path_full,
