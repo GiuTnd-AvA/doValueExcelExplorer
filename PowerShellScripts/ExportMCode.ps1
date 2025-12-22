@@ -4,7 +4,8 @@
 # Esegui da PowerShell prima di lanciare lo script Python
 
 # Importa le variabili di configurazione
-. "$PSScriptRoot\..\Config\config.ps1"
+$folder = "$env:USERPROFILE\Desktop\doValue"  # <-- Cartella radice
+$exportFolder = "$env:USERPROFILE\Desktop\Export M Code"  # <-- Cartella export
 
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false

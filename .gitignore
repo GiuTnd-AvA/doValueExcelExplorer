@@ -1,4 +1,18 @@
-# Byte-compiled / optimized / DLL files
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+
+# Reports (generated)
+Report/*.xlsx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
