@@ -69,6 +69,12 @@ class PowerQuerySourceConnectionParser:
         re.IGNORECASE,
     )
 
+    # Pattern for db..table where schema is omitted
+    _FROM_OR_JOIN_DB_DOTDOT_TABLE_RE = re.compile(
+        r"\b(?:FROM|JOIN)\s+(?!\()(?P<db>\[[^\]]+\]|[A-Za-z0-9_]+)\s*\.\s*\.\s*(?P<table>\[[^\]]+\]|[A-Za-z0-9_]+)",
+        re.IGNORECASE,
+    )
+
     def parse_all(self, source_line: str):
         """Return a list of dicts for all tables found in FROM/JOIN clauses.
         Each dict contains server, database, schema, table.
@@ -102,6 +108,21 @@ class PowerQuerySourceConnectionParser:
             db = None or param_db  # temp tables don't specify DB; keep param as context
             schema = "temp"
             key = (db or "", schema or "", table or "")
+            if key not in seen:
+                seen.add(key)
+                results.append({
+                    "server": server,
+                    "database": db or param_db,
+                    "schema": schema,
+                    "table": table,
+                })
+
+        # db..table (missing schema)
+        for md in self._FROM_OR_JOIN_DB_DOTDOT_TABLE_RE.finditer(query):
+            table = _strip_brackets(md.group("table"))
+            db = _strip_brackets(md.group("db"))
+            schema = None
+            key = ((db or param_db) or "", schema or "", table or "")
             if key not in seen:
                 seen.add(key)
                 results.append({
@@ -174,22 +195,36 @@ class PowerQuerySourceConnectionParser:
                 schema = "temp"
                 table = m_temp.group("temp")
             else:
-                m_from = self._FROM_OR_JOIN_OBJECT_RE.search(query)
-                if m_from:
-                    g_db = m_from.group("db")
-                    g_schema = m_from.group("schema")
-                    g_table = m_from.group("table")
-
-                    # If we only have two-part name (schema.table), the regex will put
-                    # the first part in g_db and leave g_schema empty. Re-map accordingly.
-                    if g_db and not g_schema and g_table:
+                # First, handle db..table (missing schema)
+                m_dbdd = self._FROM_OR_JOIN_DB_DOTDOT_TABLE_RE.search(query)
+                if m_dbdd:
+                    db = _strip_brackets(m_dbdd.group("db"))
+                    schema = None
+                    table = _strip_brackets(m_dbdd.group("table"))
+                else:
+                    # Then, try to capture temporary tables (e.g., ##MyTemp)
+                    m_temp = self._FROM_OR_JOIN_TEMP_RE.search(query)
+                    if m_temp:
                         db = None
-                        schema = _strip_brackets(g_db)
-                        table = _strip_brackets(g_table)
+                        schema = "temp"
+                        table = m_temp.group("temp")
                     else:
-                        db = _strip_brackets(g_db or "") or None
-                        schema = _strip_brackets(g_schema or "") or None
-                        table = _strip_brackets(g_table or "") or None
+                        m_from = self._FROM_OR_JOIN_OBJECT_RE.search(query)
+                        if m_from:
+                            g_db = m_from.group("db")
+                            g_schema = m_from.group("schema")
+                            g_table = m_from.group("table")
+
+                            # If we only have two-part name (schema.table), the regex will put
+                            # the first part in g_db and leave g_schema empty. Re-map accordingly.
+                            if g_db and not g_schema and g_table:
+                                db = None
+                                schema = _strip_brackets(g_db)
+                                table = _strip_brackets(g_table)
+                            else:
+                                db = _strip_brackets(g_db or "") or None
+                                schema = _strip_brackets(g_schema or "") or None
+                                table = _strip_brackets(g_table or "") or None
 
         # Decide database: prefer one found in FROM; otherwise fallback to param
         if not db:

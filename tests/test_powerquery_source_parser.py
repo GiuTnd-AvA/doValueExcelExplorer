@@ -79,6 +79,19 @@ class TestPowerQuerySourceParser(unittest.TestCase):
         self.assertIn(("CORESQL7", "dbo", "proposte_di_delibera_tipo"), names)
         self.assertIn(("S1057B", "dbo", "DB_TOTALE"), names)
 
+    def test_parse_db_dotdot_table_missing_schema(self):
+        src = (
+            'Source = Sql.Database("epcp3", "s1057b", '
+            '[Query="select * from s1057b..ReportAste_doBank"])'
+        )
+        info = self.parser.parse(src)
+        self.assertEqual(info["database"].lower(), "s1057b")
+        self.assertIsNone(info["schema"])
+        self.assertEqual(info["table"], "ReportAste_doBank")
+
+        infos = self.parser.parse_all(src)
+        self.assertTrue(any(i.get("table") == "ReportAste_doBank" and (i.get("schema") is None) for i in infos))
+
 
 if __name__ == "__main__":
     unittest.main()
