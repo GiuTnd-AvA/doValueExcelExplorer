@@ -19,20 +19,23 @@ bl_obj = bl(EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
 
 # Definizione colonne per export file e connessioni
 columns_file_list = ['Percorsi', 'File']
-columns_connessioni = ['File_Name',
-                       'Creatore_file',
-                       'Ultimo_modificatore_file',
-                       'Data_creazione_file',
-                       'Data_ultima_modifica_file',
-                       'Collegamento_esterno',
-                       'Source',
-                       'Server',
-                       'Database',
-                       'Schema',
-                       'Table',
-                       'Join',
-                       'Type',
-                       'N_Connessioni_PQ']
+columns_connessioni = [
+    'File_Name',
+    'File_XLSX_Origine',
+    'Creatore_file',
+    'Ultimo_modificatore_file',
+    'Data_creazione_file',
+    'Data_ultima_modifica_file',
+    'Collegamento_esterno',
+    'Source',
+    'Server',
+    'Database',
+    'Schema',
+    'Table',
+    'Join',
+    'Type',
+    'N_Connessioni_PQ'
+]
 
 excel_files_list = bl_obj.split_excel_root_path()
 aggregated_info = bl_obj.get_aggregated_info()
@@ -78,15 +81,15 @@ def filter_duplicates(records):
             base_name = file_name.split("\\")[-1].split("/")[-1]
             base_name = base_name.replace('.txt', '').replace('.xlsx', '')
             # Usa anche la tabella principale per deduplicare (se vuoi deduplicare per file+table)
-            key = (base_name, row[10])  # row[10] è la colonna Table
+            key = (base_name, row[11])  # row[11] è la colonna Table (dopo aggiunta File_XLSX_Origine)
             if key not in seen:
                 filtered.append(row)
                 seen.add(key)
     return filtered
 
+
 # Prima di esportare in Excel:
-aggregated_info_export = convert_txt_to_xlsx(aggregated_info)
-aggregated_info_export = filter_duplicates(aggregated_info_export)
+aggregated_info_export = filter_duplicates(aggregated_info)
 stampa_report_connessioni.write_excel(columns_connessioni, aggregated_info_export, sheet_name = 'Connessioni')
 print("Report connessioni creato correttamente.")
 
