@@ -168,8 +168,15 @@ class BusinessLogic:
 
             file_path_full = getattr(conn, 'txt_file', '')
             file_name_only = os.path.basename(file_path_full)
+            # Trova il file xlsx di origine associato al txt
+            xlsx_file = None
+            for data in metadata:
+                if data.nome_file and data.nome_file.replace('.xlsx', '') in file_name_only:
+                    xlsx_file = data.nome_file
+                    break
             print_string.append([
                 file_path_full,
+                xlsx_file,
                 creatore_file,
                 ultimo_modificatore,
                 data_creazione,
