@@ -78,15 +78,13 @@ class GetSqlConnection(IConnection):
                         table_full = jm.strip('[]"`()')
                         parts = re.split(r'\.', table_full)
                         parts = [p.strip('[]') for p in parts if p.strip('[]')]
-                        if len(parts) == 2:
-                            schema = parts[0]
-                            table = parts[1]
+                        # Prendi sempre l'ultimo elemento come nome tabella, il penultimo come schema (se esiste)
+                        if len(parts) >= 2:
+                            schema = parts[-2]
+                            table = parts[-1]
                         elif len(parts) == 1:
                             schema = ''
                             table = parts[0]
-                        elif len(parts) == 3:
-                            schema = parts[1]
-                            table = parts[2]
                         else:
                             schema = ''
                             table = table_full
@@ -104,15 +102,16 @@ class GetSqlConnection(IConnection):
                             table_full = table_matches[0].strip('[]"`()')
                             parts = re.split(r'\.', table_full)
                             parts = [p.strip('[]') for p in parts if p.strip('[]')]
-                            if len(parts) == 2:
-                                self.schema = parts[0]
-                                self.table = parts[1]
+                            # Prendi sempre l'ultimo elemento come nome tabella, il penultimo come schema (se esiste)
+                            if len(parts) >= 2:
+                                self.schema = parts[-2]
+                                self.table = parts[-1]
                             elif len(parts) == 1:
                                 self.schema = ''
                                 self.table = parts[0]
-                            elif len(parts) == 3:
-                                self.schema = parts[1]
-                                self.table = parts[2]
+                            else:
+                                self.schema = ''
+                                self.table = table_full
                     # Nuova logica: se non è stata trovata una table, cerca temp table (# o ##)
                     if not getattr(self, 'table', None):
                         temp_table_match = re.search(r'(?:FROM|JOIN)\s+(#\#?[\w_]+)', cleaned_query, re.IGNORECASE)
