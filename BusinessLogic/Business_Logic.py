@@ -166,10 +166,10 @@ class BusinessLogic:
             join_tables = getattr(conn, 'join_tables', [])
             join_tables_str = ', '.join(join_tables) if join_tables else ''
 
-            # Solo nome file senza percorso
-            file_name_only = os.path.basename(getattr(conn, 'txt_file', ''))
+            file_path_full = getattr(conn, 'txt_file', '')
+            file_name_only = os.path.basename(file_path_full)
             print_string.append([
-                file_name_only,
+                file_path_full,
                 creatore_file,
                 ultimo_modificatore,
                 data_creazione,
