@@ -63,7 +63,10 @@ class BusinessLogic:
         self.txt_finder = TxtFinder(root_path_txt)
 
     def _excel_file_list(self) -> list[str]:
-        return self.excel_finder.file_finder()
+        # Restituisce solo file .xls e .xlsm (e .xlsx se vuoi includerli)
+        all_files = self.excel_finder.file_finder()
+        filtered = [f for f in all_files if f.lower().endswith('.xls') or f.lower().endswith('.xlsm')]
+        return filtered
 
     def split_excel_root_path(self) -> List[str]:
         excel_list = self._excel_file_list()
@@ -133,14 +136,17 @@ class BusinessLogic:
             # Trova la corrispondenza con il file Excel
             excel_file_name = None
             for data in metadata:
-                if data.nome_file and data.nome_file.replace('.xlsx', '') in conn.txt_file:
-                    excel_file_name = data.nome_file
-                    creatore_file = data.creatore_file
-                    ultimo_modificatore = data.ultimo_modificatore
-                    data_creazione = data.data_creazione
-                    data_ultima_modifica = data.data_ultima_modifica
-                    collegamento_esterno = data.collegamento_esterno
-                    break
+                # Match su .xls, .xlsm, .xlsx senza estensione
+                if data.nome_file:
+                    base_excel = os.path.splitext(data.nome_file)[0]
+                    if base_excel in conn.txt_file:
+                        excel_file_name = data.nome_file
+                        creatore_file = data.creatore_file
+                        ultimo_modificatore = data.ultimo_modificatore
+                        data_creazione = data.data_creazione
+                        data_ultima_modifica = data.data_ultima_modifica
+                        collegamento_esterno = data.collegamento_esterno
+                        break
             else:
                 excel_file_name = os.path.basename(getattr(conn, 'txt_file', ''))
                 creatore_file = None
@@ -171,9 +177,11 @@ class BusinessLogic:
             # Trova il file xlsx di origine associato al txt
             xlsx_file = None
             for data in metadata:
-                if data.nome_file and data.nome_file.replace('.xlsx', '') in file_name_only:
-                    xlsx_file = data.nome_file
-                    break
+                if data.nome_file:
+                    base_excel = os.path.splitext(data.nome_file)[0]
+                    if base_excel in file_name_only:
+                        xlsx_file = data.nome_file
+                        break
             print_string.append([
                 file_path_full,
                 xlsx_file,

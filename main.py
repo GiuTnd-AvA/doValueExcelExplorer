@@ -71,25 +71,12 @@ def convert_txt_to_xlsx(records):
 
 
 # Filtra i duplicati per nome file (prima colonna)
-def filter_duplicates(records):
-    seen = set()
-    filtered = []
-    for row in records:
-        if row:
-            # Prendi solo il nome file senza percorso ed estensione
-            file_name = row[0]
-            base_name = file_name.split("\\")[-1].split("/")[-1]
-            base_name = base_name.replace('.txt', '').replace('.xlsx', '')
-            # Usa anche la tabella principale per deduplicare (se vuoi deduplicare per file+table)
-            key = (base_name, row[11])  # row[11] è la colonna Table (dopo aggiunta File_XLSX_Origine)
-            if key not in seen:
-                filtered.append(row)
-                seen.add(key)
-    return filtered
+
+    return records
 
 
 # Prima di esportare in Excel:
-aggregated_info_export = filter_duplicates(aggregated_info)
+aggregated_info_export = aggregated_info
 stampa_report_connessioni.write_excel(columns_connessioni, aggregated_info_export, sheet_name = 'Connessioni')
 print("Report connessioni creato correttamente.")
 
