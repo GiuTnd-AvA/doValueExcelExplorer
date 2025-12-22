@@ -10,13 +10,18 @@ class ExcelWriter:
         self.file_name = file_name
         # Tracks whether the file has been initialized in the current run
         self._initialized = False
+        # Resolved output path to keep sheets in the same file across writes
+        self._resolved_output_path = None
 
     def write_excel(self, columns, data, sheet_name='Sheet1'):
         # Ensure output directory exists
         if self.folder_path and not os.path.isdir(self.folder_path):
             os.makedirs(self.folder_path, exist_ok=True)
 
-        output_path = os.path.join(self.folder_path, self.file_name)
+        base_output_path = os.path.join(self.folder_path, self.file_name)
+        if self._resolved_output_path is None:
+            self._resolved_output_path = base_output_path
+        output_path = self._resolved_output_path
         df = pd.DataFrame(data, columns=columns)
 
         # Sanitize DataFrame to remove characters illegal for openpyxl
@@ -28,8 +33,8 @@ class ExcelWriter:
                 return illegal_chars.sub("", val)
             return val
 
-        # Pandas deprecates DataFrame.applymap; prefer DataFrame.map for element-wise ops
-        df = df.map(_clean)
+        # Clean each cell value (applymap is supported for DataFrame element-wise ops)
+        df = df.applymap(_clean)
 
         # Overwrite file on first write of this instance; append thereafter
         if not self._initialized:
@@ -48,5 +53,20 @@ class ExcelWriter:
         # Also ensure sheet_name is clean and within Excel limits
         clean_sheet_name = illegal_chars.sub("", sheet_name)[:31] or "Sheet1"
 
-        with pd.ExcelWriter(output_path, **writer_kwargs) as writer:
-            df.to_excel(writer, index=False, sheet_name=clean_sheet_name)
+        try:
+            with pd.ExcelWriter(output_path, **writer_kwargs) as writer:
+                df.to_excel(writer, index=False, sheet_name=clean_sheet_name)
+        except PermissionError:
+            # If the target file is locked (e.g., opened in Excel), fall back to a timestamped filename
+            import datetime
+            ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            alt_name = os.path.splitext(self.file_name)[0] + f"_{ts}" + os.path.splitext(self.file_name)[1]
+            self._resolved_output_path = os.path.join(self.folder_path, alt_name)
+            output_path = self._resolved_output_path
+            # On first write, we still want 'w'; for subsequent writes, keep 'a'
+            # Always start a new file in write mode for the fallback path
+            writer_kwargs = dict(engine='openpyxl', mode='w')
+            with pd.ExcelWriter(output_path, **writer_kwargs) as writer:
+                df.to_excel(writer, index=False, sheet_name=clean_sheet_name)
+            # Mark as initialized so subsequent writes append to the same file
+            self._initialized = True

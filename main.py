@@ -46,7 +46,7 @@ def _filter_by_range(rows, get_name_fn, rng):
     return [r for r in rows if get_name_fn(r) in name_to_index and start <= name_to_index[get_name_fn(r)] <= end]
 
 columns_file_list = ['Percorsi', 'File']
-columns_connection_no_power_query = ['File_Name','Server','Database','Schema','Table']
+columns_connection_no_power_query = ['Percorso','File_Name','Server','Database','Schema','Table']
 columns_connessioni = ['File_Name',
                        'Creatore_file',
                        'Ultimo_modificatore_file',

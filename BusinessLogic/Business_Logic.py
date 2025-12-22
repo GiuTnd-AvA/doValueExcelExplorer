@@ -229,7 +229,8 @@ class BusinessLogic:
                 # Skip completely empty/placeholder entries
                 if not any([server, database, schema, table]):
                     continue
-                row = [xml.file_name, server, database, schema, table]
+                # Richiesta aggiornata: avere Path e Nome in colonne separate
+                row = [xml.excel_path, xml.file_name, server, database, schema, table]
                 print("\n"+str(row)+"\n")
                 connessioni_xml.append(row)
             print(f"[Connessioni] Elaborazione file {idx}/{total}: {meta.file_path}")
