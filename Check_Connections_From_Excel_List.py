@@ -19,6 +19,11 @@ try:
 except Exception:
     pd = None
 
+# Configurazione: percorso Excel di input di default.
+# Imposta qui il file da usare quando non passi --input da CLI.
+# Esempio: INPUT_EXCEL_PATH = r"C:\\Percorso\\Connessioni assenti da verificare.xlsx"
+INPUT_EXCEL_PATH: str | None = None
+
 
 def read_paths_from_excel(input_excel: str) -> List[str]:
     """Reads file paths from Sheet1, column A of the given Excel file.
@@ -120,8 +125,11 @@ def main():
     )
     parser.add_argument(
         "--input",
-        required=True,
-        help="Percorso dell'Excel di input (es. 'Connessioni assenti da verificare.xlsx')"
+        default=INPUT_EXCEL_PATH,
+        help=(
+            "Percorso dell'Excel di input (Sheet1 col A). Se omesso, "
+            "usa la variabile INPUT_EXCEL_PATH definita a inizio script."
+        )
     )
     parser.add_argument(
         "--output",
@@ -132,6 +140,11 @@ def main():
 
     input_path = args.input
     output_path = args.output
+
+    if not input_path:
+        parser.error(
+            "Devi specificare --input oppure valorizzare INPUT_EXCEL_PATH all'inizio script."
+        )
 
     paths = read_paths_from_excel(input_path)
     rows: List[List[str]] = []
