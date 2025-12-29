@@ -48,33 +48,80 @@ class SqlFilesAppender:
             self.output_txt = os.path.join(base_dir, "SQL_Append.txt")
 
     def _read_paths_from_excel(self) -> List[str]:
+        """Legge le righe dell'Excel e restituisce percorsi completi a file .sql.
+
+        Convenzione supportata (consigliata):
+        - Colonna A: percorso directory
+        - Colonna B: nome file (es: script.sql)
+
+        Compatibilità:
+        - Se in A c'è già il percorso completo che termina con .sql, usa A.
+        - Se esiste un'intestazione "Percorsi", viene usata per la colonna dei percorsi.
+        - In assenza di B, usa solo A.
+        """
         wb = load_workbook(self.excel_path, read_only=True, data_only=True)
         try:
             ws = wb[self.sheet_name] if self.sheet_name and self.sheet_name in wb.sheetnames else wb.worksheets[0]
             rows = list(ws.iter_rows(values_only=True))
             if not rows:
                 return []
-            # Prova a identificare intestazioni
-            headers = [str(h).strip() if h is not None else "" for h in rows[0]]
-            # Trova colonna 'Percorsi' se presente, altrimenti prima colonna
-            try:
-                idx_percorsi = headers.index("Percorsi")
-                start_row = 1  # dati dopo intestazione
-            except ValueError:
-                idx_percorsi = 0
-                start_row = 0
+
+            # Determina se la prima riga è intestazione
+            first = rows[0] or ()
+            headers = [str(h).strip() if h is not None else "" for h in first]
+            looks_like_header = any(h.lower() in ("percorsi", "file", "percorso", "nomefile") for h in headers)
+
+            # Indici di default: A=0 (dir o path), B=1 (filename)
+            start_row = 1 if looks_like_header else 0
+            idx_a = 0
+            idx_b = 1
+
+            # Se c'è una colonna chiamata "Percorsi" la usiamo come A
+            if "Percorsi" in headers:
+                idx_a = headers.index("Percorsi")
+            # Se c'è una colonna chiamata "File" la usiamo come B
+            if "File" in headers:
+                idx_b = headers.index("File")
+
             paths: List[str] = []
             for r in rows[start_row:]:
-                if r is None:
+                if not r:
                     continue
-                if idx_percorsi >= len(r):
+                # Estrai A e B se presenti
+                a = str(r[idx_a]).strip() if idx_a < len(r) and r[idx_a] is not None else ""
+                b = str(r[idx_b]).strip() if idx_b < len(r) and r[idx_b] is not None else ""
+
+                # Composizione logica del percorso
+                candidate: str = ""
+                if a:
+                    a_exp = os.path.expanduser(os.path.expandvars(a))
+                else:
+                    a_exp = ""
+                if b:
+                    b_exp = os.path.expanduser(os.path.expandvars(b))
+                else:
+                    b_exp = ""
+
+                if a_exp.lower().endswith('.sql'):
+                    # Colonna A ha già un percorso completo a .sql
+                    candidate = a_exp
+                elif a_exp and b_exp:
+                    # A è directory, B è filename
+                    if a_exp.endswith(('\\', '/')):
+                        candidate = a_exp + b_exp
+                    else:
+                        candidate = os.path.join(a_exp, b_exp)
+                elif a_exp:
+                    candidate = a_exp
+                elif b_exp:
+                    candidate = b_exp
+                else:
                     continue
-                cell = r[idx_percorsi]
-                if cell is None:
-                    continue
-                p = str(cell).strip()
-                if p:
-                    paths.append(p)
+
+                candidate = os.path.normpath(candidate)
+                if candidate:
+                    paths.append(candidate)
+
             return paths
         finally:
             wb.close()
