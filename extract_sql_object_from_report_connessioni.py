@@ -38,7 +38,6 @@ def get_conn_params(row):
 
 def estrai_e_append_multi(engine, query, result_list, row_transform, error_msg):
     try:
-        print(f"Eseguo query: {query}")
         with engine.connect() as conn:
             for r in conn.execute(text(query)):
                 res = row_transform(r)
@@ -54,26 +53,45 @@ def estrai_e_append_multi(engine, query, result_list, row_transform, error_msg):
 # =========================
 df = pd.read_excel(excel_path, sheet_name=0)
 
+total_rows = len(df)
+
+# --- OTTIMIZZAZIONE: cache connessioni e export parziale ---
+from collections import defaultdict
+
 results = []
 dipendenze = []
 dipendenze_inverse = []
 elenco_tabelle = []
 struttura_colonne = []
 
-for idx, row in df.iterrows():
-    print(f"DEBUG RAW ROW {idx}: {row.to_dict()}")
+engine_cache = dict()
+def get_engine(server, db_name):
+    key = (server, db_name)
+    if key not in engine_cache:
+        conn_str = f"mssql+pyodbc://@{server}/{db_name}?driver={DRIVER}&trusted_connection=yes"
+        engine_cache[key] = create_engine(conn_str)
+    return engine_cache[key]
+
+def export_partial(results, dipendenze, output_path, batch_num):
+    with pd.ExcelWriter(f"{output_path}_parziale_{batch_num}.xlsx", engine='openpyxl') as writer:
+        pd.DataFrame(results).to_excel(writer, index=False, sheet_name='Risultati')
+        pd.DataFrame(dipendenze).to_excel(writer, index=False, sheet_name='Dipendenze')
+    print(f"Export parziale batch {batch_num} completato.")
+
+total_rows = len(df)
+batch_size = 100
+for i, (idx, row) in enumerate(df.iterrows(), 1):
+    print(f"Stato avanzamento: {i}/{total_rows}")
     params = get_conn_params(row)
-    print(f"DEBUG PARAMS: {params}")
-    # --- CONNESSIONE E VALIDAZIONE PARAMETRI ---
     if not (params["server"] and params["db_name"] and params["table"]):
         print(f"SKIP: Parametri mancanti per riga {idx}")
         continue
-    conn_str = f"mssql+pyodbc://@{params['server']}/{params['db_name']}?driver={DRIVER}&trusted_connection=yes"
     try:
-        engine = create_engine(conn_str)
-        # Test connessione
-        with engine.connect() as test_conn:
-            pass
+        engine = get_engine(params['server'], params['db_name'])
+        # Test connessione solo la prima volta
+        if i == 1 or (i % batch_size == 1):
+            with engine.connect() as test_conn:
+                pass
     except Exception as e:
         print(f"ERRORE CONNESSIONE per riga {idx} (Server: {params['server']}, DB: {params['db_name']}): {e}")
         continue
@@ -130,17 +148,14 @@ for idx, row in df.iterrows():
         obj_name, obj_type, sql_def = row
         tables = set()
         if sql_def:
-            # Cerca pattern: FROM/JOIN [schema].[table] oppure schema.table oppure solo table
             for m in re.findall(r'(?:FROM|JOIN)\s+([\[\]\w]+)\.([\[\]\w]+)', sql_def, re.IGNORECASE):
                 schema, table = m
                 schema = schema.strip('[]')
                 table = table.strip('[]')
-                # Escludi match dove manca la tabella o table==schema
                 if table and table.lower() != schema.lower():
                     tables.add(f"{schema}.{table}")
             for m in re.findall(r'(?:FROM|JOIN)\s+([\[\]\w]+)', sql_def, re.IGNORECASE):
                 t = m.strip('[]')
-                # Escludi se t è uno schema noto (dbo, sys, ecc) o troppo corto
                 if '.' not in t and t.lower() not in {"dbo", "sys", "information_schema", "guest", "db_owner", "db_accessadmin", "db_securityadmin", "db_ddladmin", "db_backupoperator", "db_datareader", "db_datawriter", "db_denydatareader", "db_denydatawriter"} and len(t) > 1:
                     tables.add(t)
         return [
@@ -162,6 +177,18 @@ for idx, row in df.iterrows():
         dipendenze_row_transform,
         f"Errore estrazione dipendenze complete per {params['db_name']}"
     )
+
+    # Export parziale ogni batch_size record
+    if i % batch_size == 0:
+        export_partial(results, dipendenze, output_path, i // batch_size)
+        results.clear()
+        dipendenze.clear()
+
+# Export finale
+with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+    pd.DataFrame(results).to_excel(writer, index=False, sheet_name='Risultati')
+    pd.DataFrame(dipendenze).to_excel(writer, index=False, sheet_name='Dipendenze')
+print(f"Risultati esportati in: {output_path}")
 
 # =========================
 # EXPORT RISULTATI
