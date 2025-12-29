@@ -72,11 +72,18 @@ def get_engine(server, db_name):
         engine_cache[key] = create_engine(conn_str)
     return engine_cache[key]
 
+
 def export_partial(results, dipendenze, output_path, batch_num):
-    with pd.ExcelWriter(f"{output_path}_parziale_{batch_num}.xlsx", engine='openpyxl') as writer:
-        pd.DataFrame(results).to_excel(writer, index=False, sheet_name='Risultati')
-        pd.DataFrame(dipendenze).to_excel(writer, index=False, sheet_name='Dipendenze')
-    print(f"Export parziale batch {batch_num} completato.")
+    def export_large_dataframe(df, base_path, sheet_name, prefix):
+        max_rows = 1000000
+        for i in range(0, len(df), max_rows):
+            chunk = df[i:i+max_rows]
+            file_path = f"{base_path}_parziale_{prefix}_{batch_num}_{i//max_rows+1}.xlsx"
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                chunk.to_excel(writer, index=False, sheet_name=sheet_name)
+            print(f"Export parziale: {file_path} ({len(chunk)} righe)")
+    export_large_dataframe(pd.DataFrame(results), output_path, 'Risultati', 'results')
+    export_large_dataframe(pd.DataFrame(dipendenze), output_path, 'Dipendenze', 'dipendenze')
 
 total_rows = len(df)
 batch_size = 100
@@ -184,11 +191,19 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
         results.clear()
         dipendenze.clear()
 
-# Export finale
-with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-    pd.DataFrame(results).to_excel(writer, index=False, sheet_name='Risultati')
-    pd.DataFrame(dipendenze).to_excel(writer, index=False, sheet_name='Dipendenze')
-print(f"Risultati esportati in: {output_path}")
+
+# Export finale in più file se necessario
+def export_large_dataframe(df, base_path, sheet_name, prefix):
+    max_rows = 1000000
+    for i in range(0, len(df), max_rows):
+        chunk = df[i:i+max_rows]
+        file_path = f"{base_path}_{prefix}_{i//max_rows+1}.xlsx"
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            chunk.to_excel(writer, index=False, sheet_name=sheet_name)
+        print(f"Esportato: {file_path} ({len(chunk)} righe)")
+
+export_large_dataframe(pd.DataFrame(results), output_path, 'Risultati', 'final')
+export_large_dataframe(pd.DataFrame(dipendenze), output_path, 'Dipendenze', 'final')
 
 # =========================
 # EXPORT RISULTATI
