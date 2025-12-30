@@ -106,44 +106,44 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
     table_valid = params["table"] not in ['', None]
 
     # --- RISULTATI: oggetti che usano la tabella ---
-    if table_valid:
-        if schema_valid:
-            query = f"""
-            SELECT o.name, o.type_desc, sm.definition
-            FROM sys.sql_modules sm
-            JOIN sys.objects o ON sm.object_id = o.object_id
-            WHERE CHARINDEX('FROM [{params['schema']}].[{params['table']}]', sm.definition) > 0
-               OR CHARINDEX('JOIN [{params['schema']}].[{params['table']}]', sm.definition) > 0
-               OR CHARINDEX('FROM {params['schema']}.{params['table']}', sm.definition) > 0
-               OR CHARINDEX('JOIN {params['schema']}.{params['table']}', sm.definition) > 0
-               OR CHARINDEX('FROM {params['table']}', sm.definition) > 0
-               OR CHARINDEX('JOIN {params['table']}', sm.definition) > 0
-            """
-            table_label = f"{params['schema']}.{params['table']}"
-        else:
-            query = f"""
-            SELECT o.name, o.type_desc, sm.definition
-            FROM sys.sql_modules sm
-            JOIN sys.objects o ON sm.object_id = o.object_id
-            WHERE CHARINDEX('FROM {params['table']}', sm.definition) > 0
-               OR CHARINDEX('JOIN {params['table']}', sm.definition) > 0
-            """
-            table_label = params['table']
-        estrai_e_append_multi(
-            engine,
-            query,
-            results,
-            lambda r: {
-                "FileName": params['file_name'],
-                "Server": params['server'],
-                "Database": params['db_name'],
-                "Table": table_label,
-                "ObjectName": r[0],
-                "ObjectType": r[1],
-                "SQLDefinition": r[2]
-            },
-            f"Errore su {params['file_name']} ({params['db_name']}) tabella {table_label}"
-        )
+    # if table_valid:
+    #     if schema_valid:
+    #         query = f"""
+    #         SELECT o.name, o.type_desc, sm.definition
+    #         FROM sys.sql_modules sm
+    #         JOIN sys.objects o ON sm.object_id = o.object_id
+    #         WHERE CHARINDEX('FROM [{params['schema']}].[{params['table']}]', sm.definition) > 0
+    #            OR CHARINDEX('JOIN [{params['schema']}].[{params['table']}]', sm.definition) > 0
+    #            OR CHARINDEX('FROM {params['schema']}.{params['table']}', sm.definition) > 0
+    #            OR CHARINDEX('JOIN {params['schema']}.{params['table']}', sm.definition) > 0
+    #            OR CHARINDEX('FROM {params['table']}', sm.definition) > 0
+    #            OR CHARINDEX('JOIN {params['table']}', sm.definition) > 0
+    #         """
+    #         table_label = f"{params['schema']}.{params['table']}"
+    #     else:
+    #         query = f"""
+    #         SELECT o.name, o.type_desc, sm.definition
+    #         FROM sys.sql_modules sm
+    #         JOIN sys.objects o ON sm.object_id = o.object_id
+    #         WHERE CHARINDEX('FROM {params['table']}', sm.definition) > 0
+    #            OR CHARINDEX('JOIN {params['table']}', sm.definition) > 0
+    #         """
+    #         table_label = params['table']
+    #     estrai_e_append_multi(
+    #         engine,
+    #         query,
+    #         results,
+    #         lambda r: {
+    #             "FileName": params['file_name'],
+    #             "Server": params['server'],
+    #             "Database": params['db_name'],
+    #             "Table": table_label,
+    #             "ObjectName": r[0],
+    #             "ObjectType": r[1],
+    #             "SQLDefinition": r[2]
+    #         },
+    #         f"Errore su {params['file_name']} ({params['db_name']}) tabella {table_label}"
+    #     )
 
     # --- DIPENDENZE: tutte le tabelle usate da ogni oggetto SQL ---
     dep_sql = """
@@ -165,6 +165,23 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
                 t = m.strip('[]')
                 if '.' not in t and t.lower() not in {"dbo", "sys", "information_schema", "guest", "db_owner", "db_accessadmin", "db_securityadmin", "db_ddladmin", "db_backupoperator", "db_datareader", "db_datawriter", "db_denydatareader", "db_denydatawriter"} and len(t) > 1:
                     tables.add(t)
+        def get_dep_type(dep, db_name):
+            # cross-database se inizia con un nome db diverso da quello corrente
+            parts = dep.split('.')
+            if len(parts) == 2:
+                # schema.table oppure db.schema
+                if parts[0].lower() != db_name.lower():
+                    return 'cross-database'
+                else:
+                    return 'intra-database'
+            elif len(parts) == 3:
+                # db.schema.table
+                if parts[0].lower() != db_name.lower():
+                    return 'cross-database'
+                else:
+                    return 'intra-database'
+            else:
+                return 'intra-database'
         return [
             {
                 "FileName": params['file_name'],
@@ -172,7 +189,8 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
                 "Table": t,
                 "ObjectName": obj_name,
                 "ObjectType": obj_type,
-                "Dipendenza": t
+                "Dipendenza": t,
+                "DipendenzaType": get_dep_type(t, params['db_name'])
             }
             for t in tables
         ] if tables else None
