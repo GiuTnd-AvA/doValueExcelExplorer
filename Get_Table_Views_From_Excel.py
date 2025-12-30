@@ -203,6 +203,14 @@ class TableViewsExtractor:
         conns: Dict[Tuple[str, str], object] = {}
         results: List[List[str]] = []
 
+        def _write_results(path: str, rows: List[List[str]]):
+            out_dir = os.path.dirname(path)
+            if out_dir and not os.path.exists(out_dir):
+                os.makedirs(out_dir, exist_ok=True)
+            df = pd.DataFrame(rows, columns=["Server", "DB", "Schema", "Table", "Object_Name", "Definition"])
+            with pd.ExcelWriter(path, engine='openpyxl', mode='w') as writer:
+                df.to_excel(writer, index=False, sheet_name='Viste')
+
         try:
             for idx, (server, db, schema, table) in enumerate(items, start=1):
                 print(f"[VIEW] Elaborazione {idx}/{total}: {server}.{db}.{schema}.{table}")
@@ -221,6 +229,14 @@ class TableViewsExtractor:
                 print(f"[VIEW] Trovate {len(views)} viste per {schema}.{table}")
                 for view_name, definition in views:
                     results.append([server, db, schema, table, view_name, definition])
+
+                # Salvataggio parziale ogni 50 elementi elaborati
+                if idx % 50 == 0:
+                    base_dir = os.path.dirname(self.output_excel) or os.getcwd()
+                    base_name = os.path.splitext(os.path.basename(self.output_excel or 'VistePerTabella.xlsx'))[0]
+                    partial_path = os.path.join(base_dir, f"{base_name}_partial_{idx}.xlsx")
+                    print(f"[VIEW] Salvataggio parziale {idx}/{total}: {partial_path}")
+                    _write_results(partial_path, results)
         finally:
             # Chiudi connessioni
             for key, c in conns.items():
@@ -232,12 +248,7 @@ class TableViewsExtractor:
         # Scrivi output
         if not results:
             print("[VIEW] Nessun risultato da scrivere.")
-        out_dir = os.path.dirname(self.output_excel)
-        if out_dir and not os.path.exists(out_dir):
-            os.makedirs(out_dir, exist_ok=True)
-        df = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table", "Object_Name", "Definition"])
-        with pd.ExcelWriter(self.output_excel, engine='openpyxl', mode='w') as writer:
-            df.to_excel(writer, index=False, sheet_name='Viste')
+        _write_results(self.output_excel, results)
         print(f"[VIEW] Output scritto in: {self.output_excel}")
         return self.output_excel
 
