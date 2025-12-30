@@ -35,6 +35,15 @@ def get_engine(server, db_name, engine_cache, driver):
         engine_cache[key] = create_engine(conn_str)
     return engine_cache[key]
 
+def get_variants(schema, table):
+    variants = set()
+    if schema and schema not in ['', None]:
+        variants.add(f"[{schema}].[{table}]")
+        variants.add(f"{schema}.{table}")
+    variants.add(f"[{table}]")
+    variants.add(table)
+    return variants
+    
 def estrai_sql_objects(engine, query, params, table_label, error_msg):
     sql_objects = []
     # Clausole T-SQL da cercare
@@ -79,14 +88,6 @@ def main():
     engine_cache = dict()
     sql_objects = []
     error_log = []
-    def get_variants(schema, table):
-        variants = set()
-        if schema and schema not in ['', None]:
-            variants.add(f"[{schema}].[{table}]")
-            variants.add(f"{schema}.{table}")
-        variants.add(f"[{table}]")
-        variants.add(table)
-        return variants
 
     for i, (idx, row) in enumerate(df.iterrows(), 1):
         print(f"Stato avanzamento: {i}/{total_rows}")
