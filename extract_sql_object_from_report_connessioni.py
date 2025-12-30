@@ -34,7 +34,6 @@ def get_conn_params(row):
         "db_name": row.get('Database'),
         "schema": row.get('Schema'),
         "table": row.get('Table'),
-        "file_name": row.get('File_Name')
     }
 
 def estrai_e_append_multi(engine, query, result_list, row_transform, error_msg):
@@ -81,7 +80,7 @@ def export_partial(results, viste, dipendenze, output_path, batch_num):
     export_large_dataframe(pd.DataFrame(viste), output_path, 'Viste', 'viste')
     # export_large_dataframe(pd.DataFrame(dipendenze), output_path, 'Dipendenze', 'dipendenze')  # Esportazione dipendenze disabilitata su richiesta
 
-df = pd.read_excel(excel_path, sheet_name=0)
+df = pd.read_excel(excel_path, sheet_name=5)
 total_rows = len(df)
 batch_size = 100
 for i, (idx, row) in enumerate(df.iterrows(), 1):
@@ -191,7 +190,7 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
             query,
             results,
             row_dispatch,
-            f"Errore su {params['file_name']} ({params['db_name']}) tabella {table_label}"
+            f"Errore su {params['db_name']} tabella {table_label}"
         )
 
         # Export parziale ogni batch_size record
