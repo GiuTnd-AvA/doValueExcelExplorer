@@ -66,7 +66,7 @@ def export_large_dataframe(df, base_path, sheet_name, prefix, batch_num, max_row
 def main():
     df = pd.read_excel(excel_path, sheet_name=5)
     total_rows = len(df)
-    batch_size = 100
+    batch_size = 50
     engine_cache = dict()
     sql_objects = []
     for i, (idx, row) in enumerate(df.iterrows(), 1):
