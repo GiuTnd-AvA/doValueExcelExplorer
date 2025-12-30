@@ -28,6 +28,10 @@ ODBC_DRIVERS: List[str] = [
     "ODBC Driver 18 for SQL Server",
     "ODBC Driver 17 for SQL Server",
     "SQL Server",
+    # legacy/common names
+    "SQL Server Native Client 11.0",
+    "ODBC Driver 13 for SQL Server",
+    "ODBC Driver 11 for SQL Server",
 ]
 TRUSTED_CONNECTION: bool = True
 SQL_USERNAME: Optional[str] = None  # usato se TRUSTED_CONNECTION=False
@@ -104,8 +108,24 @@ class TableViewsExtractor:
         return items
 
     def _build_conn_str(self, server: str, db: str) -> str:
+        # Rileva driver installati su macchina
+        installed = []
+        try:
+            installed = list(pyodbc.drivers())
+        except Exception:
+            installed = []
+        if installed:
+            print(f"[VIEW] Driver ODBC installati: {installed}")
+
+        # Scegli il primo compatibile dalla lista preferita che risulta installato
+        candidates = ([d for d in ODBC_DRIVERS if d in installed] if installed else ODBC_DRIVERS)
+        if not candidates:
+            raise RuntimeError(
+                "Nessun driver ODBC trovato. Installa 'Microsoft ODBC Driver 18 for SQL Server' o '17'."
+            )
+
         last_error: Optional[Exception] = None
-        for drv in ODBC_DRIVERS:
+        for drv in candidates:
             try:
                 conn_str = f"DRIVER={{{{}}}};SERVER={server};DATABASE={db};".format(drv)
                 if TRUSTED_CONNECTION:
@@ -115,8 +135,10 @@ class TableViewsExtractor:
                         raise RuntimeError("Imposta SQL_USERNAME e SQL_PASSWORD oppure usa Trusted_Connection.")
                     conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
                 conn_str += ODBC_ENCRYPT_OPTS
+                # Prova connessione rapida per validare il driver selezionato
                 tconn = pyodbc.connect(conn_str, timeout=3)
                 tconn.close()
+                print(f"[VIEW] Uso driver ODBC: {drv}")
                 return conn_str
             except Exception as e:
                 last_error = e
