@@ -38,6 +38,8 @@ SQL_USERNAME: Optional[str] = None  # usato se TRUSTED_CONNECTION=False
 SQL_PASSWORD: Optional[str] = None  # usato se TRUSTED_CONNECTION=False
 # Timeout in secondi
 QUERY_TIMEOUT: int = 60
+# Timeout rapido per test connessione driver
+CONNECTION_TEST_TIMEOUT: int = 3
 # Opzioni di cifratura/Trust
 ODBC_ENCRYPT_OPTS: str = "Encrypt=no;TrustServerCertificate=yes;"
 
@@ -108,26 +110,14 @@ class TableViewsExtractor:
         return items
 
     def _build_conn_str(self, server: str, db: str) -> str:
-        # Rileva driver installati su macchina
-        installed = []
-        try:
-            installed = list(pyodbc.drivers())
-        except Exception:
-            installed = []
-        if installed:
-            print(f"[VIEW] Driver ODBC installati: {installed}")
-
-        # Scegli il primo compatibile dalla lista preferita che risulta installato
-        candidates = ([d for d in ODBC_DRIVERS if d in installed] if installed else ODBC_DRIVERS)
-        if not candidates:
-            raise RuntimeError(
-                "Nessun driver ODBC trovato. Installa 'Microsoft ODBC Driver 18 for SQL Server' o '17'."
-            )
-
+        """Replica la logica di connessione utilizzata in Get_Table_Definitions_From_Excel.
+        Prova i driver in ODBC_DRIVERS in ordine, aggiunge Trusted/UID/PWD e le opzioni ODBC_ENCRYPT_OPTS,
+        valida con una connessione rapida e ritorna la stringa valida.
+        """
         last_error: Optional[Exception] = None
-        for drv in candidates:
+        for drv in ODBC_DRIVERS:
             try:
-                conn_str = f"DRIVER={{{{}}}};SERVER={server};DATABASE={db};".format(drv)
+                conn_str = f"DRIVER={{{drv}}};SERVER={server};DATABASE={db};"
                 if TRUSTED_CONNECTION:
                     conn_str += "Trusted_Connection=yes;"
                 else:
@@ -135,10 +125,9 @@ class TableViewsExtractor:
                         raise RuntimeError("Imposta SQL_USERNAME e SQL_PASSWORD oppure usa Trusted_Connection.")
                     conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
                 conn_str += ODBC_ENCRYPT_OPTS
-                # Prova connessione rapida per validare il driver selezionato
-                tconn = pyodbc.connect(conn_str, timeout=3)
+                # Test rapido del driver
+                tconn = pyodbc.connect(conn_str, timeout=CONNECTION_TEST_TIMEOUT)
                 tconn.close()
-                print(f"[VIEW] Uso driver ODBC: {drv}")
                 return conn_str
             except Exception as e:
                 last_error = e
