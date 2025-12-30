@@ -37,18 +37,27 @@ def get_engine(server, db_name, engine_cache, driver):
 
 def estrai_sql_objects(engine, query, params, table_label, error_msg):
     sql_objects = []
+    # Clausole T-SQL da cercare
+    clause_ops = ["INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "CREATE TABLE", "ALTER TABLE", "FROM", "JOIN"]
     try:
         with engine.connect() as conn:
             for r in conn.execute(text(query)):
                 obj_type = r[1]
                 sql_def = r[2]
+                # Trova tutte le clausole effettivamente presenti nella definizione SQL
+                found_clauses = set()
+                for v in get_variants(params['schema'], params['table']):
+                    for op in clause_ops:
+                        if sql_def and f"{op} {v}" in sql_def:
+                            found_clauses.add(f"{op} {v}")
                 base = {
                     "Server": params['server'],
                     "Database": params['db_name'],
                     "Table": table_label,
                     "ObjectName": r[0],
                     "ObjectType": obj_type,
-                    "SQLDefinition": sql_def
+                    "SQLDefinition": sql_def,
+                    "SQL_CLAUSE": "; ".join(sorted(found_clauses)) if found_clauses else None
                 }
                 sql_objects.append(base)
     except Exception as e:
@@ -64,16 +73,34 @@ def export_large_dataframe(df, base_path, sheet_name, prefix, batch_num, max_row
         print(f"Export parziale: {file_path} ({len(chunk)} righe)")
 
 def main():
-    df = pd.read_excel(excel_path, sheet_name=5)
+    df = pd.read_excel(excel_path, sheet_name=6)
     total_rows = len(df)
     batch_size = 50
     engine_cache = dict()
     sql_objects = []
+    error_log = []
+    def get_variants(schema, table):
+        variants = set()
+        if schema and schema not in ['', None]:
+            variants.add(f"[{schema}].[{table}]")
+            variants.add(f"{schema}.{table}")
+        variants.add(f"[{table}]")
+        variants.add(table)
+        return variants
+
     for i, (idx, row) in enumerate(df.iterrows(), 1):
         print(f"Stato avanzamento: {i}/{total_rows}")
         params = get_conn_params(row)
         if not (params["server"] and params["db_name"] and params["table"]):
             print(f"SKIP: Parametri mancanti per riga {idx}")
+            error_log.append({
+                "Riga": idx,
+                "Server": params["server"],
+                "Database": params["db_name"],
+                "Schema": params["schema"],
+                "Table": params["table"],
+                "Errore": "Parametri mancanti"
+            })
             continue
         try:
             engine = get_engine(params['server'], params['db_name'], engine_cache, DRIVER)
@@ -82,18 +109,22 @@ def main():
                     pass
         except Exception as e:
             print(f"ERRORE CONNESSIONE per riga {idx} (Server: {params['server']}, DB: {params['db_name']}): {e}")
+            error_log.append({
+                "Riga": idx,
+                "Server": params["server"],
+                "Database": params["db_name"],
+                "Schema": params["schema"],
+                "Table": params["table"],
+                "Errore": str(e)
+            })
             continue
         schema = params["schema"]
         table = params["table"]
-        variants = set()
-        if schema and schema not in ['', None]:
-            variants.add(f"[{schema}].[{table}]")
-            variants.add(f"{schema}.{table}")
-        variants.add(f"[{table}]")
-        variants.add(table)
+        variants = get_variants(schema, table)
         conditions = []
+        clause_ops = ["INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "CREATE TABLE", "ALTER TABLE", "FROM", "JOIN"]
         for v in variants:
-            for op in ["INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "CREATE TABLE", "ALTER TABLE", "FROM", "JOIN"]:
+            for op in clause_ops:
                 conditions.append(f"CHARINDEX('{op} {v}', sm.definition) > 0")
         where_clause = "\n                OR ".join(conditions)
         query = f"""
@@ -106,13 +137,34 @@ def main():
             AND o.type_desc <> 'VIEW'
         """
         table_label = f"{schema}.{table}" if schema and schema not in ['', None] else table
-        batch_objects = estrai_sql_objects(engine, query, params, table_label, f"Errore su {params['db_name']} tabella {table_label}")
-        sql_objects.extend(batch_objects)
+        try:
+            batch_objects = estrai_sql_objects(engine, query, params, table_label, f"Errore su {params['db_name']} tabella {table_label}")
+            sql_objects.extend(batch_objects)
+        except Exception as e:
+            print(f"ERRORE QUERY per riga {idx} (Server: {params['server']}, DB: {params['db_name']}): {e}")
+            error_log.append({
+                "Riga": idx,
+                "Server": params["server"],
+                "Database": params["db_name"],
+                "Schema": params["schema"],
+                "Table": params["table"],
+                "Errore": f"Query: {e}"
+            })
+            continue
         if i % batch_size == 0:
             export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', i // batch_size)
             sql_objects.clear()
     if sql_objects:
         export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', (total_rows // batch_size) + 1)
+
+    # Log riepilogativo errori
+    if error_log:
+        error_df = pd.DataFrame(error_log)
+        error_file = f"{output_path}_error_log.xlsx"
+        error_df.to_excel(error_file, index=False)
+        print(f"\nLog errori esportato in: {error_file}")
+    else:
+        print("\nNessun errore di connessione o query.")
 
 if __name__ == "__main__":
     main()
