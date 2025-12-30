@@ -247,10 +247,13 @@ END
         if not items:
             raise RuntimeError("Nessuna tabella valida trovata nell'Excel di input.")
 
+        total = len(items)
+        print(f"[DDL] Totale tabelle da elaborare: {total}")
         results: List[List[str]] = []
         conns: Dict[Tuple[str, str], pyodbc.Connection] = {}
         try:
-            for server, db, schema, table in items:
+            for idx, (server, db, schema, table) in enumerate(items, start=1):
+                print(f"[DDL] Elaborazione {idx}/{total}: {server}.{db}.{schema}.{table}")
                 key = (server, db)
                 if key not in conns:
                     conn_str = self._build_conn_str(server, db)

@@ -1,0 +1,1 @@
+SELECT 'J1' AS J;

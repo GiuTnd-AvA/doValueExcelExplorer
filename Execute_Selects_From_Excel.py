@@ -59,54 +59,42 @@ class SelectsExecutor:
 
     def _read_selects(self) -> List[str]:
         wb = load_workbook(self.input_excel, read_only=True, data_only=True)
-        try:
-            ws = wb.worksheets[0]
-            rows = list(ws.iter_rows(min_row=1, max_col=1, values_only=True))
-            selects: List[str] = []
-            first_val = None
-            if rows:
-                first_cell = rows[0][0]
-                first_val = str(first_cell).strip() if first_cell is not None else ""
-            for r in rows:
-                val = r[0]
-                if val is None:
-                    continue
-                s = str(val).strip()
+        ws = wb.worksheets[0]
+        rows = list(ws.iter_rows(min_row=1, max_col=1, values_only=True))
+        selects: List[str] = []
+        header_skipped = False
+        for (val,) in rows:
+            if isinstance(val, str):
+                s = val.strip()
                 if not s:
                     continue
+                if not header_skipped and s.lower() in ("select", "query"):
+                    header_skipped = True
+                    continue
                 low = s.lower()
-                # Accetta solo SELECT/CTE; ignora header tipo "conn"
                 if low.startswith("select") or low.startswith("with"):
                     selects.append(s)
-            # Se la prima riga è un'intestazione (ad es. "Select"), rimuovila
-            if selects and first_val and first_val.lower() in ("select", "query", "sql"):
-                selects = selects[1:]
-            return selects
-        finally:
-            wb.close()
+        return selects
 
     def _build_conn_str(self) -> str:
         last_error: Optional[Exception] = None
-        # Trova il primo driver disponibile tra quelli elencati
         for drv in ODBC_DRIVERS:
             try:
-                conn_str = f"DRIVER={{{drv}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};"
+                conn_str = f"DRIVER={{{{}}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};".format(drv)
                 if TRUSTED_CONNECTION:
                     conn_str += "Trusted_Connection=yes;"
                 else:
                     if not SQL_USERNAME or not SQL_PASSWORD:
                         raise RuntimeError("Imposta SQL_USERNAME e SQL_PASSWORD oppure usa Trusted_Connection.")
                     conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
-                # Opzioni utili con ODBC 17/18
                 conn_str += ODBC_ENCRYPT_OPTS
-                # Proviamo una connessione veloce per validare il driver
-                conn = pyodbc.connect(conn_str, timeout=3)
-                conn.close()
+                # test quick connectivity for driver
+                tconn = pyodbc.connect(conn_str, timeout=3)
+                tconn.close()
                 return conn_str
             except Exception as e:
                 last_error = e
                 continue
-        # Se siamo qui, nessun driver ha funzionato
         raise RuntimeError(f"Nessun driver ODBC valido trovato. Ultimo errore: {last_error}")
 
     def _execute_select(self, conn, sql: str) -> Optional[str]:
@@ -129,14 +117,20 @@ class SelectsExecutor:
     def run(self) -> str:
         selects = self._read_selects()
         if not selects:
-            raise RuntimeError("Nessuna SELECT trovata nell'Excel di input.")
+            print("[SELECT] Nessuna SELECT valida trovata nell'Excel di input.")
+            return self.output_excel or ""
+
+        total = len(selects)
+        print(f"[SELECT] Totale SELECT da eseguire: {total}")
 
         conn_str = self._build_conn_str()
         results: List[List[str]] = []
         conn = None
         try:
             conn = pyodbc.connect(conn_str, timeout=QUERY_TIMEOUT)
-            for s in selects:
+            for idx, s in enumerate(selects, start=1):
+                preview = (s.replace('\n', ' ')[:120] + ('…' if len(s) > 120 else ''))
+                print(f"[SELECT] Esecuzione {idx}/{total}: {preview}")
                 err = self._execute_select(conn, s)
                 results.append([s, "" if err is None else err])
         finally:
@@ -153,6 +147,7 @@ class SelectsExecutor:
         df = pd.DataFrame(results, columns=["Select", "Errore"])
         with pd.ExcelWriter(self.output_excel, engine='openpyxl', mode='w') as writer:
             df.to_excel(writer, index=False, sheet_name='Esiti')
+        print(f"[SELECT] Output scritto in: {self.output_excel}")
         return self.output_excel
 
 
