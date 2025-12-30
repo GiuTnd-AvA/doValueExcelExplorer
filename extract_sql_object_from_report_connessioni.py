@@ -112,7 +112,7 @@ def main():
             export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', i // batch_size)
             sql_objects.clear()
     if sql_objects:
-        export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', (i // batch_size) + 1)
+        export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', (total_rows // batch_size) + 1)
 
 if __name__ == "__main__":
     main()
