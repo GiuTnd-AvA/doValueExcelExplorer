@@ -6,6 +6,7 @@
 # =========================
 from Config.config import EXCEL_INPUT_PATH, EXCEL_OUTPUT_PATH
 import pandas as pd
+from collections import defaultdict
 from sqlalchemy import create_engine, text
 import pyodbc
 import re
@@ -51,16 +52,10 @@ def estrai_e_append_multi(engine, query, result_list, row_transform, error_msg):
 # =========================
 # MAIN: ESTRAZIONE DATI
 # =========================
-df = pd.read_excel(excel_path, sheet_name=0)
-
-total_rows = len(df)
-
-# --- OTTIMIZZAZIONE: cache connessioni e export parziale ---
-from collections import defaultdict
 
 results = []
+viste = []
 dipendenze = []
-dipendenze_inverse = []
 elenco_tabelle = []
 struttura_colonne = []
 
@@ -73,7 +68,7 @@ def get_engine(server, db_name):
     return engine_cache[key]
 
 
-def export_partial(results, dipendenze, output_path, batch_num):
+def export_partial(results, viste, dipendenze, output_path, batch_num):
     def export_large_dataframe(df, base_path, sheet_name, prefix):
         max_rows = 1000000
         for i in range(0, len(df), max_rows):
@@ -82,9 +77,11 @@ def export_partial(results, dipendenze, output_path, batch_num):
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                 chunk.to_excel(writer, index=False, sheet_name=sheet_name)
             print(f"Export parziale: {file_path} ({len(chunk)} righe)")
-    export_large_dataframe(pd.DataFrame(results), output_path, 'Risultati', 'results')
-    export_large_dataframe(pd.DataFrame(dipendenze), output_path, 'Dipendenze', 'dipendenze')
+    export_large_dataframe(pd.DataFrame(results), output_path, 'Oggetti T-Sql', 'oggetti')
+    export_large_dataframe(pd.DataFrame(viste), output_path, 'Viste', 'viste')
+    # export_large_dataframe(pd.DataFrame(dipendenze), output_path, 'Dipendenze', 'dipendenze')  # Esportazione dipendenze disabilitata su richiesta
 
+df = pd.read_excel(excel_path, sheet_name=0)
 total_rows = len(df)
 batch_size = 100
 for i, (idx, row) in enumerate(df.iterrows(), 1):
@@ -105,7 +102,7 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
     schema_valid = params["schema"] not in ['', None]
     table_valid = params["table"] not in ['', None]
 
-    # RISULTATI: oggetti che popolano/aggiornano la tabella
+    # RISULTATI: oggetti che popolano/aggiornano la tabella e viste
     if table_valid:
         if schema_valid:
             table_full_bracket = f"[{params['schema']}].[{params['table']}]"
@@ -121,10 +118,10 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
                 OR CHARINDEX('MERGE INTO {table_full_bracket}', sm.definition) > 0
                 OR CHARINDEX('CREATE TABLE {table_full_bracket}', sm.definition) > 0
                 OR CHARINDEX('ALTER TABLE {table_full_bracket}', sm.definition) > 0
-                # OR CHARINDEX('FROM {table_full_bracket}', sm.definition) > 0
-                # OR CHARINDEX('JOIN {table_full_bracket}', sm.definition) > 0
-                # OR CHARINDEX('FROM {table_no_schema}', sm.definition) > 0
-                # OR CHARINDEX('JOIN {table_no_schema}', sm.definition) > 0
+                OR CHARINDEX('FROM {table_full_bracket}', sm.definition) > 0
+                OR CHARINDEX('JOIN {table_full_bracket}', sm.definition) > 0
+                OR CHARINDEX('FROM {table_no_schema}', sm.definition) > 0
+                OR CHARINDEX('JOIN {table_no_schema}', sm.definition) > 0
             )
             """
             table_label = f"{params['schema']}.{params['table']}"
@@ -141,26 +138,68 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
                 OR CHARINDEX('MERGE INTO {table_bracket}', sm.definition) > 0
                 OR CHARINDEX('CREATE TABLE {table_bracket}', sm.definition) > 0
                 OR CHARINDEX('ALTER TABLE {table_bracket}', sm.definition) > 0
-                # OR CHARINDEX('FROM {table_bracket}', sm.definition) > 0
-                # OR CHARINDEX('JOIN {table_bracket}', sm.definition) > 0
+                OR CHARINDEX('FROM {table_bracket}', sm.definition) > 0
+                OR CHARINDEX('JOIN {table_bracket}', sm.definition) > 0
             )
             """
             table_label = params['table']
-        estrai_e_append_multi(
-            engine,
-            query,
-            results,
-            lambda r: {
-                "FileName": params['file_name'],
+
+        def is_vista(obj_type, sql_def):
+            # Considera vista se contiene FROM/JOIN e NON operazioni di modifica
+            mod_ops = [
+                f"INSERT INTO {table_full_bracket}",
+                f"UPDATE {table_full_bracket}",
+                f"DELETE FROM {table_full_bracket}",
+                f"MERGE INTO {table_full_bracket}",
+                f"CREATE TABLE {table_full_bracket}",
+            ] if schema_valid else [
+                f"INSERT INTO {table_bracket}",
+                f"UPDATE {table_bracket}",
+                f"DELETE FROM {table_bracket}",
+                f"MERGE INTO {table_bracket}",
+                f"CREATE TABLE {table_bracket}",
+                f"ALTER TABLE {table_bracket}"
+            ]
+            if sql_def and any(op in sql_def for op in mod_ops):
+                return False
+            # Se contiene FROM/JOIN, è vista
+            if sql_def and (f"FROM {table_full_bracket}" in sql_def or f"JOIN {table_full_bracket}" in sql_def or f"FROM {table_no_schema}" in sql_def or f"JOIN {table_no_schema}" in sql_def):
+                return True
+            if not schema_valid and sql_def and (f"FROM {table_bracket}" in sql_def or f"JOIN {table_bracket}" in sql_def):
+                return True
+            return False
+
+        def row_dispatch(r):
+            obj_type = r[1]
+            sql_def = r[2]
+            base = {
                 "Server": params['server'],
                 "Database": params['db_name'],
                 "Table": table_label,
                 "ObjectName": r[0],
-                "ObjectType": r[1],
-                "SQLDefinition": r[2]
-            },
+                "ObjectType": obj_type,
+                "SQLDefinition": sql_def
+            }
+            if is_vista(obj_type, sql_def):
+                viste.append(base)
+                return None
+            else:
+                return base
+
+        estrai_e_append_multi(
+            engine,
+            query,
+            results,
+            row_dispatch,
             f"Errore su {params['file_name']} ({params['db_name']}) tabella {table_label}"
         )
+
+        # Export parziale ogni batch_size record
+    if i % batch_size == 0:
+        export_partial(results, viste, dipendenze, output_path, i // batch_size)
+        results.clear()
+        viste.clear()
+        dipendenze.clear()
 
     # --- DIPENDENZE: tutte le tabelle usate da ogni oggetto SQL ---
     # dep_sql = """
@@ -217,39 +256,14 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
     #     dep_sql,
     #     dipendenze,
     #     dipendenze_row_transform,
-    #     f"Errore estrazione dipendenze complete per {params['db_name']}"
     # )
 
-    # Export parziale ogni batch_size record
-    if i % batch_size == 0:
-        export_partial(results, dipendenze, output_path, i // batch_size)
-        results.clear()
-        dipendenze.clear()
+    
 
 
-# Export finale in più file se necessario
-def export_large_dataframe(df, base_path, sheet_name, prefix):
-    max_rows = 1000000
-    for i in range(0, len(df), max_rows):
-        chunk = df[i:i+max_rows]
-        file_path = f"{base_path}_{prefix}_{i//max_rows+1}.xlsx"
-        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-            chunk.to_excel(writer, index=False, sheet_name=sheet_name)
-        print(f"Esportato: {file_path} ({len(chunk)} righe)")
 
-export_large_dataframe(pd.DataFrame(results), output_path, 'Risultati', 'final')
-export_large_dataframe(pd.DataFrame(dipendenze), output_path, 'Dipendenze', 'final')
 
-# =========================
-# EXPORT RISULTATI
-# =========================
-with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-    # pd.DataFrame(elenco_tabelle).to_excel(writer, index=False, sheet_name='ElencoTabelle')
-    # pd.DataFrame(struttura_colonne).to_excel(writer, index=False, sheet_name='StrutturaColonne')
-    pd.DataFrame(results).to_excel(writer, index=False, sheet_name='Risultati')
-    pd.DataFrame(dipendenze).to_excel(writer, index=False, sheet_name='Dipendenze')
-    # pd.DataFrame(dipendenze_inverse).to_excel(writer, index=False, sheet_name='DipendenzeTabella')
-    print(f"Risultati esportati in: {output_path}")
+# (RIMOSSA esportazione finale: ora solo export parziale batch)
     
 
     # # --- DIPENDENZE INVERSE ---
