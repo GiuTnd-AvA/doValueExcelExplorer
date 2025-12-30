@@ -21,7 +21,7 @@ except Exception:
 # -----------------------------------------------------------------------------
 INPUT_EXCEL_PATH: Optional[str] = None  # es: r"C:\\path\\Selects.xlsx"
 OUTPUT_EXCEL_PATH: Optional[str] = None  # es: r"C:\\path\\Esiti_Select.xlsx"
-SQL_SERVER: str = "EPCP3"
+SQL_SERVER: str = "EPCP3"  # se istanza nominata: "EPCP3\\ISTANZA"
 SQL_DATABASE: str = "master"
 # Proveremo questi driver in ordine.
 ODBC_DRIVERS: List[str] = [
@@ -30,8 +30,12 @@ ODBC_DRIVERS: List[str] = [
     "SQL Server",
 ]
 TRUSTED_CONNECTION: bool = True
+SQL_USERNAME: Optional[str] = None  # usato se TRUSTED_CONNECTION=False
+SQL_PASSWORD: Optional[str] = None  # usato se TRUSTED_CONNECTION=False
 # Timeout in secondi per ogni query
 QUERY_TIMEOUT: int = 60
+# Opzioni di cifratura/Trust (ODBC 18 abilita Encrypt by default). Regola se necessario.
+ODBC_ENCRYPT_OPTS: str = "Encrypt=no;TrustServerCertificate=yes;"
 
 
 class SelectsExecutor:
@@ -57,20 +61,24 @@ class SelectsExecutor:
         wb = load_workbook(self.input_excel, read_only=True, data_only=True)
         try:
             ws = wb.worksheets[0]
-            rows = ws.iter_rows(min_row=1, max_col=1, values_only=True)
+            rows = list(ws.iter_rows(min_row=1, max_col=1, values_only=True))
             selects: List[str] = []
             first_val = None
-            for i, r in enumerate(rows, start=1):
+            if rows:
+                first_cell = rows[0][0]
+                first_val = str(first_cell).strip() if first_cell is not None else ""
+            for r in rows:
                 val = r[0]
-                if i == 1:
-                    first_val = str(val).strip() if val is not None else ""
                 if val is None:
                     continue
                 s = str(val).strip()
                 if not s:
                     continue
-                selects.append(s)
-            # Se la prima riga è un'intestazione, rimuoverla
+                low = s.lower()
+                # Accetta solo SELECT/CTE; ignora header tipo "conn"
+                if low.startswith("select") or low.startswith("with"):
+                    selects.append(s)
+            # Se la prima riga è un'intestazione (ad es. "Select"), rimuovila
             if selects and first_val and first_val.lower() in ("select", "query", "sql"):
                 selects = selects[1:]
             return selects
@@ -82,11 +90,15 @@ class SelectsExecutor:
         # Trova il primo driver disponibile tra quelli elencati
         for drv in ODBC_DRIVERS:
             try:
-                # pyodbc.connect fallirà più tardi se il driver non esiste, ma costruiamo la stringa qui
-                conn_str = (
-                    f"DRIVER={{{drv}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};" +
-                    ("Trusted_Connection=yes;" if TRUSTED_CONNECTION else "")
-                )
+                conn_str = f"DRIVER={{{drv}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};"
+                if TRUSTED_CONNECTION:
+                    conn_str += "Trusted_Connection=yes;"
+                else:
+                    if not SQL_USERNAME or not SQL_PASSWORD:
+                        raise RuntimeError("Imposta SQL_USERNAME e SQL_PASSWORD oppure usa Trusted_Connection.")
+                    conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
+                # Opzioni utili con ODBC 17/18
+                conn_str += ODBC_ENCRYPT_OPTS
                 # Proviamo una connessione veloce per validare il driver
                 conn = pyodbc.connect(conn_str, timeout=3)
                 conn.close()
@@ -101,7 +113,7 @@ class SelectsExecutor:
         """Esegue una singola SELECT. Ritorna None se ok, altrimenti messaggio di errore."""
         try:
             cursor = conn.cursor()
-            cursor.timeout = QUERY_TIMEOUT
+            # rimosso: cursor.timeout (non esiste)
             cursor.execute(sql)
             # Non è richiesto leggere i risultati, vogliamo solo validare l'esecuzione
             # Recuperiamo un record al massimo per forzare eventuali errori di sintassi
