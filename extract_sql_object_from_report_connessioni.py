@@ -108,44 +108,41 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
     # RISULTATI: oggetti che popolano/aggiornano la tabella
     if table_valid:
         if schema_valid:
+            table_full_bracket = f"[{params['schema']}].[{params['table']}]"
+            table_no_schema = f"[{params['table']}]"
             query = f"""
             SELECT o.name, o.type_desc, sm.definition
             FROM sys.sql_modules sm
             JOIN sys.objects o ON sm.object_id = o.object_id
             WHERE (
-                CHARINDEX('INSERT INTO [{params['schema']}].[{params['table']}]', sm.definition) > 0
-                OR CHARINDEX('UPDATE [{params['schema']}].[{params['table']}]', sm.definition) > 0
-                OR CHARINDEX('DELETE FROM [{params['schema']}].[{params['table']}]', sm.definition) > 0
-                OR CHARINDEX('MERGE INTO [{params['schema']}].[{params['table']}]', sm.definition) > 0
-                OR CHARINDEX('CREATE TABLE [{params['schema']}].[{params['table']}]', sm.definition) > 0
-                OR CHARINDEX('ALTER TABLE [{params['schema']}].[{params['table']}]', sm.definition) > 0
-                OR CHARINDEX('INSERT INTO {params['schema']}.{params['table']}', sm.definition) > 0
-                OR CHARINDEX('UPDATE {params['schema']}.{params['table']}', sm.definition) > 0
-                OR CHARINDEX('DELETE FROM {params['schema']}.{params['table']}', sm.definition) > 0
-                OR CHARINDEX('MERGE INTO {params['schema']}.{params['table']}', sm.definition) > 0
-                OR CHARINDEX('CREATE TABLE {params['schema']}.{params['table']}', sm.definition) > 0
-                OR CHARINDEX('ALTER TABLE {params['schema']}.{params['table']}', sm.definition) > 0
-                OR CHARINDEX('INSERT INTO {params['table']}', sm.definition) > 0
-                OR CHARINDEX('UPDATE {params['table']}', sm.definition) > 0
-                OR CHARINDEX('DELETE FROM {params['table']}', sm.definition) > 0
-                OR CHARINDEX('MERGE INTO {params['table']}', sm.definition) > 0
-                OR CHARINDEX('CREATE TABLE {params['table']}', sm.definition) > 0
-                OR CHARINDEX('ALTER TABLE {params['table']}', sm.definition) > 0
+                CHARINDEX('INSERT INTO {table_full_bracket}', sm.definition) > 0
+                OR CHARINDEX('UPDATE {table_full_bracket}', sm.definition) > 0
+                OR CHARINDEX('DELETE FROM {table_full_bracket}', sm.definition) > 0
+                OR CHARINDEX('MERGE INTO {table_full_bracket}', sm.definition) > 0
+                OR CHARINDEX('CREATE TABLE {table_full_bracket}', sm.definition) > 0
+                OR CHARINDEX('ALTER TABLE {table_full_bracket}', sm.definition) > 0
+                # OR CHARINDEX('FROM {table_full_bracket}', sm.definition) > 0
+                # OR CHARINDEX('JOIN {table_full_bracket}', sm.definition) > 0
+                # OR CHARINDEX('FROM {table_no_schema}', sm.definition) > 0
+                # OR CHARINDEX('JOIN {table_no_schema}', sm.definition) > 0
             )
             """
             table_label = f"{params['schema']}.{params['table']}"
         else:
+            table_bracket = f"[{params['table']}]"
             query = f"""
             SELECT o.name, o.type_desc, sm.definition
             FROM sys.sql_modules sm
             JOIN sys.objects o ON sm.object_id = o.object_id
             WHERE (
-                CHARINDEX('INSERT INTO {params['table']}', sm.definition) > 0
-                OR CHARINDEX('UPDATE {params['table']}', sm.definition) > 0
-                OR CHARINDEX('DELETE FROM {params['table']}', sm.definition) > 0
-                OR CHARINDEX('MERGE INTO {params['table']}', sm.definition) > 0
-                OR CHARINDEX('CREATE TABLE {params['table']}', sm.definition) > 0
-                OR CHARINDEX('ALTER TABLE {params['table']}', sm.definition) > 0
+                CHARINDEX('INSERT INTO {table_bracket}', sm.definition) > 0
+                OR CHARINDEX('UPDATE {table_bracket}', sm.definition) > 0
+                OR CHARINDEX('DELETE FROM {table_bracket}', sm.definition) > 0
+                OR CHARINDEX('MERGE INTO {table_bracket}', sm.definition) > 0
+                OR CHARINDEX('CREATE TABLE {table_bracket}', sm.definition) > 0
+                OR CHARINDEX('ALTER TABLE {table_bracket}', sm.definition) > 0
+                # OR CHARINDEX('FROM {table_bracket}', sm.definition) > 0
+                # OR CHARINDEX('JOIN {table_bracket}', sm.definition) > 0
             )
             """
             table_label = params['table']
