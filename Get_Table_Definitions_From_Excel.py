@@ -117,7 +117,7 @@ class TableDefinitionExtractor:
 
     # ---------------- DDL builder ----------------
     def _fetch_table_ddl(self, conn, schema: str, table: str) -> str:
-        tsql = r"""
+        tsql_stringagg = r"""
 DECLARE @schema_table nvarchar(512) = QUOTENAME(?) + N'.' + QUOTENAME(?);
 DECLARE @obj_id int = OBJECT_ID(@schema_table);
 IF @obj_id IS NULL
@@ -174,8 +174,70 @@ BEGIN
            ISNULL(CHAR(13) + CHAR(10) + @pk, N'') AS ddl;
 END
 """
+        tsql_xmlpath = r"""
+DECLARE @schema_table nvarchar(512) = QUOTENAME(?) + N'.' + QUOTENAME(?);
+DECLARE @obj_id int = OBJECT_ID(@schema_table);
+IF @obj_id IS NULL
+    SELECT CAST(N'ERROR: tabella non trovata: ' + @schema_table AS nvarchar(max)) AS ddl;
+ELSE
+BEGIN
+    DECLARE @cols nvarchar(max) = N'';
+    SELECT @cols = STUFF((
+        SELECT N',' + CHAR(13) + CHAR(10) +
+               N'[' + c.name + N'] ' +
+               UPPER(t.name) +
+               CASE 
+                   WHEN t.name IN (N'char',N'nchar',N'varchar',N'nvarchar',N'binary',N'varbinary') 
+                        THEN N'(' + CASE 
+                                      WHEN t.name IN (N'nchar',N'nvarchar') 
+                                           THEN CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length/2 AS nvarchar(10)) END
+                                      ELSE CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length AS nvarchar(10)) END
+                                    END + N')'
+                   WHEN t.name IN (N'decimal',N'numeric') 
+                        THEN N'(' + CAST(c.precision AS nvarchar(10)) + N',' + CAST(c.scale AS nvarchar(10)) + N')'
+                   WHEN t.name IN (N'datetime2',N'time',N'datetimeoffset')
+                        THEN N'(' + CAST(c.scale AS nvarchar(10)) + N')'
+                   ELSE N''
+               END +
+               CASE WHEN ic.is_identity = 1 
+                    THEN N' IDENTITY(' + CAST(ic.seed_value AS nvarchar(50)) + N',' + CAST(ic.increment_value AS nvarchar(50)) + N')' 
+                    ELSE N'' 
+               END +
+               CASE WHEN c.is_nullable = 0 THEN N' NOT NULL' ELSE N' NULL' END +
+               COALESCE(N' DEFAULT ' + dc.definition, N'')
+        FROM sys.columns c
+        JOIN sys.types t ON c.user_type_id = t.user_type_id
+        LEFT JOIN sys.default_constraints dc ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+        LEFT JOIN sys.identity_columns ic ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE c.object_id = @obj_id
+        ORDER BY c.column_id
+        FOR XML PATH(''), TYPE
+    ).value('.', 'nvarchar(max)'), 1, 1, N'');
+
+    DECLARE @pk nvarchar(max) = NULL;
+    SELECT @pk = N'CONSTRAINT [' + kc.name + N'] PRIMARY KEY (' +
+                 STUFF((
+                    SELECT N', ' + N'[' + c.name + N']' + CASE WHEN ic.is_descending_key = 1 THEN N' DESC' ELSE N'' END
+                    FROM sys.index_columns ic
+                    JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                    WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id
+                    ORDER BY ic.key_ordinal
+                    FOR XML PATH(''), TYPE
+                 ).value('.', 'nvarchar(max)'), 1, 2, N'') + N')'
+    FROM sys.key_constraints kc
+    JOIN sys.indexes i ON i.object_id = kc.parent_object_id AND i.index_id = kc.unique_index_id
+    WHERE kc.type = 'PK' AND kc.parent_object_id = @obj_id;
+
+    SELECT N'CREATE TABLE ' + @schema_table + CHAR(13) + CHAR(10) +
+           N'(' + ISNULL(@cols, N'') + N')' +
+           ISNULL(CHAR(13) + CHAR(10) + @pk, N'') AS ddl;
+END
+"""
         cur = conn.cursor()
-        cur.execute(tsql, (schema, table))
+        try:
+            cur.execute(tsql_stringagg, (schema, table))
+        except Exception:
+            cur.execute(tsql_xmlpath, (schema, table))
         row = cur.fetchone()
         return row[0] if row else ""
 
