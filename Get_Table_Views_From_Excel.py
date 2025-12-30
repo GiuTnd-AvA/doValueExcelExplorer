@@ -40,6 +40,8 @@ SQL_PASSWORD: Optional[str] = None  # usato se TRUSTED_CONNECTION=False
 QUERY_TIMEOUT: int = 60
 # Timeout rapido per test connessione driver
 CONNECTION_TEST_TIMEOUT: int = 3
+# Salvataggio parziale ogni N elementi
+PARTIAL_SAVE_EVERY: int = 50
 # Opzioni di cifratura/Trust
 ODBC_ENCRYPT_OPTS: str = "Encrypt=no;TrustServerCertificate=yes;"
 
@@ -230,8 +232,8 @@ class TableViewsExtractor:
                 for view_name, definition in views:
                     results.append([server, db, schema, table, view_name, definition])
 
-                # Salvataggio parziale ogni 50 elementi elaborati
-                if idx % 50 == 0:
+                # Salvataggio parziale ogni PARTIAL_SAVE_EVERY elementi elaborati
+                if idx % PARTIAL_SAVE_EVERY == 0:
                     base_dir = os.path.dirname(self.output_excel) or os.getcwd()
                     base_name = os.path.splitext(os.path.basename(self.output_excel or 'VistePerTabella.xlsx'))[0]
                     partial_path = os.path.join(base_dir, f"{base_name}_partial_{idx}.xlsx")
