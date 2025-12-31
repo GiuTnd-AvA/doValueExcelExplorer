@@ -170,22 +170,40 @@ class TableViewsExtractor:
         if rows:
             return rows
 
-        # Fallback: cerca nel testo definizioni che contengono schema.table
-        pattern1 = f"[{schema}].[{table}]"  # con brackets
-        pattern2 = f"{schema}.{table}"     # senza brackets
+        # Fallback ROBUSTO: ricerca letterale con CHARINDEX per evitare falsi positivi dei bracket con LIKE
         sql_fb = (
             """
-            SELECT v.name AS view_name,
-                   sm.definition
+            DECLARE @schema sysname = ?;
+            DECLARE @table  sysname = ?;
+
+            DECLARE @two_br   nvarchar(400) = QUOTENAME(@schema) + N'.' + QUOTENAME(@table); -- [schema].[table]
+            DECLARE @two_pl   nvarchar(400) = @schema + N'.' + @table;                         -- schema.table
+            DECLARE @db       sysname       = DB_NAME();
+            DECLARE @three_br nvarchar(600) = QUOTENAME(@db) + N'.' + @two_br;                 -- [db].[schema].[table]
+            DECLARE @three_pl nvarchar(600) = @db + N'.' + @two_pl;                             -- db.schema.table
+
+            SELECT DISTINCT v.name AS view_name,
+                            sm.definition
             FROM sys.views AS v
             JOIN sys.sql_modules AS sm ON v.object_id = sm.object_id
-            WHERE sm.definition LIKE ? OR sm.definition LIKE ?
+            WHERE  CHARINDEX(@two_br ,  sm.definition) > 0
+                OR CHARINDEX(@two_pl ,  sm.definition) > 0
+                OR CHARINDEX(@three_br, sm.definition) > 0
+                OR CHARINDEX(@three_pl, sm.definition) > 0
+                OR CHARINDEX(N'FROM ' + @two_br ,  sm.definition) > 0
+                OR CHARINDEX(N'JOIN ' + @two_br ,  sm.definition) > 0
+                OR CHARINDEX(N'FROM ' + @two_pl ,  sm.definition) > 0
+                OR CHARINDEX(N'JOIN ' + @two_pl ,  sm.definition) > 0
+                OR CHARINDEX(N'FROM ' + @three_br, sm.definition) > 0
+                OR CHARINDEX(N'JOIN ' + @three_br, sm.definition) > 0
+                OR CHARINDEX(N'FROM ' + @three_pl, sm.definition) > 0
+                OR CHARINDEX(N'JOIN ' + @three_pl, sm.definition) > 0
             ORDER BY v.name;
             """
         )
         cur = conn.cursor()
         try:
-            cur.execute(sql_fb, (f"%{pattern1}%", f"%{pattern2}%"))
+            cur.execute(sql_fb, (schema, table))
             fb_rows = cur.fetchall()
             rows = [(str(r[0]), str(r[1])) for r in fb_rows]
         except Exception:
