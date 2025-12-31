@@ -45,6 +45,7 @@ def get_variants(schema, table):
     return variants
     
 def estrai_sql_objects(engine, query, params, table_label, error_msg):
+    import re
     sql_objects = []
     # Clausole T-SQL da cercare
     clause_ops = ["INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "CREATE TABLE", "ALTER TABLE", "FROM", "JOIN"]
@@ -53,12 +54,17 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
             for r in conn.execute(text(query)):
                 obj_type = r[1]
                 sql_def = r[2]
-                # Trova tutte le clausole effettivamente presenti nella definizione SQL
                 found_clauses = set()
-                for v in get_variants(params['schema'], params['table']):
-                    for op in clause_ops:
-                        if sql_def and f"{op} {v}" in sql_def:
-                            found_clauses.add(f"{op} {v}")
+                if sql_def:
+                    sql_def_l = sql_def.lower()
+                    for v in get_variants(params['schema'], params['table']):
+                        v_l = v.lower()
+                        for op in clause_ops:
+                            op_l = op.lower()
+                            # Regex: op + spazi + v + (spazio o parentesi quadra o fine riga), tollera alias dopo
+                            pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}(\s|\[|$)"
+                            if re.search(pattern, sql_def_l):
+                                found_clauses.add(f"{op} {v}")
                 base = {
                     "Server": params['server'],
                     "Database": params['db_name'],
