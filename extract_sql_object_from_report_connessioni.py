@@ -18,6 +18,9 @@ except Exception:
 
 excel_path = EXCEL_INPUT_PATH
 output_path = EXCEL_OUTPUT_PATH
+SHEET_INDEX = 0 
+BATCH_SIZE = 50
+START_ROW = 102  
 
 def get_conn_params(row):
     """Estrae i parametri di connessione da una riga del DataFrame."""
@@ -88,14 +91,14 @@ def export_large_dataframe(df, base_path, sheet_name, prefix, batch_num, max_row
         print(f"Export parziale: {file_path} ({len(chunk)} righe)")
 
 def main():
-    df = pd.read_excel(excel_path, sheet_name=6)
+    df = pd.read_excel(excel_path, sheet_name=SHEET_INDEX)
     total_rows = len(df)
-    batch_size = 50
+    batch_size = BATCH_SIZE
     engine_cache = dict()
     sql_objects = []
     error_log = []
 
-    for i, (idx, row) in enumerate(df.iloc[101:].iterrows(), 102):
+    for i, (idx, row) in enumerate(df.iloc[START_ROW -1:].iterrows(), START_ROW):
         print(f"Stato avanzamento: {i}/{total_rows}")
         params = get_conn_params(row)
         if not (params["server"] and params["db_name"] and params["table"]):
