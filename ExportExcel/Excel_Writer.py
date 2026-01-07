@@ -22,15 +22,11 @@ class ExcelWriter:
         if not self._initialized:
             # First write in this run: start fresh (overwrite file)
             mode = 'w'
-            # If a previous file exists, starting with 'w' will overwrite it
             self._initialized = True
+            with pd.ExcelWriter(output_path, engine='openpyxl', mode=mode) as writer:
+                df.to_excel(writer, index=False, sheet_name=sheet_name)
         else:
             # Subsequent writes in the same run: append sheets
             mode = 'a'
-
-        writer_kwargs = dict(engine='openpyxl', mode=mode)
-        if mode == 'a':
-            writer_kwargs['if_sheet_exists'] = 'replace'
-
-        with pd.ExcelWriter(output_path, **writer_kwargs) as writer:
-            df.to_excel(writer, index=False, sheet_name=sheet_name)
+            with pd.ExcelWriter(output_path, engine='openpyxl', mode=mode, if_sheet_exists='replace') as writer:
+                df.to_excel(writer, index=False, sheet_name=sheet_name)
