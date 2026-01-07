@@ -128,3 +128,46 @@ def test_checker_no_matches_writes_empty_excel(tmp_path):
     df = pd.read_excel(out, sheet_name="Tabelle")
     # No matches expected
     assert len(df) == 0
+
+
+def test_checker_includes_views(tmp_path, monkeypatch):
+    # Input cerca una vista chiamata v1
+    xlsx_in = tmp_path / "input.xlsx"
+    _write_input_excel(
+        str(xlsx_in),
+        rows=[["v1"]],
+        header=["Table"],
+    )
+
+    out_xlsx = tmp_path / "out.xlsx"
+
+    # Ensure module has a pyodbc-like placeholder to pass __init__
+    if getattr(mod, "pyodbc", None) is None:
+        mod.pyodbc = types.SimpleNamespace(connect=lambda *a, **k: None)
+
+    # Abilita ricerca viste (semantico per il test; logica mockata)
+    try:
+        import importlib
+        import Table_Existence_Checker as checker_mod
+        checker_mod.INCLUDE_VIEWS = True
+    except Exception:
+        pass
+
+    def fake_list_dbs(self):
+        return ["db1"]
+
+    # Simula che il DB contenga una vista v1 nello schema dbo
+    def fake_fetch_objects(self, db: str):
+        return {("dbo", "v1")}
+
+    TableExistenceChecker._list_user_databases = fake_list_dbs  # type: ignore
+    TableExistenceChecker._fetch_tables_in_db = fake_fetch_objects  # type: ignore
+
+    checker = TableExistenceChecker(str(xlsx_in), str(out_xlsx), server="EPCP3")
+    out = checker.run()
+    assert os.path.exists(out)
+    df = pd.read_excel(out, sheet_name="Tabelle")
+    assert len(df) == 1
+    assert df.iloc[0]["DB"] == "db1"
+    assert df.iloc[0]["Schema"].lower() == "dbo"
+    assert df.iloc[0]["Table"].lower() == "v1"

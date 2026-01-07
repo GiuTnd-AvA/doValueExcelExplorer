@@ -36,6 +36,8 @@ ODBC_DRIVERS: List[str] = [
 ODBC_ENCRYPT_OPTS: str = "Encrypt=no;TrustServerCertificate=yes;"
 CONNECTION_TEST_TIMEOUT: int = 3
 QUERY_TIMEOUT: int = 60
+# Includi anche le viste nella ricerca
+INCLUDE_VIEWS: bool = True
 
 
 class TableExistenceChecker:
@@ -153,20 +155,36 @@ class TableExistenceChecker:
                 pass
 
     def _fetch_tables_in_db(self, db: str) -> Set[Tuple[str, str]]:
-        """Ritorna set di (schema, table) esistenti nel DB."""
-        print(f"[CHECK] Carico elenco tabelle per DB: {db}")
+        """Ritorna set di (schema, object_name) esistenti nel DB.
+        Se INCLUDE_VIEWS=True, include anche le viste.
+        """
+        print(f"[CHECK] Carico elenco {'tabelle+viste' if INCLUDE_VIEWS else 'tabelle'} per DB: {db}")
         conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
         try:
             cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT s.name AS schema_name, t.name AS table_name
-                FROM sys.tables AS t
-                JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-                """
-            )
+            if INCLUDE_VIEWS:
+                sql = (
+                    """
+                    SELECT s.name AS schema_name, t.name AS object_name
+                    FROM sys.tables AS t
+                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+                    UNION ALL
+                    SELECT s.name AS schema_name, v.name AS object_name
+                    FROM sys.views AS v
+                    JOIN sys.schemas AS s ON s.schema_id = v.schema_id
+                    """
+                )
+            else:
+                sql = (
+                    """
+                    SELECT s.name AS schema_name, t.name AS object_name
+                    FROM sys.tables AS t
+                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+                    """
+                )
+            cur.execute(sql)
             fetched = {(str(r[0]), str(r[1])) for r in cur.fetchall()}
-            print(f"[CHECK] Tabelle in {db}: {len(fetched)}")
+            print(f"[CHECK] Oggetti in {db}: {len(fetched)}")
             return fetched
         finally:
             try:
