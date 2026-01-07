@@ -1,7 +1,7 @@
 from Config.config import POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH, EXCEL_OUTPUT_PATH
 from PowerShellScripts.Excecute_Power_Shell_Script import ExecPsCode as ps
 from BusinessLogic.Business_Logic import BusinessLogic as bl
-from Report.Excel_Writer import ExcelWriter as ew
+from ExportExcel.Excel_Writer import ExcelWriter as ew
 
 run_ps = ps(POWERSHELL_SCRIPT_PATH, EXCEL_ROOT_PATH, EXPORT_MCODE_PATH)
 return_code, output, error = run_ps.run()

@@ -1,4 +1,4 @@
-from Connection.IConnection import IConnection
+from IConnection import IConnection
 import re
 
 

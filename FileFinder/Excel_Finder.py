@@ -1,6 +1,5 @@
-
 import os
-from Finder.IFinder import IFinder
+from FileFinder.IFinder import IFinder
 
 class ExcelFinder(IFinder):
     EXTENSIONS = ['.xls', '.xlsm', '.xlsx', '.xlsb']
@@ -16,8 +15,3 @@ class ExcelFinder(IFinder):
         except Exception as e:
             print(f"Errore nella ricerca dei file Excel: {e}")
         return found_files
-
-                    
-
-  
-
