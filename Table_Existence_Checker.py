@@ -207,7 +207,14 @@ class TableExistenceChecker:
         # Per efficienza, per ogni DB carichiamo tutte le tabelle e poi confrontiamo in memoria
         for db in databases:
             print(f"[CHECK] Scansione tabelle in DB: {db}")
-            existing = self._fetch_tables_in_db(db)
+            try:
+                existing = self._fetch_tables_in_db(db)
+            except Exception as e:
+                msg = f"Errore lettura tabelle: {e}"
+                print(f"[CHECK] {msg}")
+                # Riga di errore per il DB corrente
+                results.append([self.server, db, "", "", msg])
+                continue
             # Costruisci indici
             by_table: Dict[str, List[Tuple[str, str]]] = {}
             for sch, tbl in existing:
@@ -229,7 +236,7 @@ class TableExistenceChecker:
                     matches = by_table.get(ttable, [])
 
                 for (sch, tbl) in matches:
-                    results.append([self.server, db, sch, tbl])
+                    results.append([self.server, db, sch, tbl, ""])  # nessun errore
                     matches_in_db += 1
                     total_matches += 1
             print(f"[CHECK] Corrispondenze trovate in {db}: {matches_in_db}")
@@ -238,7 +245,10 @@ class TableExistenceChecker:
         out_dir = os.path.dirname(self.output_excel)
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
-        df_out = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table"])
+        df_out = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table", "Error"])
+        # Normalizza la colonna Error per evitare NaN
+        if "Error" in df_out.columns:
+            df_out["Error"] = df_out["Error"].fillna("")
         with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as writer:
             df_out.to_excel(writer, index=False, sheet_name="Tabelle")
         print(f"[CHECK] Totale corrispondenze: {total_matches}")

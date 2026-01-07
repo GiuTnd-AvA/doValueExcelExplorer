@@ -52,14 +52,15 @@ def test_checker_with_db_and_schema(tmp_path):
     out = checker.run()
     assert os.path.exists(out)
     df = pd.read_excel(out, sheet_name="Tabelle")
-    assert list(df.columns) == ["Server", "DB", "Schema", "Table"]
+    assert list(df.columns) == ["Server", "DB", "Schema", "Table", "Error"]
     assert len(df) == 1
-    assert df.iloc[0].to_dict() == {
-        "Server": "EPCP3",
-        "DB": "db1",
-        "Schema": "dbo",
-        "Table": "t1",
-    }
+    row = df.iloc[0].to_dict()
+    assert row["Server"] == "EPCP3"
+    assert row["DB"] == "db1"
+    assert row["Schema"] == "dbo"
+    assert row["Table"] == "t1"
+    # Celle vuote possono tornare NaN da read_excel
+    assert pd.isna(row["Error"]) or str(row["Error"]) == ""
 
 
 def test_checker_without_db_and_schema(tmp_path):
@@ -95,6 +96,8 @@ def test_checker_without_db_and_schema(tmp_path):
     assert df.iloc[0]["DB"] == "db1"
     assert df.iloc[0]["Schema"].lower() == "dbo"
     assert df.iloc[0]["Table"].lower() == "t1"
+    # Celle vuote possono tornare NaN da read_excel
+    assert pd.isna(df.iloc[0]["Error"]) or str(df.iloc[0]["Error"]) == ""
 
 
 def test_checker_no_matches_writes_empty_excel(tmp_path):
