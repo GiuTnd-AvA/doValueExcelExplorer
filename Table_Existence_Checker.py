@@ -221,6 +221,10 @@ class TableExistenceChecker:
 
         results: List[List[str]] = []
         total_matches = 0
+        # Tracciamo quali target trovano almeno una corrispondenza
+        found_flags: List[bool] = [False] * len(targets)
+        # Mappa di errori per DB (se un DB non è stato analizzato)
+        db_errors: Dict[str, str] = {}
 
         # Per efficienza, per ogni DB carichiamo tutte le tabelle e poi confrontiamo in memoria
         for db in databases:
@@ -232,6 +236,7 @@ class TableExistenceChecker:
                 print(f"[CHECK] {msg}")
                 # Riga di errore per il DB corrente
                 results.append([self.server, db, "", "", msg])
+                db_errors[db.lower()] = msg
                 continue
             # Costruisci indici
             by_table: Dict[str, List[Tuple[str, str]]] = {}
@@ -241,7 +246,7 @@ class TableExistenceChecker:
 
             # Valuta target che chiedono proprio questo DB (o tutti i DB)
             matches_in_db = 0
-            for (tdb, tschema, ttable) in norm_targets:
+            for idx, (tdb, tschema, ttable) in enumerate(norm_targets):
                 if tdb is not None and tdb != db.lower():
                     continue
                 matches: List[Tuple[str, str]] = []
@@ -257,7 +262,29 @@ class TableExistenceChecker:
                     results.append([self.server, db, sch, tbl, ""])  # nessun errore
                     matches_in_db += 1
                     total_matches += 1
+                    found_flags[idx] = True
             print(f"[CHECK] Corrispondenze trovate in {db}: {matches_in_db}")
+
+        # Aggiungi righe per i target non trovati
+        if targets:
+            # Elenco DB con errori (per nota informativa)
+            errored_dbs = [d for d in databases if d.lower() in db_errors]
+            for i, (orig_db, orig_schema, orig_table) in enumerate(targets):
+                if found_flags[i]:
+                    continue
+                if orig_db and orig_db.lower() in db_errors:
+                    err = f"Ricerca non eseguita su DB '{orig_db}': {db_errors[orig_db.lower()]}"
+                    results.append([self.server, orig_db, orig_schema or "", orig_table, err])
+                else:
+                    if orig_db:
+                        err = "Cercata ma non trovata"
+                        results.append([self.server, orig_db, orig_schema or "", orig_table, err])
+                    else:
+                        note = (
+                            f" Non analizzati: {', '.join(errored_dbs)}" if errored_dbs else ""
+                        )
+                        err = f"Cercata ma non trovata in nessun DB utente.{note}"
+                        results.append([self.server, "", orig_schema or "", orig_table, err])
 
         # Scrivi risultati
         out_dir = os.path.dirname(self.output_excel)

@@ -100,7 +100,7 @@ def test_checker_without_db_and_schema(tmp_path):
     assert pd.isna(df.iloc[0]["Error"]) or str(df.iloc[0]["Error"]) == ""
 
 
-def test_checker_no_matches_writes_empty_excel(tmp_path):
+def test_checker_no_matches_writes_not_found_rows(tmp_path):
     xlsx_in = tmp_path / "input.xlsx"
     _write_input_excel(
         str(xlsx_in),
@@ -126,8 +126,13 @@ def test_checker_no_matches_writes_empty_excel(tmp_path):
     out = checker.run()
     assert os.path.exists(out)
     df = pd.read_excel(out, sheet_name="Tabelle")
-    # No matches expected
-    assert len(df) == 0
+    # Now we expect a row with an error message for not found items
+    assert len(df) == 1
+    row = df.iloc[0]
+    # DB blank when no DB specified
+    assert (pd.isna(row["DB"]) or str(row["DB"]).strip() == "")
+    assert str(row["Table"]).lower() == "tx"
+    assert "trovata" in str(row["Error"]).lower()
 
 
 def test_checker_includes_views(tmp_path, monkeypatch):
