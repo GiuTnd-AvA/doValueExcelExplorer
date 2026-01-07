@@ -12,8 +12,12 @@ except Exception:
     pd = None  # type: ignore
 
 # -----------------------------------------------------------------------------
-# Configurazione connessione
+# Configurazione: inserisci qui i percorsi degli Excel e i parametri di connessione
 # -----------------------------------------------------------------------------
+INPUT_EXCEL_PATH: Optional[str] = None  # es: r"C:\\path\\ListaTabelle.xlsx"
+OUTPUT_EXCEL_PATH: Optional[str] = None  # es: r"C:\\path\\TabelleEsistenti.xlsx"
+
+# Parametri connessione
 DEFAULT_SERVER: str = "EPCP3"
 TRUSTED_CONNECTION: bool = True
 SQL_USERNAME: Optional[str] = None  # usato se TRUSTED_CONNECTION=False
@@ -65,6 +69,7 @@ class TableExistenceChecker:
         - schema può essere None => cerca per nome tabella su tutti gli schemi
         - table è obbligatoria
         """
+        print(f"[CHECK] Lettura input da: {self.input_excel}")
         df = pd.read_excel(self.input_excel)
         if df.empty:
             return []
@@ -97,6 +102,7 @@ class TableExistenceChecker:
                 table = raw_table
 
             targets.append((db or None, schema or None, table))
+        print(f"[CHECK] Target letti: {len(targets)}")
         return targets
 
     # ------------------------------ Utilità SQL -------------------------------
@@ -124,6 +130,7 @@ class TableExistenceChecker:
         raise RuntimeError(f"Nessun driver ODBC valido trovato. Ultimo errore: {last_error}")
 
     def _list_user_databases(self) -> List[str]:
+        print(f"[CHECK] Connessione a {self.server} per elencare i database utente...")
         conn = pyodbc.connect(self._build_conn_str(None), timeout=QUERY_TIMEOUT)
         try:
             cur = conn.cursor()
@@ -136,7 +143,9 @@ class TableExistenceChecker:
                 ORDER BY name;
                 """
             )
-            return [str(r[0]) for r in cur.fetchall()]
+            dbs = [str(r[0]) for r in cur.fetchall()]
+            print(f"[CHECK] Database utente trovati: {len(dbs)}")
+            return dbs
         finally:
             try:
                 conn.close()
@@ -145,6 +154,7 @@ class TableExistenceChecker:
 
     def _fetch_tables_in_db(self, db: str) -> Set[Tuple[str, str]]:
         """Ritorna set di (schema, table) esistenti nel DB."""
+        print(f"[CHECK] Carico elenco tabelle per DB: {db}")
         conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
         try:
             cur = conn.cursor()
@@ -155,7 +165,9 @@ class TableExistenceChecker:
                 JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                 """
             )
-            return {(str(r[0]), str(r[1])) for r in cur.fetchall()}
+            fetched = {(str(r[0]), str(r[1])) for r in cur.fetchall()}
+            print(f"[CHECK] Tabelle in {db}: {len(fetched)}")
+            return fetched
         finally:
             try:
                 conn.close()
@@ -174,8 +186,10 @@ class TableExistenceChecker:
         dbs_in_input = sorted({db for (db, _schema, _table) in targets if db})
         if dbs_in_input:
             databases = dbs_in_input
+            print(f"[CHECK] DB specificati in input: {', '.join(databases)}")
         else:
             databases = self._list_user_databases()
+            print(f"[CHECK] DB enumerati dal server: {', '.join(databases)}")
 
         print(f"[CHECK] DB da verificare: {len(databases)}")
 
@@ -188,6 +202,7 @@ class TableExistenceChecker:
             )
 
         results: List[List[str]] = []
+        total_matches = 0
 
         # Per efficienza, per ogni DB carichiamo tutte le tabelle e poi confrontiamo in memoria
         for db in databases:
@@ -200,6 +215,7 @@ class TableExistenceChecker:
                 by_table.setdefault(key, []).append((sch, tbl))
 
             # Valuta target che chiedono proprio questo DB (o tutti i DB)
+            matches_in_db = 0
             for (tdb, tschema, ttable) in norm_targets:
                 if tdb is not None and tdb != db.lower():
                     continue
@@ -214,6 +230,9 @@ class TableExistenceChecker:
 
                 for (sch, tbl) in matches:
                     results.append([self.server, db, sch, tbl])
+                    matches_in_db += 1
+                    total_matches += 1
+            print(f"[CHECK] Corrispondenze trovate in {db}: {matches_in_db}")
 
         # Scrivi risultati
         out_dir = os.path.dirname(self.output_excel)
@@ -222,16 +241,15 @@ class TableExistenceChecker:
         df_out = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table"])
         with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as writer:
             df_out.to_excel(writer, index=False, sheet_name="Tabelle")
+        print(f"[CHECK] Totale corrispondenze: {total_matches}")
         print(f"[CHECK] Output scritto in: {self.output_excel} (righe: {len(results)})")
         return self.output_excel
 
 
 if __name__ == "__main__":
-    # Esempio d'uso rapido: imposta i percorsi sotto
-    INPUT_EXCEL = os.environ.get("TABLES_INPUT_XLSX", "")  # es: C:\path\ListaTabelle.xlsx
-    OUTPUT_EXCEL = os.environ.get("TABLES_OUTPUT_XLSX", "")  # es: C:\path\TabelleEsistenti.xlsx
-    if not INPUT_EXCEL:
-        raise SystemExit("Imposta la variabile TABLES_INPUT_XLSX oppure modifica lo script.")
-    checker = TableExistenceChecker(INPUT_EXCEL, OUTPUT_EXCEL)
+    # Esempio d'uso rapido: imposta i percorsi all'inizio del file
+    if not INPUT_EXCEL_PATH:
+        raise SystemExit("Imposta INPUT_EXCEL_PATH a inizio file (o modifica lo script).")
+    checker = TableExistenceChecker(INPUT_EXCEL_PATH, OUTPUT_EXCEL_PATH or "")
     out = checker.run()
     print(out)
