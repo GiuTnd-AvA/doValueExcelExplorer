@@ -95,7 +95,7 @@ def main():
     sql_objects = []
     error_log = []
 
-    for i, (idx, row) in enumerate(df.iloc[50:].iterrows(), 51):
+    for i, (idx, row) in enumerate(df.iloc[101:].iterrows(), 102):
         print(f"Stato avanzamento: {i}/{total_rows}")
         params = get_conn_params(row)
         if not (params["server"] and params["db_name"] and params["table"]):
