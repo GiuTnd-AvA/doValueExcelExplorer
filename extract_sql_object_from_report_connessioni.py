@@ -19,8 +19,8 @@ except Exception:
 excel_path = EXCEL_INPUT_PATH
 output_path = EXCEL_OUTPUT_PATH
 SHEET_INDEX = 0 
-BATCH_SIZE = 100
-START_ROW = 252  
+BATCH_SIZE = 50
+START_ROW = 102  
 
 def get_conn_params(row):
     """Estrae i parametri di connessione da una riga del DataFrame."""
@@ -46,13 +46,6 @@ def get_variants(schema, table):
     variants.add(f"[{table}]")
     variants.add(table)
     return variants
-
-def sanitize_for_like(s):
-    """
-    Rimuove caratteri che possono causare errori nelle condizioni LIKE SQL.
-    Modifica secondo necessità.
-    """
-    return s.replace('[', '').replace(']', '').replace(':', '').replace('%', '').replace('_', '')
     
 def estrai_sql_objects(engine, query, params, table_label, error_msg):
     import re
@@ -71,8 +64,8 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                         v_l = v.lower()
                         for op in clause_ops:
                             op_l = op.lower()
-                            # Regex: op + spazi + v + (spazio, alias, parentesi quadra, a capo, ecc.)
-                            pattern = rf"{re.escape(op_l)}\\s+{re.escape(v_l)}(\\s|\\[|$|,|\n|\r)"
+                            # Regex: op + spazi + v + (spazio o parentesi quadra o fine riga), tollera alias dopo
+                            pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}(\s|\[|$)"
                             if re.search(pattern, sql_def_l):
                                 found_clauses.add(f"{op} {v}")
                 base = {
@@ -105,7 +98,7 @@ def main():
     sql_objects = []
     error_log = []
 
-    for i, (idx, row) in enumerate(df.iloc[START_ROW - 1:].iterrows(), START_ROW):
+    for i, (idx, row) in enumerate(df.iloc[START_ROW -1:].iterrows(), START_ROW):
         print(f"Stato avanzamento: {i}/{total_rows}")
         params = get_conn_params(row)
         if not (params["server"] and params["db_name"] and params["table"]):
@@ -137,17 +130,19 @@ def main():
             continue
         schema = params["schema"]
         table = params["table"]
-        # Ottieni tutte le varianti del nome tabella per il filtro LIKE
         variants = get_variants(schema, table)
-        sanitized_variants = [sanitize_for_like(v) for v in variants]
-        like_conditions = [f"sm.definition LIKE '%{v}%'" for v in sanitized_variants]
-        where_like = " OR ".join(like_conditions)
+        conditions = []
+        clause_ops = ["INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "CREATE TABLE", "ALTER TABLE", "FROM", "JOIN"]
+        for v in variants:
+            for op in clause_ops:
+                conditions.append(f"CHARINDEX('{op} {v}', sm.definition) > 0")
+        where_clause = "\n                OR ".join(conditions)
         query = f"""
             SELECT o.name, o.type_desc, sm.definition
             FROM sys.sql_modules sm
             JOIN sys.objects o ON sm.object_id = o.object_id
             WHERE (
-                {where_like}
+                {where_clause}
             )
             AND o.type_desc <> 'VIEW'
         """
@@ -183,4 +178,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+       
