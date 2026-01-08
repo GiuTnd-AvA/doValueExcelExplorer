@@ -46,6 +46,13 @@ def get_variants(schema, table):
     variants.add(f"[{table}]")
     variants.add(table)
     return variants
+
+def sanitize_for_like(s):
+    """
+    Rimuove caratteri che possono causare errori nelle condizioni LIKE SQL.
+    Modifica secondo necessità.
+    """
+    return s.replace('[', '').replace(']', '').replace(':', '').replace('%', '').replace('_', '')
     
 def estrai_sql_objects(engine, query, params, table_label, error_msg):
     import re
@@ -132,7 +139,8 @@ def main():
         table = params["table"]
         # Ottieni tutte le varianti del nome tabella per il filtro LIKE
         variants = get_variants(schema, table)
-        like_conditions = [f"sm.definition LIKE '%{v}%'" for v in variants]
+        sanitized_variants = [sanitize_for_like(v) for v in variants]
+        like_conditions = [f"sm.definition LIKE '%{v}%'" for v in sanitized_variants]
         where_like = " OR ".join(like_conditions)
         query = f"""
             SELECT o.name, o.type_desc, sm.definition
