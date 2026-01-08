@@ -22,7 +22,7 @@ def _write_input_excel(path, rows, header):
     wb.save(path)
 
 
-def test_partial_files_are_non_overlapping(tmp_path):
+def test_partial_files_are_non_overlapping(tmp_path, monkeypatch):
     # Prepare input with 5 items
     xlsx_in = tmp_path / "input.xlsx"
     rows = [["EPCP3", "db", "dbo", f"t{i}"] for i in range(1, 6)]
@@ -31,23 +31,23 @@ def test_partial_files_are_non_overlapping(tmp_path):
     out_xlsx = tmp_path / "out.xlsx"
 
     # Reduce batch size for test and avoid real DB calls
-    mod.PARTIAL_SAVE_EVERY = 2
+    monkeypatch.setattr(mod, "PARTIAL_SAVE_EVERY", 2, raising=False)
 
     # Stub pyodbc to bypass real connections
     if getattr(mod, "pyodbc", None) is None:
-        mod.pyodbc = types.SimpleNamespace(connect=lambda *a, **k: types.SimpleNamespace(close=lambda: None))
+        monkeypatch.setattr(mod, "pyodbc", types.SimpleNamespace(connect=lambda *a, **k: types.SimpleNamespace(close=lambda: None)), raising=False)
 
     # Avoid using the connection in fetch; return one fake view per table
     def fake_fetch(self, conn, schema, table):
         return [(f"v_{table}", f"SELECT * FROM {schema}.{table}")]
 
-    TableViewsExtractor._fetch_views_for_table = fake_fetch  # type: ignore
+    monkeypatch.setattr(TableViewsExtractor, "_fetch_views_for_table", fake_fetch, raising=False)
 
     # Also avoid real driver probing
-    TableViewsExtractor._build_conn_str = lambda self, s, d: "DRIVER={stub};"  # type: ignore
+    monkeypatch.setattr(TableViewsExtractor, "_build_conn_str", lambda self, s, d: "DRIVER={stub};", raising=False)
 
     # Monkeypatch connect to return a dummy object with close
-    mod.pyodbc.connect = lambda *a, **k: types.SimpleNamespace(close=lambda: None)
+    monkeypatch.setattr(mod.pyodbc, "connect", lambda *a, **k: types.SimpleNamespace(close=lambda: None), raising=False)
 
     extractor = TableViewsExtractor(str(xlsx_in), str(out_xlsx))
     extractor.run()
