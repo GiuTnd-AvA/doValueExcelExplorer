@@ -222,6 +222,7 @@ class TableViewsExtractor:
         # Pool connessioni per server/db
         conns: Dict[Tuple[str, str], object] = {}
         results: List[List[str]] = []
+        batch_results: List[List[str]] = []  # risultati solo per il blocco corrente
 
         def _write_results(path: str, rows: List[List[str]]):
             out_dir = os.path.dirname(path)
@@ -248,7 +249,9 @@ class TableViewsExtractor:
                     continue
                 print(f"[VIEW] Trovate {len(views)} viste per {schema}.{table}")
                 for view_name, definition in views:
-                    results.append([server, db, schema, table, view_name, definition])
+                    row = [server, db, schema, table, view_name, definition]
+                    results.append(row)
+                    batch_results.append(row)
 
                 # Salvataggio parziale ogni PARTIAL_SAVE_EVERY elementi elaborati
                 if idx % PARTIAL_SAVE_EVERY == 0:
@@ -256,7 +259,9 @@ class TableViewsExtractor:
                     base_name = os.path.splitext(os.path.basename(self.output_excel or 'VistePerTabella.xlsx'))[0]
                     partial_path = os.path.join(base_dir, f"{base_name}_partial_{idx}.xlsx")
                     print(f"[VIEW] Salvataggio parziale {idx}/{total}: {partial_path}")
-                    _write_results(partial_path, results)
+                    # Scrivi solo il blocco corrente, non cumulativo
+                    _write_results(partial_path, batch_results)
+                    batch_results = []
         finally:
             # Chiudi connessioni
             for key, c in conns.items():
@@ -268,6 +273,14 @@ class TableViewsExtractor:
         # Scrivi output
         if not results:
             print("[VIEW] Nessun risultato da scrivere.")
+        # Se esiste un batch parziale non salvato (ultima tranche < PARTIAL_SAVE_EVERY), salvalo come partial finale
+        if batch_results:
+            last_idx = total
+            base_dir = os.path.dirname(self.output_excel) or os.getcwd()
+            base_name = os.path.splitext(os.path.basename(self.output_excel or 'VistePerTabella.xlsx'))[0]
+            partial_path = os.path.join(base_dir, f"{base_name}_partial_{last_idx}.xlsx")
+            print(f"[VIEW] Salvataggio parziale finale {last_idx}/{total}: {partial_path}")
+            _write_results(partial_path, batch_results)
         _write_results(self.output_excel, results)
         print(f"[VIEW] Output scritto in: {self.output_excel}")
         return self.output_excel
