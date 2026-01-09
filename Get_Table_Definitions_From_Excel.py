@@ -1,3 +1,8 @@
+# -----------------------------------------------------------------------------
+# Scopo: legge un file con gli elementi di connessione e per ogni elementi mi dice
+# il tipo di oggetto di DB che sta leggendo e nel database cerca la devinizione 
+# -----------------------------------------------------------------------------
+
 import os
 from typing import List, Optional, Tuple, Dict
 
@@ -241,6 +246,41 @@ END
         row = cur.fetchone()
         return row[0] if row else ""
 
+    def _get_object_type(self, conn, schema: str, name: str) -> str:
+        """Ritorna il tipo oggetto in forma leggibile (es. 'Tabella', 'Vista').
+        Se non trovato, ritorna 'Non trovato'.
+        """
+        sql = (
+            """
+            SELECT type, type_desc
+            FROM sys.objects
+            WHERE object_id = OBJECT_ID(QUOTENAME(?) + '.' + QUOTENAME(?));
+            """
+        )
+        cur = conn.cursor()
+        try:
+            cur.execute(sql, (schema, name))
+            r = cur.fetchone()
+            if not r:
+                return "Non trovato"
+            code = str(r[0]) if r[0] is not None else ""
+            desc = str(r[1]) if r[1] is not None else ""
+            mapping = {
+                "U": "Tabella",
+                "V": "Vista",
+                "P": "Stored Procedure",
+                "FN": "Funzione (scalar)",
+                "IF": "Funzione (inline table)",
+                "TF": "Funzione (table)",
+                "TR": "Trigger",
+                "S": "Tabella di sistema",
+                "SN": "Synonym",
+                "SO": "Sequence/Service Object",
+            }
+            return mapping.get(code, desc or code or "Sconosciuto")
+        except Exception:
+            return "Sconosciuto"
+
     # ---------------- Main ----------------
     def run(self) -> str:
         items = self._read_items()
@@ -258,8 +298,9 @@ END
                 if key not in conns:
                     conn_str = self._build_conn_str(server, db)
                     conns[key] = pyodbc.connect(conn_str, timeout=QUERY_TIMEOUT)
+                obj_type = self._get_object_type(conns[key], schema, table)
                 ddl = self._fetch_table_ddl(conns[key], schema, table)
-                results.append([server, db, schema, table, ddl])
+                results.append([server, db, schema, table, obj_type, ddl])
         finally:
             for c in conns.values():
                 try:
@@ -271,7 +312,7 @@ END
         out_dir = os.path.dirname(self.output_excel)
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
-        df = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table", "DDL"])
+        df = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table", "ObjectType", "DDL"])
         with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as w:
             df.to_excel(w, index=False, sheet_name="DDL")
         return self.output_excel

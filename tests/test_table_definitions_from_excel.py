@@ -59,7 +59,9 @@ try:
     out = ext.run()
     assert os.path.exists(out)
     df = pd.read_excel(out)
-    assert list(df.columns) == ['Server','DB','Schema','Table','DDL']
+    assert list(df.columns) == ['Server','DB','Schema','Table','ObjectType','DDL']
+    # ObjectType should be a non-empty string
+    assert isinstance(df.loc[0,'ObjectType'], str)
     assert 'CREATE TABLE' in str(df.loc[0,'DDL'])
     print('Table DDL extractor test passed.')
 finally:
