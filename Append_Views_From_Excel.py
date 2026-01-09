@@ -10,6 +10,7 @@
 
 import os
 from typing import Optional, List, Dict
+import re
 
 try:
     from openpyxl import load_workbook
@@ -86,6 +87,33 @@ class ViewsDDLAppender:
 
             data_rows = rows[1:]  # salta intestazione
             out: List[Dict[str, str]] = []
+            def extract_view_from_ddl(ddl: str) -> Dict[str, Optional[str]]:
+                if not ddl:
+                    return {"schema": None, "name": None}
+                text = str(ddl)
+                # normalize whitespace
+                # Try bracketed schema and name: CREATE [OR ALTER] VIEW [schema].[name]
+                m = re.search(r"\bcreate\s+(?:or\s+alter\s+)?view\s+\[([^\]]+)\]\s*\.\s*\[([^\]]+)\]",
+                              text, flags=re.IGNORECASE | re.DOTALL)
+                if m:
+                    return {"schema": m.group(1), "name": m.group(2)}
+                # Try bracketed name only: CREATE VIEW [name]
+                m = re.search(r"\bcreate\s+(?:or\s+alter\s+)?view\s+\[([^\]]+)\]",
+                              text, flags=re.IGNORECASE | re.DOTALL)
+                if m:
+                    return {"schema": None, "name": m.group(1)}
+                # Try unbracketed schema.name: CREATE VIEW schema.name
+                m = re.search(r"\bcreate\s+(?:or\s+alter\s+)?view\s+([a-zA-Z0-9_]+)\s*\.\s*([a-zA-Z0-9_]+)\b",
+                              text, flags=re.IGNORECASE)
+                if m:
+                    return {"schema": m.group(1), "name": m.group(2)}
+                # Try unbracketed name only
+                m = re.search(r"\bcreate\s+(?:or\s+alter\s+)?view\s+([a-zA-Z0-9_]+)\b",
+                              text, flags=re.IGNORECASE)
+                if m:
+                    return {"schema": None, "name": m.group(1)}
+                return {"schema": None, "name": None}
+
             for r in data_rows:
                 if not r:
                     continue
@@ -100,6 +128,17 @@ class ViewsDDLAppender:
                 schema = get("schema")
                 table = get("table")
                 ddl = get("ddl")
+                # Fallback: se 'table' (nome vista) manca, prova a estrarlo dalla DDL
+                if (not table) and ddl:
+                    parsed = extract_view_from_ddl(ddl)
+                    if parsed["name"]:
+                        table = parsed["name"]
+                    if (not schema) and parsed["schema"]:
+                        schema = parsed["schema"]
+                # Ultimo fallback: se ancora manca il nome, crea un placeholder stabile
+                if not table:
+                    # usa un nome generico per evitare intestazioni tronche
+                    table = "UNKNOWN_VIEW"
                 # se manca qualcosa, comunque produce riga (ddl può essere vuota)
                 out.append({
                     "server": server,
