@@ -281,6 +281,33 @@ END
         except Exception:
             return "Sconosciuto"
 
+    def _fetch_view_definition(self, conn, schema: str, view: str) -> str:
+        """Ritorna la definizione testuale della vista così come salvata nel DB.
+        Usa sys.sql_modules/OBJECT_DEFINITION. Se la definizione non è disponibile
+        (es. oggetto crittografato), restituisce un messaggio informativo.
+        """
+        sql = (
+            """
+            SELECT sm.definition
+            FROM sys.sql_modules AS sm
+            WHERE sm.object_id = OBJECT_ID(QUOTENAME(?) + N'.' + QUOTENAME(?));
+            """
+        )
+        cur = conn.cursor()
+        try:
+            cur.execute(sql, (schema, view))
+            r = cur.fetchone()
+            if r and r[0]:
+                return str(r[0])
+            # fallback: OBJECT_DEFINITION
+            cur.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(QUOTENAME(?) + N'.' + QUOTENAME(?)))", (schema, view))
+            r2 = cur.fetchone()
+            if r2 and r2[0]:
+                return str(r2[0])
+            return "ERROR: definizione non disponibile (possibile oggetto crittografato)"
+        except Exception as e:
+            return f"ERROR: lettura definizione vista fallita: {e}"
+
     # ---------------- Main ----------------
     def run(self) -> str:
         items = self._read_items()
@@ -299,7 +326,10 @@ END
                     conn_str = self._build_conn_str(server, db)
                     conns[key] = pyodbc.connect(conn_str, timeout=QUERY_TIMEOUT)
                 obj_type = self._get_object_type(conns[key], schema, table)
-                ddl = self._fetch_table_ddl(conns[key], schema, table)
+                if obj_type.lower().startswith("vista"):
+                    ddl = self._fetch_view_definition(conns[key], schema, table)
+                else:
+                    ddl = self._fetch_table_ddl(conns[key], schema, table)
                 results.append([server, db, schema, table, obj_type, ddl])
         finally:
             for c in conns.values():
