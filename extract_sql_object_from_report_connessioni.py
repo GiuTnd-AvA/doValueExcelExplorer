@@ -58,6 +58,7 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                 obj_type = r[1]
                 sql_def = r[2]
                 found_clauses = set()
+                found_clause_types = set()
                 if sql_def:
                     sql_def_l = sql_def.lower()
                     for v in get_variants(params['schema'], params['table']):
@@ -68,6 +69,7 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                             pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}(\s|\[|$)"
                             if re.search(pattern, sql_def_l):
                                 found_clauses.add(f"{op} {v}")
+                                found_clause_types.add(op)
                 base = {
                     "Server": params['server'],
                     "Database": params['db_name'],
@@ -75,7 +77,8 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                     "ObjectName": r[0],
                     "ObjectType": obj_type,
                     "SQLDefinition": sql_def,
-                    "SQL_CLAUSE": "; ".join(sorted(found_clauses)) if found_clauses else None
+                    "SQL_CLAUSE": "; ".join(sorted(found_clauses)) if found_clauses else None,
+                    "CLAUSE_TYPE": "; ".join(sorted(found_clause_types)) if found_clause_types else None
                 }
                 sql_objects.append(base)
     except Exception as e:
