@@ -1,3 +1,9 @@
+# -----------------------------------------------------------------------------
+# Scopo: questo script legge tutti i file .txt in un percorso e per ogni file txt
+# estrae il percrso il nome e inserisce in una colonna la sorce del power query
+# presente nel file .txt. 
+# Questo file poi viene usato nello script Export_Parsed_PowerQuery_Connections.py
+# -----------------------------------------------------------------------------
 import argparse
 import os
 import sys

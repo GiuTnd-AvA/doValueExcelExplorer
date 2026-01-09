@@ -1,3 +1,7 @@
+# -----------------------------------------------------------------------------
+# Scopo: questo script legge da un file excel la lista di connessioni PowerQuery
+# e da questa esporta gli elementi del server, database, schema, tabella.
+# -----------------------------------------------------------------------------
 import argparse
 import os
 from typing import List, Tuple

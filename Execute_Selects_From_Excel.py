@@ -1,3 +1,9 @@
+# -----------------------------------------------------------------------------
+# Scopo: prende una lista di select da un file excel, le esegue sul database
+# se la select non funziona, scrive in un excel di output la select lanciata
+# e il messaggio di errore dato 
+# -----------------------------------------------------------------------------
+
 import os
 from typing import List, Optional
 

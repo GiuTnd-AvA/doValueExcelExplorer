@@ -1,3 +1,7 @@
+# -----------------------------------------------------------------------------
+# Scopo: verifica se la lista di tabelle passate da un file excel esistono sul 
+# database e se non esistono da un messaggio sul fatto che non sono state trovate
+# -----------------------------------------------------------------------------
 import os
 from typing import Dict, List, Optional, Set, Tuple
 

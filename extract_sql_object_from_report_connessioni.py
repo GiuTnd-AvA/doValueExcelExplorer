@@ -1,3 +1,7 @@
+# -----------------------------------------------------------------------------
+# Scopo: questo script estrae gli oggetti di database sql associati a una tabella
+# NON CREDO DI AVERLO MAI USATO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# -----------------------------------------------------------------------------
 from Config.config import EXCEL_INPUT_PATH, EXCEL_OUTPUT_PATH
 import pandas as pd
 from sqlalchemy import create_engine, text

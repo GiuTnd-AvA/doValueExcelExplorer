@@ -1,3 +1,9 @@
+# -----------------------------------------------------------------------------
+# Scopo: legge la lista di percorsi sql in un file Excel apre i file sql e
+# fa l'append dei file sql separandoli con un commento contenente il percorso
+# come output produce un file .sql e .txt con l'append
+# -----------------------------------------------------------------------------
+
 import os
 from typing import List, Optional
 

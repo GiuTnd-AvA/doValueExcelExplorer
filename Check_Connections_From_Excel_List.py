@@ -1,3 +1,9 @@
+# -----------------------------------------------------------------------------
+# Scopo: legge il percorso di file excel da una lista presente in un file excel
+# e verifica per ogni file se contiene una connessione di qualunque tipo.
+# Produce un nuovo file excel con i risultati.
+# -----------------------------------------------------------------------------
+
 import os
 import argparse
 from typing import List
