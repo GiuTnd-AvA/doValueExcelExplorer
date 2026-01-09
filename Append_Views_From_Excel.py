@@ -17,6 +17,9 @@ except Exception:
     load_workbook = None
 
 # Config di default (puoi sovrascrivere da CLI se necessario)
+# Imposta qui il percorso del tuo file Excel se vuoi evitare di passarlo da CLI.
+# Esempio: DEFAULT_EXCEL_PATH = r"C:\percorso\al\file.xlsx"
+DEFAULT_EXCEL_PATH: Optional[str] = None
 DEFAULT_SHEET_NAME: Optional[str] = None  # usa il primo foglio se None
 DEFAULT_OUTPUT_PATH: Optional[str] = None  # se None, crea output vicino all'Excel
 
@@ -142,15 +145,22 @@ class ViewsDDLAppender:
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="Append DDL delle viste da Excel in output .txt/.sql")
-    ap.add_argument("excel", help="Percorso al file Excel di input")
+    # Rende l'argomento posizionale 'excel' opzionale: se non fornito, usa DEFAULT_EXCEL_PATH
+    ap.add_argument("excel", nargs="?", help="Percorso al file Excel di input")
     ap.add_argument("-o", "--output", help="Percorso file di output .txt")
     ap.add_argument("-s", "--sheet", help="Nome foglio Excel da usare (default: primo)")
     ap.add_argument("--no-sql-copy", action="store_true", help="Non creare la copia .sql")
     args = ap.parse_args()
 
     create_sql_copy = not args.no_sql_copy
+    # Calcola il percorso Excel: CLI oppure DEFAULT_EXCEL_PATH
+    excel_path = args.excel or DEFAULT_EXCEL_PATH
+    if not excel_path:
+        raise SystemExit(
+            "Errore: specifica il percorso Excel (argomento 'excel') oppure imposta DEFAULT_EXCEL_PATH all'inizio del file."
+        )
 
-    app = ViewsDDLAppender(args.excel, args.output, args.sheet, create_sql_copy=create_sql_copy)
+    app = ViewsDDLAppender(excel_path, args.output or DEFAULT_OUTPUT_PATH, args.sheet or DEFAULT_SHEET_NAME, create_sql_copy=create_sql_copy)
     out = app.run()
     print(f"Output creato: {out}")
     if create_sql_copy:
