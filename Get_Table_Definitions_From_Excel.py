@@ -246,9 +246,9 @@ END
         row = cur.fetchone()
         return row[0] if row else ""
 
-    def _get_object_type(self, conn, schema: str, name: str) -> str:
-        """Ritorna il tipo oggetto in forma leggibile (es. 'Tabella', 'Vista').
-        Se non trovato, ritorna 'Non trovato'.
+    def _get_object_type_info(self, conn, schema: str, name: str) -> Tuple[str, str, str]:
+        """Ritorna (code, type_desc, label_per_output).
+        Esempi: ('U','USER_TABLE','USER_TABLE'), ('V','VIEW','VIEW').
         """
         sql = (
             """
@@ -262,24 +262,13 @@ END
             cur.execute(sql, (schema, name))
             r = cur.fetchone()
             if not r:
-                return "Non trovato"
+                return ("", "NOT_FOUND", "Non trovato")
             code = str(r[0]) if r[0] is not None else ""
             desc = str(r[1]) if r[1] is not None else ""
-            mapping = {
-                "U": "Tabella",
-                "V": "Vista",
-                "P": "Stored Procedure",
-                "FN": "Funzione (scalar)",
-                "IF": "Funzione (inline table)",
-                "TF": "Funzione (table)",
-                "TR": "Trigger",
-                "S": "Tabella di sistema",
-                "SN": "Synonym",
-                "SO": "Sequence/Service Object",
-            }
-            return mapping.get(code, desc or code or "Sconosciuto")
+            label = desc or code or "Sconosciuto"
+            return (code, desc, label)
         except Exception:
-            return "Sconosciuto"
+            return ("", "ERROR", "Sconosciuto")
 
     def _fetch_view_definition(self, conn, schema: str, view: str) -> str:
         """Ritorna la definizione testuale della vista così come salvata nel DB.
@@ -325,8 +314,8 @@ END
                 if key not in conns:
                     conn_str = self._build_conn_str(server, db)
                     conns[key] = pyodbc.connect(conn_str, timeout=QUERY_TIMEOUT)
-                obj_type = self._get_object_type(conns[key], schema, table)
-                if obj_type.lower().startswith("vista"):
+                code, desc, obj_type = self._get_object_type_info(conns[key], schema, table)
+                if code.upper() == "V" or desc.upper().startswith("VIEW") or obj_type.lower().startswith("vista"):
                     ddl = self._fetch_view_definition(conns[key], schema, table)
                 else:
                     ddl = self._fetch_table_ddl(conns[key], schema, table)
