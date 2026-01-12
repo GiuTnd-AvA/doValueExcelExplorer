@@ -231,6 +231,20 @@ def generate_description(sql_def, patterns, dml_count, join_count, dependencies,
     
     return "; ".join(parts).capitalize()
 
+def is_critical_for_migration(clause_type):
+    """Determina se l'oggetto è critico per la migrazione basandosi su CLAUSE_TYPE."""
+    if not clause_type:
+        return 'NO'
+    
+    clause_type_upper = clause_type.upper()
+    critical_operations = ['INSERT INTO', 'UPDATE', 'DELETE FROM', 'MERGE INTO', 'CREATE TABLE', 'ALTER TABLE']
+    
+    for op in critical_operations:
+        if op in clause_type_upper:
+            return 'SÌ'
+    
+    return 'NO'
+
 def analyze_sql_object(row):
     """Analizza un singolo oggetto SQL."""
     sql_def = row.get('SQLDefinition', '')
@@ -246,11 +260,13 @@ def analyze_sql_object(row):
     complexity_score = calculate_complexity_score(sql_def, patterns, dml_count, join_count, dependencies)
     criticality = classify_criticality(complexity_score, dml_count, patterns)
     description = generate_description(sql_def, patterns, dml_count, join_count, dependencies, clause_type)
+    critical_migration = is_critical_for_migration(clause_type)
     
     return {
+        'Critico_Migrazione': critical_migration,
         'Descrizione_Comportamento': description,
         'Complessità_Score': complexity_score,
-        'Criticità': criticality,
+        'Criticità_Tecnica': criticality,
         'Pattern_Identificati': '; '.join(sorted(patterns)) if patterns else 'Nessuno',
         'Dipendenze_Count': len(dependencies),
         'Dipendenze': '; '.join(sorted(dependencies)) if dependencies else 'Nessuna',
@@ -306,8 +322,10 @@ def main():
             print(f"  - Esportato: {output_path.name}")
             
             # Statistiche
-            criticita_counts = analysis_df['Criticità'].value_counts()
-            print(f"  - Criticità: ALTA={criticita_counts.get('ALTA', 0)}, MEDIA={criticita_counts.get('MEDIA', 0)}, BASSA={criticita_counts.get('BASSA', 0)}")
+            criticita_counts = analysis_df['Criticità_Tecnica'].value_counts()
+            critici_migr = len(analysis_df[analysis_df['Critico_Migrazione'] == 'SÌ'])
+            print(f"  - Criticità Tecnica: ALTA={criticita_counts.get('ALTA', 0)}, MEDIA={criticita_counts.get('MEDIA', 0)}, BASSA={criticita_counts.get('BASSA', 0)}")
+            print(f"  - Critici per migrazione (DML/DDL): {critici_migr}")
             print(f"  - Complessità media: {analysis_df['Complessità_Score'].mean():.1f}\n")
             
         except Exception as e:
