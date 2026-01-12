@@ -166,8 +166,12 @@ def main():
             })
             continue
         if i % batch_size == 0:
-            export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', i // batch_size)
-            sql_objects.clear()
+            print(f"\n=== CHECKPOINT {i}: {len(sql_objects)} oggetti accumulati ===")
+            if sql_objects:
+                export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', i // batch_size)
+                sql_objects.clear()
+            else:
+                print("ATTENZIONE: Nessun oggetto da esportare!")
     if sql_objects:
         export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', (total_rows // batch_size) + 1)
 
