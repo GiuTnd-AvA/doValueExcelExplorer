@@ -23,6 +23,10 @@ class IDBConnection(ABC):
         preferred = [
             "ODBC Driver 18 for SQL Server",
             "ODBC Driver 17 for SQL Server",
+            "SQL Server",
+            "SQL Server Native Client 11.0",
+            "ODBC Driver 13 for SQL Server",
+            "ODBC Driver 11 for SQL Server",
             self.DRIVER if getattr(self, "DRIVER", None) else "",
         ]
         preferred = [d for d in preferred if d]

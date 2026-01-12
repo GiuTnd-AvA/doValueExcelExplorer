@@ -35,6 +35,10 @@ ODBC_DRIVERS: List[str] = [
     "ODBC Driver 18 for SQL Server",
     "ODBC Driver 17 for SQL Server",
     "SQL Server",
+    # legacy/common names
+    "SQL Server Native Client 11.0",
+    "ODBC Driver 13 for SQL Server",
+    "ODBC Driver 11 for SQL Server",
 ]
 TRUSTED_CONNECTION: bool = True
 SQL_USERNAME: Optional[str] = None
@@ -108,6 +112,9 @@ class TableDefinitionExtractor:
             "ODBC Driver 18 for SQL Server",
             "ODBC Driver 17 for SQL Server",
             "SQL Server",
+            "SQL Server Native Client 11.0",
+            "ODBC Driver 13 for SQL Server",
+            "ODBC Driver 11 for SQL Server",
         ]
         ordered = [d for d in preferred if d in installed]
         ordered += [d for d in installed if d not in ordered]
