@@ -79,14 +79,33 @@ class SelectsExecutor:
                     continue
                 low = s.lower()
                 if low.startswith("select") or low.startswith("with"):
-                    selects.append(s)
+                    selects.append(s.rstrip(";"))
         return selects
+
+    def _candidate_drivers(self) -> List[str]:
+        try:
+            installed = [d for d in pyodbc.drivers() if "sql server" in d.lower()]
+        except Exception:
+            installed = []
+        preferred = [
+            "ODBC Driver 18 for SQL Server",
+            "ODBC Driver 17 for SQL Server",
+            "SQL Server",
+        ]
+        ordered = [d for d in preferred if d in installed]
+        ordered += [d for d in installed if d not in ordered]
+        if not ordered:
+            ordered = ODBC_DRIVERS
+        print(f"[ODBC] Driver installati: {installed}")
+        return ordered
 
     def _build_conn_str(self) -> str:
         last_error: Optional[Exception] = None
-        for drv in ODBC_DRIVERS:
+        tried: List[str] = []
+        for drv in self._candidate_drivers():
+            tried.append(drv)
             try:
-                conn_str = f"DRIVER={{{{}}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};".format(drv)
+                conn_str = f"DRIVER={{{{drv}}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};"
                 if TRUSTED_CONNECTION:
                     conn_str += "Trusted_Connection=yes;"
                 else:
@@ -94,14 +113,17 @@ class SelectsExecutor:
                         raise RuntimeError("Imposta SQL_USERNAME e SQL_PASSWORD oppure usa Trusted_Connection.")
                     conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
                 conn_str += ODBC_ENCRYPT_OPTS
-                # test quick connectivity for driver
                 tconn = pyodbc.connect(conn_str, timeout=3)
                 tconn.close()
+                print(f"[ODBC] Uso driver: {drv}")
                 return conn_str
             except Exception as e:
                 last_error = e
                 continue
-        raise RuntimeError(f"Nessun driver ODBC valido trovato. Ultimo errore: {last_error}")
+        available = ", ".join(pyodbc.drivers()) if pyodbc is not None else "pyodbc non disponibile"
+        raise RuntimeError(
+            f"Nessun driver ODBC valido trovato. Provati: {tried}. Driver installati: {available}. Ultimo errore: {last_error}"
+        )
 
     def _execute_select(self, conn, sql: str) -> Optional[str]:
         """Esegue una singola SELECT. Ritorna None se ok, altrimenti messaggio di errore."""

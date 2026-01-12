@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 
 import os
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Any
 
 try:
     import pyodbc
@@ -99,26 +99,61 @@ class TableDefinitionExtractor:
             wb.close()
 
     # ---------------- Connection handling ----------------
+    def _candidate_drivers(self) -> List[str]:
+        try:
+            installed = [d for d in pyodbc.drivers() if "sql server" in d.lower()]
+        except Exception:
+            installed = []
+        preferred = [
+            "ODBC Driver 18 for SQL Server",
+            "ODBC Driver 17 for SQL Server",
+            "SQL Server",
+        ]
+        ordered = [d for d in preferred if d in installed]
+        ordered += [d for d in installed if d not in ordered]
+        if not ordered:
+            ordered = ODBC_DRIVERS
+        print(f"[ODBC] Driver installati: {installed}")
+        return ordered
+
     def _build_conn_str(self, server: str, db: str) -> str:
         last_error: Optional[Exception] = None
-        for drv in ODBC_DRIVERS:
+        tried: List[str] = []
+        for drv in self._candidate_drivers():
+            tried.append(drv)
             try:
-                conn_str = f"DRIVER={{{drv}}};SERVER={server};DATABASE={db};"
+                # Per il test del driver usiamo sempre 'master' per evitare errori 4060 sul DB target
+                test_db = "master"
+                enc_opts = ODBC_ENCRYPT_OPTS
+                # Alcuni driver legacy ("SQL Server") non supportano Encrypt/TrustServerCertificate
+                if drv.lower().strip() == "sql server":
+                    enc_opts = ""
+                test_conn_str = f"DRIVER={{{{{drv}}}}};SERVER={server};DATABASE={test_db};"
                 if TRUSTED_CONNECTION:
-                    conn_str += "Trusted_Connection=yes;"
+                    test_conn_str += "Trusted_Connection=yes;"
                 else:
                     if not SQL_USERNAME or not SQL_PASSWORD:
                         raise RuntimeError("Credenziali non impostate e Trusted_Connection disattivata.")
-                    conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
-                conn_str += ODBC_ENCRYPT_OPTS
-                # test driver
-                conn = pyodbc.connect(conn_str, timeout=CONNECTION_TEST_TIMEOUT)
+                    test_conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
+                test_conn_str += enc_opts
+                conn = pyodbc.connect(test_conn_str, timeout=CONNECTION_TEST_TIMEOUT)
                 conn.close()
-                return conn_str
+                # Driver valido: costruisco la stringa finale per il DB target
+                final_conn_str = f"DRIVER={{{{{drv}}}}};SERVER={server};DATABASE={db};"
+                if TRUSTED_CONNECTION:
+                    final_conn_str += "Trusted_Connection=yes;"
+                else:
+                    final_conn_str += f"UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
+                final_conn_str += enc_opts
+                print(f"[ODBC] Uso driver: {drv}")
+                return final_conn_str
             except Exception as e:
                 last_error = e
                 continue
-        raise RuntimeError(f"Nessun driver ODBC valido trovato per {server}/{db}. Ultimo errore: {last_error}")
+        available = ", ".join(pyodbc.drivers()) if pyodbc is not None else "pyodbc non disponibile"
+        raise RuntimeError(
+            f"Impossibile stabilire connessione al server {server}. Provati driver: {tried}. Driver installati: {available}. Ultimo errore: {last_error}"
+        )
 
     # ---------------- DDL builder ----------------
     def _fetch_table_ddl(self, conn, schema: str, table: str) -> str:
@@ -306,14 +341,19 @@ END
         total = len(items)
         print(f"[DDL] Totale tabelle da elaborare: {total}")
         results: List[List[str]] = []
-        conns: Dict[Tuple[str, str], pyodbc.Connection] = {}
+        conns: Dict[Tuple[str, str], Any] = {}
         try:
             for idx, (server, db, schema, table) in enumerate(items, start=1):
                 print(f"[DDL] Elaborazione {idx}/{total}: {server}.{db}.{schema}.{table}")
                 key = (server, db)
                 if key not in conns:
-                    conn_str = self._build_conn_str(server, db)
-                    conns[key] = pyodbc.connect(conn_str, timeout=QUERY_TIMEOUT)
+                    try:
+                        conn_str = self._build_conn_str(server, db)
+                        conns[key] = pyodbc.connect(conn_str, timeout=QUERY_TIMEOUT)
+                    except Exception as e:
+                        # Connessione non riuscita per questo server/db: si registra errore e si continua
+                        results.append([server, db, schema, table, "ERROR", f"Connessione fallita: {e}"])
+                        continue
                 code, desc, obj_type = self._get_object_type_info(conns[key], schema, table)
                 if code.upper() == "V" or desc.upper().startswith("VIEW") or obj_type.lower().startswith("vista"):
                     ddl = self._fetch_view_definition(conns[key], schema, table)
