@@ -105,7 +105,7 @@ class SelectsExecutor:
         for drv in self._candidate_drivers():
             tried.append(drv)
             try:
-                conn_str = f"DRIVER={{{{drv}}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};"
+                conn_str = f"DRIVER={{{drv}}};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};"
                 if TRUSTED_CONNECTION:
                     conn_str += "Trusted_Connection=yes;"
                 else:

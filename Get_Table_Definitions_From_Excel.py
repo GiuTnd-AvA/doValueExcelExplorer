@@ -128,7 +128,7 @@ class TableDefinitionExtractor:
                 # Alcuni driver legacy ("SQL Server") non supportano Encrypt/TrustServerCertificate
                 if drv.lower().strip() == "sql server":
                     enc_opts = ""
-                test_conn_str = f"DRIVER={{{{{drv}}}}};SERVER={server};DATABASE={test_db};"
+                test_conn_str = f"DRIVER={{{drv}}};SERVER={server};DATABASE={test_db};"
                 if TRUSTED_CONNECTION:
                     test_conn_str += "Trusted_Connection=yes;"
                 else:
@@ -139,7 +139,7 @@ class TableDefinitionExtractor:
                 conn = pyodbc.connect(test_conn_str, timeout=CONNECTION_TEST_TIMEOUT)
                 conn.close()
                 # Driver valido: costruisco la stringa finale per il DB target
-                final_conn_str = f"DRIVER={{{{{drv}}}}};SERVER={server};DATABASE={db};"
+                final_conn_str = f"DRIVER={{{drv}}};SERVER={server};DATABASE={db};"
                 if TRUSTED_CONNECTION:
                     final_conn_str += "Trusted_Connection=yes;"
                 else:
