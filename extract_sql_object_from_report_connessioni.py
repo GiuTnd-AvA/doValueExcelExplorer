@@ -65,8 +65,9 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                         v_l = v.lower()
                         for op in clause_ops:
                             op_l = op.lower()
-                            # Regex: op + spazi + v + (spazio o parentesi quadra o fine riga), tollera alias dopo
-                            pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}(\s|\[|$)"
+                            # Regex: op + spazi + v + qualsiasi carattere non alfanumerico o underscore (o fine riga)
+                            # Questo cattura: spazi, parentesi (), [], virgole, doppi apici, fine riga, ecc.
+                            pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}(?:\W|$)"
                             if re.search(pattern, sql_def_l):
                                 found_clauses.add(f"{op} {v}")
                                 found_clause_types.add(op)
