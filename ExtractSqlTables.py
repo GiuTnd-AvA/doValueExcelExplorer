@@ -22,8 +22,16 @@ INPUT_SQL = r"c:/Users/giuseppe.tanda/Desktop/doValue/OneDrive_1_12-30-2025/Appe
 
 # Identifier: [name] or "name" or `name` or simple names, including temp tables #/##
 IDENTIFIER = r'(?:\[[^\]]+\]|"[^"]+"|`[^`]+`|[#]{1,2}[A-Za-z_][A-Za-z0-9_$]*|[A-Za-z_][A-Za-z0-9_$]*)'
-# Up to 3-part names: db.schema.table
-QUALIFIED = rf'{IDENTIFIER}(?:\s*\.\s*{IDENTIFIER}){{0,2}}'
+# Qualified names support:
+# - table
+# - schema.table
+# - db.schema.table
+# - db..table   (missing schema -> default to dbo)
+# The regex below allows either 2-part names or 3-part names where the middle part may be empty
+QUALIFIED = rf'{IDENTIFIER}(?:\s*\.\s*(?:{IDENTIFIER}|(?=\s*\.))\s*\.\s*{IDENTIFIER}|\s*\.\s*{IDENTIFIER})?'
+
+# Detect pattern db..table to normalize missing schema to dbo
+EMPTY_SCHEMA_PATTERN = re.compile(rf'^(?P<db>{IDENTIFIER})\s*\.\s*\.\s*(?P<table>{IDENTIFIER})$', re.IGNORECASE)
 
 CLAUSE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("DROP TABLE",     re.compile(rf"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
@@ -52,6 +60,10 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
         for m in pattern.finditer(text):
             c = clause
             t = m.group('table').strip()
+            # Normalize db..table -> db.dbo.table
+            em = EMPTY_SCHEMA_PATTERN.match(t)
+            if em:
+                t = f"{em.group('db')}.dbo.{em.group('table')}"
             join_type = m.groupdict().get('type')
             if join_type:
                 c = f"{join_type.upper()} JOIN"
