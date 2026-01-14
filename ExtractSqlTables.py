@@ -33,6 +33,40 @@ QUALIFIED = rf'{IDENTIFIER}(?:\s*\.\s*(?:{IDENTIFIER}|(?=\s*\.))\s*\.\s*{IDENTIF
 # Detect pattern db..table to normalize missing schema to dbo
 EMPTY_SCHEMA_PATTERN = re.compile(rf'^(?P<db>{IDENTIFIER})\s*\.\s*\.\s*(?P<table>{IDENTIFIER})$', re.IGNORECASE)
 
+# CTE detection: capture names defined via WITH ... AS (...), including comma-separated CTEs
+CTE_FIRST_PATTERN = re.compile(rf"\bWITH\s+(?P<name>{IDENTIFIER})\s*(?:\([^)]*\))?\s+AS\b", re.IGNORECASE|re.DOTALL)
+CTE_NEXT_PATTERN = re.compile(rf",\s*(?P<name>{IDENTIFIER})\s*(?:\([^)]*\))?\s+AS\b", re.IGNORECASE|re.DOTALL)
+
+def _strip_delimiters(s: str) -> str:
+    s = s.strip()
+    if s.startswith('[') and s.endswith(']'):
+        s = s[1:-1]
+    elif s.startswith('"') and s.endswith('"'):
+        s = s[1:-1]
+    elif s.startswith('`') and s.endswith('`'):
+        s = s[1:-1]
+    return s
+
+def _last_segment(qualified: str) -> str:
+    parts = [p.strip() for p in qualified.split('.')]
+    if not parts:
+        return _strip_delimiters(qualified)
+    return _strip_delimiters(parts[-1])
+
+def _is_temp_table(qualified: str) -> bool:
+    last = _last_segment(qualified)
+    return last.startswith('#')  # matches both # and ##
+
+def _extract_cte_names(text: str) -> set:
+    names = set()
+    for m in CTE_FIRST_PATTERN.finditer(text):
+        names.add(_strip_delimiters(m.group('name')))
+        # Scan forward after a WITH for subsequent comma-separated CTE names
+        tail = text[m.end():]
+        for n in CTE_NEXT_PATTERN.finditer(tail):
+            names.add(_strip_delimiters(n.group('name')))
+    return {n.lower() for n in names}
+
 CLAUSE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("DROP TABLE",     re.compile(rf"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
     ("TRUNCATE TABLE", re.compile(rf"\bTRUNCATE\s+TABLE\s+(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
@@ -56,6 +90,7 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
     # Collect all matches with the position of the TABLE token,
     # then sort by that position to reflect exact encounter order.
     collected: List[Dict[str, str]] = []
+    cte_names = _extract_cte_names(text)
     for clause, pattern in CLAUSE_PATTERNS:
         for m in pattern.finditer(text):
             c = clause
@@ -64,6 +99,11 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
             em = EMPTY_SCHEMA_PATTERN.match(t)
             if em:
                 t = f"{em.group('db')}.dbo.{em.group('table')}"
+            # Skip temp tables (#, ##) and CTEs
+            if _is_temp_table(t):
+                continue
+            if _strip_delimiters(_last_segment(t)).lower() in cte_names:
+                continue
             join_type = m.groupdict().get('type')
             if join_type:
                 c = f"{join_type.upper()} JOIN"
