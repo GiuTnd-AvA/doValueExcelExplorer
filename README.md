@@ -178,10 +178,10 @@ pip install openpyxl pandas pyodbc sqlalchemy
 ```
 
 **Pacchetti richiesti**:
-- `openpyxl`: Lettura e scrittura file Excel (.xlsx)
-- `pandas`: Manipolazione dati e DataFrames
-- `pyodbc`: Connessione a database SQL Server
-- `sqlalchemy`: ORM e gestione database (opzionale per alcune funzionalità)
+- `openpyxl` (>= 3.0.0): Lettura e scrittura file Excel (.xlsx)
+- `pandas` (>= 1.3.0): Manipolazione dati e DataFrames
+- `pyodbc` (>= 4.0.0): Connessione a database SQL Server
+- `sqlalchemy` (>= 1.4.0): ORM e gestione database (opzionale per alcune funzionalità)
 
 ### Altri Requisiti
 
@@ -202,6 +202,7 @@ import os
 user_folder = os.path.expanduser("~")
 
 # Percorsi principali (usa user_folder per percorsi relativi alla home dell'utente)
+POWERSHELL_SCRIPT_PATH = rf'{user_folder}\Desktop\doValueExcelExplorer\PowerShellScripts\ExportMCode.ps1'
 EXCEL_ROOT_PATH = rf'{user_folder}\Desktop\doValue'           # Cartella con file Excel
 EXPORT_MCODE_PATH = rf'{user_folder}\Desktop\Export M Code'   # Export Power Query
 EXCEL_OUTPUT_PATH = rf'{user_folder}\Desktop'                  # Output report
