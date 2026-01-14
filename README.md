@@ -159,33 +159,26 @@ EXCEL_OUTPUT_PATH = r'C:\...\Report_Estratto_DB.xlsx'
    ```bash
    python main.py
    ```
-   Genera: `Report_Connessioni.xlsx` con lista file, connessioni e confronto
+   - **Output**: `Report_Connessioni.xlsx` con:
+     - Sheet "Lista file": Elenco file Excel trovati
+     - Sheet "Connessioni": Dettagli connessioni PowerQuery (server, database, schema, tabelle)
+     - Sheet "File gestiti parzialmente": Confronto connessioni attese vs estratte
 
 2. **Estrazione Oggetti SQL dai Database:**
    ```bash
    python scripts/extract_sql_object_from_report_connessioni.py
    ```
-   Genera: `Report_Estratto_DB.xlsx` con stored procedures, functions, triggers
+   - **Input**: `Report_Connessioni.xlsx`
+   - **Output**: `Report_Estratto_DB_parziale_*.xlsx` (file multipli per batch)
+   - **Contenuto**: Stored procedures, functions, triggers che referenziano le tabelle
 
 3. **Analisi Complessità SQL:**
    ```bash
    python scripts/analyze_sql_complexity.py
    ```
-   - Output: `Report_Connessioni.xlsx` con lista file e dettagli connessioni
-
-2. **Estrazione Oggetti SQL dai Database:**
-   ```bash
-   python extract_sql_object_from_report_connessioni.py
-   ```
-   - Input: `Report_Connessioni.xlsx`
-   - Output: `Report_Estratto_DB_parziale_*.xlsx` (file multipli per batch)
-
-3. **Analisi Complessità SQL:**
-   ```bash
-   python analyze_sql_complexity.py
-   ```
-   - Input: `Report_Estratto_DB_parziale_*.xlsx`
-   - Output: `Report_Estratto_DB_parziale_*_analyzed.xlsx`
+   - **Input**: `Report_Estratto_DB_parziale_*.xlsx`
+   - **Output**: `Report_Estratto_DB_parziale_*_analyzed.xlsx`
+   - **Contenuto**: Metriche di complessità, score, criticità, pattern identificati
 
 ## Use Cases
 
