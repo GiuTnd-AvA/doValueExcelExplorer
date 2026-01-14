@@ -201,10 +201,10 @@ import os
 
 user_folder = os.path.expanduser("~")
 
-# Percorsi principali
-EXCEL_ROOT_PATH = r'C:\percorso\cartella\excel'        # Cartella con file Excel
-EXPORT_MCODE_PATH = r'C:\percorso\export\mcode'        # Export Power Query
-EXCEL_OUTPUT_PATH = r'C:\percorso\output'              # Output report
+# Percorsi principali (usa user_folder per percorsi relativi alla home dell'utente)
+EXCEL_ROOT_PATH = rf'{user_folder}\Desktop\cartella\excel'    # Cartella con file Excel
+EXPORT_MCODE_PATH = rf'{user_folder}\Desktop\export\mcode'    # Export Power Query
+EXCEL_OUTPUT_PATH = rf'{user_folder}\Desktop\output'          # Output report
 
 # Dimensione chunk per report
 CHUNK_SIZE = 50  # Numero di file per report Excel
