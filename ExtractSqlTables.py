@@ -27,11 +27,15 @@ IDENTIFIER = r'(?:\[[^\]]+\]|"[^"]+"|`[^`]+`|[#]{1,2}[A-Za-z_][A-Za-z0-9_$]*|[A-
 # - schema.table
 # - db.schema.table
 # - db..table   (missing schema -> default to dbo)
-# The regex below allows either 2-part names or 3-part names where the middle part may be empty
-QUALIFIED = rf'{IDENTIFIER}(?:\s*\.\s*(?:{IDENTIFIER}|(?=\s*\.))\s*\.\s*{IDENTIFIER}|\s*\.\s*{IDENTIFIER})?'
+# The regex below allows 1 to 4-part names, with support for an empty schema
+# via a double dot (e.g., db..table or server.db..table). We achieve this by
+# allowing up to three repeatable dot-segments where each segment is either an
+# identifier or an empty placeholder detected via lookahead for the next dot.
+QUALIFIED = rf'{IDENTIFIER}(?:\s*\.\s*(?:{IDENTIFIER}|(?=\s*\.))){{0,3}}'
 
-# Detect pattern db..table to normalize missing schema to dbo
-EMPTY_SCHEMA_PATTERN = re.compile(rf'^(?P<db>{IDENTIFIER})\s*\.\s*\.\s*(?P<table>{IDENTIFIER})$', re.IGNORECASE)
+# Detect patterns with missing schema to normalize to dbo
+EMPTY_SCHEMA_3 = re.compile(rf'^(?P<db>{IDENTIFIER})\s*\.\s*\.\s*(?P<table>{IDENTIFIER})$', re.IGNORECASE)
+EMPTY_SCHEMA_4 = re.compile(rf'^(?P<server>{IDENTIFIER})\s*\.\s*(?P<db>{IDENTIFIER})\s*\.\s*\.\s*(?P<table>{IDENTIFIER})$', re.IGNORECASE)
 
 # CTE detection: capture names defined via WITH ... AS (...), including comma-separated CTEs
 CTE_FIRST_PATTERN = re.compile(rf"\bWITH\s+(?P<name>{IDENTIFIER})\s*(?:\([^)]*\))?\s+AS\b", re.IGNORECASE|re.DOTALL)
@@ -79,10 +83,13 @@ def _extract_alias_map(text: str) -> Dict[str, str]:
     alias_map: Dict[str, str] = {}
     for m in ALIAS_PATTERN.finditer(text):
         base = m.group('table').strip()
-        # Normalize db..table -> db.dbo.table
-        em = EMPTY_SCHEMA_PATTERN.match(base)
-        if em:
-            base = f"{em.group('db')}.dbo.{em.group('table')}"
+        # Normalize missing schema
+        em3 = EMPTY_SCHEMA_3.match(base)
+        em4 = EMPTY_SCHEMA_4.match(base)
+        if em4:
+            base = f"{em4.group('server')}.{em4.group('db')}.dbo.{em4.group('table')}"
+        elif em3:
+            base = f"{em3.group('db')}.dbo.{em3.group('table')}"
         alias = _strip_delimiters(m.group('alias')).lower()
         # Ignore temp/variable aliases (rare) and CTE aliases
         if alias.startswith('#') or alias.startswith('@'):
@@ -150,10 +157,13 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
                 # If UPDATE targets a single-name alias we don't know, skip to avoid false positives
                 # (prefer correctness over completeness)
                 continue
-            # Normalize db..table -> db.dbo.table
-            em = EMPTY_SCHEMA_PATTERN.match(t)
-            if em:
-                t = f"{em.group('db')}.dbo.{em.group('table')}"
+            # Normalize missing schema: db..table or server.db..table
+            em3 = EMPTY_SCHEMA_3.match(t)
+            em4 = EMPTY_SCHEMA_4.match(t)
+            if em4:
+                t = f"{em4.group('server')}.{em4.group('db')}.dbo.{em4.group('table')}"
+            elif em3:
+                t = f"{em3.group('db')}.dbo.{em3.group('table')}"
             # Skip temp tables (#, ##) and CTEs
             if _is_temp_table(t):
                 continue
