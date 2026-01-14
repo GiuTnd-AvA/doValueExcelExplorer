@@ -69,6 +69,27 @@ def _extract_cte_names(text: str) -> set:
             names.add(_strip_delimiters(n.group('name')))
     return {n.lower() for n in names}
 
+# Alias detection: FROM/JOIN <table> [AS] <alias>
+ALIAS_PATTERN = re.compile(
+    rf"(?:(?:\bFROM\b)|(?:\bJOIN\b))\s+(?:\(\s*(?!SELECT\b|WITH\b|VALUES\b))?(?P<table>{QUALIFIED})\s+(?:AS\s+)?(?P<alias>{IDENTIFIER})\b",
+    re.IGNORECASE|re.DOTALL,
+)
+
+def _extract_alias_map(text: str) -> Dict[str, str]:
+    alias_map: Dict[str, str] = {}
+    for m in ALIAS_PATTERN.finditer(text):
+        base = m.group('table').strip()
+        # Normalize db..table -> db.dbo.table
+        em = EMPTY_SCHEMA_PATTERN.match(base)
+        if em:
+            base = f"{em.group('db')}.dbo.{em.group('table')}"
+        alias = _strip_delimiters(m.group('alias')).lower()
+        # Ignore temp/variable aliases (rare) and CTE aliases
+        if alias.startswith('#') or alias.startswith('@'):
+            continue
+        alias_map[alias] = base
+    return alias_map
+
 def _strip_sql_comments(text: str) -> str:
     """Remove T-SQL style comments: line comments (--) and block comments (/* ... */).
     Keeps content otherwise unchanged. This is a best-effort stripper and does not
@@ -91,9 +112,9 @@ CLAUSE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("DELETE FROM",    re.compile(rf"\bDELETE\s+FROM\s+(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
     ("MERGE INTO",     re.compile(rf"\bMERGE\s+INTO\s+(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
     # FROM: allow optional parenthesis when not starting a subquery (SELECT/WITH)
-    ("FROM",           re.compile(rf"\bFROM\s+(?:\(\s*(?!SELECT\b|WITH\b))?(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
+    ("FROM",           re.compile(rf"\bFROM\s+(?:\(\s*(?!SELECT\b|WITH\b|VALUES\b))?(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
     # JOIN: similarly allow optional parenthesis when not a subquery
-    ("JOIN",           re.compile(rf"(?:(?P<type>INNER|LEFT|RIGHT|FULL(?:\s+OUTER)?|CROSS)\s+)?JOIN\s+(?:\(\s*(?!SELECT\b|WITH\b))?(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
+    ("JOIN",           re.compile(rf"(?:(?P<type>INNER|LEFT|RIGHT|FULL(?:\s+OUTER)?|CROSS)\s+)?JOIN\s+(?:\(\s*(?!SELECT\b|WITH\b|VALUES\b))?(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
 ]
 
 MARKER_REGEX = re.compile(r"(?m)^\s*--\s*(?P<num>\d+)\s+(?P<path>.+?\.sql)\s*$")
@@ -108,6 +129,7 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
     # then sort by that position to reflect exact encounter order.
     collected: List[Dict[str, str]] = []
     cte_names = _extract_cte_names(text)
+    alias_map = _extract_alias_map(text)
     for clause, pattern in CLAUSE_PATTERNS:
         for m in pattern.finditer(text):
             c = clause
@@ -120,6 +142,14 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
                     continue
             except Exception:
                 pass
+            # Resolve alias for UPDATE/others: if single identifier equals alias, map to base table
+            t_stripped = _strip_delimiters(t)
+            if '.' not in t_stripped and t_stripped.lower() in alias_map:
+                t = alias_map[t_stripped.lower()]
+            elif c.upper() == 'UPDATE' and '.' not in t_stripped:
+                # If UPDATE targets a single-name alias we don't know, skip to avoid false positives
+                # (prefer correctness over completeness)
+                continue
             # Normalize db..table -> db.dbo.table
             em = EMPTY_SCHEMA_PATTERN.match(t)
             if em:
