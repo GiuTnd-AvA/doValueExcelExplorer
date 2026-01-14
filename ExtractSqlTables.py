@@ -67,6 +67,17 @@ def _extract_cte_names(text: str) -> set:
             names.add(_strip_delimiters(n.group('name')))
     return {n.lower() for n in names}
 
+def _strip_sql_comments(text: str) -> str:
+    """Remove T-SQL style comments: line comments (--) and block comments (/* ... */).
+    Keeps content otherwise unchanged. This is a best-effort stripper and does not
+    handle comment markers inside quoted strings.
+    """
+    # Remove block comments
+    text = re.sub(r"/\*[\s\S]*?\*/", " ", text)
+    # Remove line comments (from -- to end of line)
+    text = re.sub(r"(?m)--.*$", "", text)
+    return text
+
 CLAUSE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("DROP TABLE",     re.compile(rf"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
     ("TRUNCATE TABLE", re.compile(rf"\bTRUNCATE\s+TABLE\s+(?P<table>{QUALIFIED})", re.IGNORECASE|re.DOTALL)),
@@ -126,7 +137,8 @@ def parse_blocks(content: str, input_path: str, verbose: bool = True) -> List[Di
         if verbose:
             print("Nessun marker trovato; elaboro il file come singolo blocco…")
         file_name = os.path.basename(input_path)
-        matches = extract_matches(content)
+        content_nc = _strip_sql_comments(content)
+        matches = extract_matches(content_nc)
         if verbose:
             print(f"  Riferimenti estratti: {len(matches)}")
         for m in matches:
@@ -142,7 +154,8 @@ def parse_blocks(content: str, input_path: str, verbose: bool = True) -> List[Di
         start = marker.end()
         end = markers[i+1].start() if i < len(markers)-1 else len(content)
         block = content[start:end]
-        matches = extract_matches(block)
+        block_nc = _strip_sql_comments(block)
+        matches = extract_matches(block_nc)
         if verbose:
             print(f"  Blocco {i+1}/{len(markers)}: {file_name}")
             print(f"    Riferimenti estratti: {len(matches)}")
