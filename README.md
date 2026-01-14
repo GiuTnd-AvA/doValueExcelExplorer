@@ -7,7 +7,7 @@
 ## Caratteristiche Principali
 
 ### 1. Analisi delle Connessioni Excel
-- **Estrazione connessioni XML**: Analizza i file Excel (.xlsx e .xls con supporto base) ed estrae le informazioni di connessione dal file `xl/connections.xml`
+- **Estrazione connessioni XML**: Analizza i file Excel (.xlsx principalmente, .xls con supporto limitato) ed estrae le informazioni di connessione
 - **Parsing Power Query**: Interpreta le sorgenti Power Query e identifica server, database, schema e tabelle
 - **Supporto connessioni multiple**: Gestisce connessioni SQL, SharePoint ed Excel
 - **Report aggregati**: Genera report Excel con tutte le connessioni trovate, organizzate per file
@@ -185,8 +185,8 @@ pip install openpyxl pandas pyodbc sqlalchemy
 
 ### Altri Requisiti
 
-- **Python**: 3.9 o superiore (raccomandato 3.10+)
-- **PowerShell**: Per script di export M Code (opzionale)
+- **Python**: 3.9 o superiore (raccomandato 3.10+ per migliori performance e type hints)
+- **PowerShell**: Per script di export M Code (opzionale, verifica che ExportMCode.ps1 esista)
 - **SQL Server ODBC Driver**: Per connessioni database
 - **Permessi**: Accesso in lettura ai file Excel e ai database
 
