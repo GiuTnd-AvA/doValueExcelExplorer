@@ -90,23 +90,33 @@ python analyze_sql_complexity.py
 
 ```
 doValueExcelExplorer/
-├── BusinessLogic/          # Logica di business principale
-│   ├── Business_Logic.py   # Orchestrazione delle operazioni
-│   └── Txt_Source_Lines.py # Parsing dei file .txt
-├── Codice_M/               # Gestione codice M e connessioni
-│   ├── Estrazione_Codice_M/
-│   └── Estrazione_Connessione_SQL/
-├── Config/                 # File di configurazione
-│   ├── config.py           # Percorsi e configurazioni Python
-│   └── config.ps1          # Configurazioni PowerShell
-├── ExportExcel/            # Esportazione in Excel
-│   └── Excel_Writer.py     # Scrittura file Excel
-├── FileFinder/             # Ricerca file
-│   ├── Excel_Finder.py     # Trova file Excel
-│   └── TXT_Finder.py       # Trova file TXT
-├── main.py                 # Script principale
-├── extract_sql_object_from_report_connessioni.py  # Estrazione oggetti SQL
-└── analyze_sql_complexity.py  # Analisi complessità
+├── config/                 # Configurazioni
+│   ├── config.py          # Percorsi e configurazioni Python
+│   └── config.ps1         # Configurazioni PowerShell
+│
+├── core/                  # Logica business principale
+│   ├── excel_analyzer.py  # Orchestratore analisi Excel/Power Query
+│   ├── helpers.py         # Funzioni utility per parsing M code
+│   └── report_generator.py # Generazione report e confronti
+│
+├── mcode_extraction/      # Estrazione e parsing codice M
+│   ├── extraction/
+│   │   ├── powershell_runner.py  # Esecuzione script PowerShell
+│   │   └── export_mcode.ps1      # Script estrazione M code da Excel
+│   └── parsers/
+│       ├── connection_base.py    # Classe base connessioni
+│       └── sql_parser.py         # Parser SQL per M code
+│
+├── io/                    # Input/Output operations
+│   ├── file_scanner.py    # Scansione file Excel e TXT
+│   └── excel_exporter.py  # Esportazione report Excel
+│
+├── scripts/               # Script utility standalone
+│   ├── analyze_sql_complexity.py           # Analisi complessità SQL
+│   └── extract_sql_object_from_report_connessioni.py  # Estrazione oggetti SQL
+│
+├── main.py                # Entry point principale (workflow completo)
+└── README.md              # Questa documentazione
 ```
 
 ## Requisiti
@@ -130,11 +140,11 @@ pip install pandas openpyxl sqlalchemy pyodbc
 
 ## Configurazione
 
-Modifica il file `Config/config.py` per specificare i percorsi:
+Modifica il file `config/config.py` per specificare i percorsi:
 
 ```python
 # Percorsi per main.py
-POWERSHELL_SCRIPT_PATH = r'C:\...\ExportMCode.ps1'
+POWERSHELL_SCRIPT_PATH = r'C:\...\mcode_extraction\extraction\export_mcode.ps1'
 EXCEL_ROOT_PATH = r'C:\...\doValue'
 EXPORT_MCODE_PATH = r'C:\...\Export M Code'
 
@@ -148,6 +158,18 @@ EXCEL_OUTPUT_PATH = r'C:\...\Report_Estratto_DB.xlsx'
 1. **Estrazione Codice M ed Analisi Connessioni:**
    ```bash
    python main.py
+   ```
+   Genera: `Report_Connessioni.xlsx` con lista file, connessioni e confronto
+
+2. **Estrazione Oggetti SQL dai Database:**
+   ```bash
+   python scripts/extract_sql_object_from_report_connessioni.py
+   ```
+   Genera: `Report_Estratto_DB.xlsx` con stored procedures, functions, triggers
+
+3. **Analisi Complessità SQL:**
+   ```bash
+   python scripts/analyze_sql_complexity.py
    ```
    - Output: `Report_Connessioni.xlsx` con lista file e dettagli connessioni
 
