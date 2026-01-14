@@ -1,7 +1,7 @@
 # =========================
 # IMPORT
 # =========================
-from Config.config import EXCEL_INPUT_PATH, EXCEL_OUTPUT_PATH
+from config.config import EXCEL_INPUT_PATH, EXCEL_OUTPUT_PATH
 import pandas as pd
 from sqlalchemy import create_engine, text
 import pyodbc

@@ -2,7 +2,7 @@ import pandas as pd
 import os
 from openpyxl import load_workbook
 
-class ExcelWriter:
+class ExcelExporter:
     
     def __init__(self, folder_path, file_name):
         self.folder_path = folder_path
