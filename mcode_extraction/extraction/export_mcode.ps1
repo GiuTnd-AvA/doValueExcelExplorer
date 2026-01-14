@@ -1,10 +1,8 @@
 # 1. SCRIPT POWERSHELL PER ESTRARRE IL CODICE M DA FILE EXCEL
 # -------------------------------------------------------------
-# Salva questo script come ExportMCode.ps1 e modificalo con i tuoi percorsi
-# Esegui da PowerShell prima di lanciare lo script Python
 
-# Importa le variabili di configurazione
-. "$PSScriptRoot\..\Config\config.ps1"
+# Importa le variabili di configurazione dal percorso relativo
+. "$PSScriptRoot\..\..\Config\config.ps1"
 
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false

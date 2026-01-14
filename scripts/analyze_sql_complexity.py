@@ -1,7 +1,7 @@
 # =========================
 # IMPORT
 # =========================
-from Config.config import EXCEL_OUTPUT_PATH
+from config.config import EXCEL_OUTPUT_PATH
 import pandas as pd
 import re
 import os
