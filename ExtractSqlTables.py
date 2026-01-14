@@ -55,7 +55,9 @@ def _last_segment(qualified: str) -> str:
 
 def _is_temp_table(qualified: str) -> bool:
     last = _last_segment(qualified)
-    return last.startswith('#')  # matches both # and ##
+    # Treat temporary tables (#, ##) and table variables (@) as non-persistent
+    # objects to ignore in extraction results.
+    return last.startswith('#') or last.startswith('@')
 
 def _extract_cte_names(text: str) -> set:
     names = set()
@@ -96,6 +98,10 @@ CLAUSE_PATTERNS: List[Tuple[str, re.Pattern]] = [
 
 MARKER_REGEX = re.compile(r"(?m)^\s*--\s*(?P<num>\d+)\s+(?P<path>.+?\.sql)\s*$")
 
+# Detect context like "FETCH NEXT FROM <cursor>" to avoid misclassifying
+# cursor names as tables when matching FROM clauses.
+CURSOR_FETCH_BEFORE = re.compile(r"\bFETCH\s+(?:NEXT|PRIOR|FIRST|LAST)?\s*$", re.IGNORECASE)
+
 
 def extract_matches(text: str) -> List[Dict[str, str]]:
     # Collect all matches with the position of the TABLE token,
@@ -106,6 +112,14 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
         for m in pattern.finditer(text):
             c = clause
             t = m.group('table').strip()
+            # Skip FROM when it's part of a cursor FETCH statement
+            try:
+                from_start = m.start()  # our pattern starts at the SQL keyword (e.g., FROM)
+                context = text[max(0, from_start-80):from_start]
+                if CURSOR_FETCH_BEFORE.search(context):
+                    continue
+            except Exception:
+                pass
             # Normalize db..table -> db.dbo.table
             em = EMPTY_SCHEMA_PATTERN.match(t)
             if em:
