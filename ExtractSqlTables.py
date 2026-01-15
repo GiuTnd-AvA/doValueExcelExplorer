@@ -150,14 +150,17 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
             except Exception:
                 pass
             # Skip dynamic SQL: detect if table name is part of string concatenation
-            # Pattern: "DROP TABLE dbo.' + @variable" or similar
-            # Check if the matched table is followed by .' (incomplete identifier in dynamic SQL)
-            # or by + @ (concatenation)
+            # Pattern: "dbo.CARTESIO_' + @variable" or "dbo.' + @variable" or similar
+            # Check if the matched table is followed by ' (incomplete in dynamic SQL)
+            # or by .' (incomplete identifier), or by + @ (concatenation)
             try:
                 match_end = m.end('table') if 'table' in m.groupdict() else m.end()
                 following = text[match_end:match_end+20]
-                # If followed by .' (incomplete in dynamic SQL) or + @ (concatenation), skip
-                if following.lstrip().startswith(".'") or following.lstrip().startswith("+ @"):
+                following_stripped = following.lstrip()
+                # If followed by ' (single quote, string literal end), or .' or + @, skip
+                if (following_stripped.startswith("'") or 
+                    following_stripped.startswith(".'") or 
+                    following_stripped.startswith("+ @")):
                     continue
             except Exception:
                 pass
