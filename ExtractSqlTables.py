@@ -149,6 +149,18 @@ def extract_matches(text: str) -> List[Dict[str, str]]:
                     continue
             except Exception:
                 pass
+            # Skip dynamic SQL: detect if table name is part of string concatenation
+            # Pattern: "DROP TABLE dbo.' + @variable" or similar
+            # Check if the matched table is followed by .' (incomplete identifier in dynamic SQL)
+            # or by + @ (concatenation)
+            try:
+                match_end = m.end('table') if 'table' in m.groupdict() else m.end()
+                following = text[match_end:match_end+20]
+                # If followed by .' (incomplete in dynamic SQL) or + @ (concatenation), skip
+                if following.lstrip().startswith(".'") or following.lstrip().startswith("+ @"):
+                    continue
+            except Exception:
+                pass
             # Resolve alias for UPDATE/others: if single identifier equals alias, map to base table
             t_stripped = _strip_delimiters(t)
             if '.' not in t_stripped and t_stripped.lower() in alias_map:
