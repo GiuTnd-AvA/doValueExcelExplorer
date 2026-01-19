@@ -46,10 +46,49 @@ def extract_dependencies(df, column_name='Dipendenze'):
     
     return dependencies
 
+def classify_object_type(obj_name):
+    """Classifica un oggetto come SP/Function o Tabella basandosi sul nome."""
+    obj_lower = obj_name.lower()
+    
+    # Pattern comuni per SP e Functions
+    sp_function_patterns = [
+        'sp_', 'usp_', 'asp_', 'proc_', 'p_',  # Stored Procedures
+        'fn_', 'udf_', 'tf_', 'if_', 'f_',     # Functions
+        '_sp_', '_fn_', '_udf_'                # Pattern nel mezzo
+    ]
+    
+    # Se contiene uno di questi pattern, è probabilmente SP/Function
+    for pattern in sp_function_patterns:
+        if pattern in obj_lower:
+            return 'SP/Function'
+    
+    # Se ha parentesi quadre e inizia con schema dbo./schema., è più probabile una Function/SP
+    if 'dbo.' in obj_lower or '[dbo].' in obj_lower:
+        # Verifica se ha pattern tipici di programmable objects
+        if any(p in obj_lower for p in ['get', 'set', 'calc', 'exec', 'run', 'process']):
+            return 'SP/Function'
+    
+    # Default: probabilmente una tabella
+    return 'Tabella'
+
 def find_new_objects(tables, dependencies):
-    """Trova oggetti in dipendenze che non sono nelle tabelle."""
+    """Trova oggetti in dipendenze che non sono nelle tabelle e li classifica."""
     new_objects = dependencies - tables
-    return sorted(new_objects)
+    
+    # Classifica ogni oggetto
+    classified = {
+        'tables': [],
+        'sp_functions': []
+    }
+    
+    for obj in sorted(new_objects):
+        obj_type = classify_object_type(obj)
+        if obj_type == 'Tabella':
+            classified['tables'].append(obj)
+        else:
+            classified['sp_functions'].append(obj)
+    
+    return classified
 
 # =========================
 # MAIN
@@ -75,42 +114,76 @@ def main():
         print(f"  - Dipendenze totali: {len(dependencies)}")
         
         # Trova nuovi oggetti
-        print("\nConfronting dipendenze con tabelle...")
-        new_objects = find_new_objects(tables, dependencies)
-        print(f"  - Nuovi oggetti da analizzare: {len(new_objects)}\n")
+        print("\nConfrontando dipendenze con tabelle...")
+        classified_objects = find_new_objects(tables, dependencies)
+        new_tables = classified_objects['tables']
+        new_sp_functions = classified_objects['sp_functions']
         
-        if new_objects:
-            # Crea DataFrame con risultati
-            result_df = pd.DataFrame({
-                'Nuovo_Oggetto': new_objects,
-                'Tipo_Stimato': ['Function/SP' for _ in new_objects],
-                'Note': ['Da verificare e analizzare' for _ in new_objects]
-            })
-            
+        print(f"  - Nuove TABELLE da analizzare: {len(new_tables)}")
+        print(f"  - Nuove SP/FUNCTIONS da analizzare: {len(new_sp_functions)}\n")
+        
+        if new_tables or new_sp_functions:
             # Esporta risultati
             input_path = Path(INPUT_FILE)
             output_path = input_path.parent / f"{input_path.stem}{OUTPUT_SUFFIX}.xlsx"
             
             with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                result_df.to_excel(writer, sheet_name='Nuove Dipendenze', index=False)
+                # Sheet 1: Nuove Tabelle
+                if new_tables:
+                    tables_df = pd.DataFrame({
+                        'Nuova_Tabella': new_tables,
+                        'Azione': ['Aggiungere all\'estrazione' for _ in new_tables],
+                        'Note': ['Tabella referenziata ma non analizzata' for _ in new_tables]
+                    })
+                    tables_df.to_excel(writer, sheet_name='Nuove Tabelle', index=False)
                 
-                # Aggiungi anche statistiche
+                # Sheet 2: Nuove SP/Functions
+                if new_sp_functions:
+                    sp_df = pd.DataFrame({
+                        'Nuovo_Oggetto': new_sp_functions,
+                        'Tipo_Stimato': ['SP/Function' for _ in new_sp_functions],
+                        'Azione': ['Analizzare dipendenze' for _ in new_sp_functions],
+                        'Note': ['Oggetto chiamato da altri ma non estratto' for _ in new_sp_functions]
+                    })
+                    sp_df.to_excel(writer, sheet_name='Nuove SP-Functions', index=False)
+                
+                # Sheet 3: Statistiche
                 stats_df = pd.DataFrame({
-                    'Metrica': ['Tabelle Analizzate', 'Dipendenze Totali', 'Nuovi Oggetti', 'Percentuale Nuovi'],
-                    'Valore': [len(tables), len(dependencies), len(new_objects), 
-                              f"{len(new_objects)/len(dependencies)*100:.1f}%" if dependencies else "0%"]
+                    'Metrica': [
+                        'Tabelle Analizzate', 
+                        'Dipendenze Totali', 
+                        'Nuove Tabelle',
+                        'Nuove SP/Functions',
+                        '% Nuove Tabelle',
+                        '% Nuove SP/Functions'
+                    ],
+                    'Valore': [
+                        len(tables), 
+                        len(dependencies), 
+                        len(new_tables),
+                        len(new_sp_functions),
+                        f"{len(new_tables)/len(dependencies)*100:.1f}%" if dependencies else "0%",
+                        f"{len(new_sp_functions)/len(dependencies)*100:.1f}%" if dependencies else "0%"
+                    ]
                 })
                 stats_df.to_excel(writer, sheet_name='Statistiche', index=False)
             
             print(f"Risultati esportati in: {output_path}\n")
             
-            # Mostra primi 10 nuovi oggetti
-            print("Primi 10 nuovi oggetti trovati:")
-            for i, obj in enumerate(new_objects[:10], 1):
-                print(f"  {i}. {obj}")
+            # Mostra risultati
+            if new_tables:
+                print(f"Prime 10 NUOVE TABELLE:")
+                for i, obj in enumerate(new_tables[:10], 1):
+                    print(f"  {i}. {obj}")
+                if len(new_tables) > 10:
+                    print(f"  ... e altre {len(new_tables) - 10} tabelle\n")
             
-            if len(new_objects) > 10:
-                print(f"  ... e altri {len(new_objects) - 10} oggetti")
+            if new_sp_functions:
+                print(f"Prime 10 NUOVE SP/FUNCTIONS:")
+                for i, obj in enumerate(new_sp_functions[:10], 1):
+                    print(f"  {i}. {obj}")
+                if len(new_sp_functions) > 10:
+                    print(f"  ... e altri {len(new_sp_functions) - 10} oggetti\n")
         else:
             print("Nessun nuovo oggetto trovato! Tutte le dipendenze sono già nella lista delle tabelle analizzate.")
     
