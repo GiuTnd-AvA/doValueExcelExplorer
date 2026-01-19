@@ -53,17 +53,18 @@ def classify_object_type(obj_name):
     # Default: probabilmente una tabella
     return 'Tabella'
 
-def extract_dependencies_with_context(df, table_col='Table', object_col='ObjectName', critical_col='Critico_Migrazione', dep_col='Dipendenze'):
+def extract_dependencies_with_context(df, table_col='Table', object_col='ObjectName', type_col='ObjectType', critical_col='Critico_Migrazione', dep_col='Dipendenze'):
     """Estrae dipendenze mantenendo il contesto dell'oggetto chiamante."""
     if dep_col not in df.columns:
         print(f"ATTENZIONE: Colonna '{dep_col}' non trovata!")
         return {}
     
-    # Mappa: dipendenza → lista di (object_name, is_critical)
+    # Mappa: dipendenza → lista di (object_name, object_type, is_critical)
     dependency_map = {}
     
     for idx, row in df.iterrows():
         object_name = row.get(object_col, 'Unknown')
+        object_type = row.get(type_col, 'Unknown')
         is_critical = row.get(critical_col, 'NO')
         dependencies_value = row.get(dep_col)
         
@@ -79,6 +80,7 @@ def extract_dependencies_with_context(df, table_col='Table', object_col='ObjectN
                     dependency_map[dep_clean] = []
                 dependency_map[dep_clean].append({
                     'object_name': object_name,
+                    'object_type': object_type,
                     'is_critical': is_critical
                 })
     
@@ -102,10 +104,16 @@ def find_new_objects_with_context(tables, dependency_map):
         # Conta chiamanti critici
         critical_callers = [c for c in callers if c['is_critical'] == 'SÌ']
         
+        # Estrai tipi di oggetti chiamanti
+        caller_types = set([c['object_type'] for c in callers])
+        critical_caller_types = set([c['object_type'] for c in critical_callers]) if critical_callers else set()
+        
         obj_info = {
             'name': dep_name,
             'total_callers': len(callers),
             'critical_callers': len(critical_callers),
+            'caller_types': '; '.join(sorted(caller_types)),
+            'critical_caller_types': '; '.join(sorted(critical_caller_types)) if critical_caller_types else 'Nessuno',
             'called_by': '; '.join([c['object_name'] for c in callers[:5]]),  # Primi 5
             'called_by_critical': '; '.join([c['object_name'] for c in critical_callers[:5]]) if critical_callers else 'Nessuno',
             'is_critical_dependency': 'SÌ' if critical_callers else 'NO'
@@ -138,7 +146,7 @@ def main():
         print(f"  - Tabelle trovate: {len(tables)}")
         
         print("\nEstrazione dipendenze con contesto...")
-        dependency_map = extract_dependencies_with_context(df, 'Table', 'ObjectName', 'Critico_Migrazione', 'Dipendenze')
+        dependency_map = extract_dependencies_with_context(df, 'Table', 'ObjectName', 'ObjectType', 'Critico_Migrazione', 'Dipendenze')
         print(f"  - Dipendenze totali: {len(dependency_map)}")
         
         # Trova nuovi oggetti
@@ -167,6 +175,8 @@ def main():
                         'Dipendenza_Critica': t['is_critical_dependency'],
                         'N_Chiamanti_Totali': t['total_callers'],
                         'N_Chiamanti_Critici': t['critical_callers'],
+                        'Tipi_Chiamanti': t['caller_types'],
+                        'Tipi_Chiamanti_Critici': t['critical_caller_types'],
                         'Chiamata_Da': t['called_by'],
                         'Chiamata_Da_Critici': t['called_by_critical'],
                         'Azione': 'Aggiungere all\'estrazione'
@@ -182,6 +192,8 @@ def main():
                         'Dipendenza_Critica': s['is_critical_dependency'],
                         'N_Chiamanti_Totali': s['total_callers'],
                         'N_Chiamanti_Critici': s['critical_callers'],
+                        'Tipi_Chiamanti': s['caller_types'],
+                        'Tipi_Chiamanti_Critici': s['critical_caller_types'],
                         'Chiamata_Da': s['called_by'],
                         'Chiamata_Da_Critici': s['called_by_critical'],
                         'Azione': 'Analizzare per migrazione'
@@ -198,6 +210,7 @@ def main():
                             'Tipo': 'Tabella',
                             'Nome': t['name'],
                             'N_Chiamanti_Critici': t['critical_callers'],
+                            'Tipi_Chiamanti_Critici': t['critical_caller_types'],
                             'Chiamata_Da_Critici': t['called_by_critical']
                         })
                 for s in new_sp_functions:
@@ -206,6 +219,7 @@ def main():
                             'Tipo': 'SP/Function',
                             'Nome': s['name'],
                             'N_Chiamanti_Critici': s['critical_callers'],
+                            'Tipi_Chiamanti_Critici': s['critical_caller_types'],
                             'Chiamata_Da_Critici': s['called_by_critical']
                         })
                 
