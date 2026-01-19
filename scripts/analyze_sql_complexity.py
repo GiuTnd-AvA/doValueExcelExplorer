@@ -231,47 +231,12 @@ def generate_description(sql_def, patterns, dml_count, join_count, dependencies,
     
     return "; ".join(parts).capitalize()
 
-def extract_operations_from_sql_clause(sql_clause):
-    """Estrae le operazioni da SQL_CLAUSE ignorando i nomi delle tabelle."""
-    if not sql_clause:
-        return set()
-    
-    operations = set()
-    # Pattern per estrarre operazioni: INSERT INTO, UPDATE, DELETE FROM, etc.
-    patterns = [
-        r'\bINSERT\s+INTO\b',
-        r'\bUPDATE\b',
-        r'\bDELETE\s+FROM\b',
-        r'\bMERGE\s+INTO\b',
-        r'\bCREATE\s+TABLE\b',
-        r'\bALTER\s+TABLE\b',
-        r'\bFROM\b',
-        r'\bJOIN\b'
-    ]
-    
-    sql_upper = sql_clause.upper()
-    for pattern in patterns:
-        if re.search(pattern, sql_upper):
-            # Estrai l'operazione senza il nome della tabella
-            match = re.search(pattern, sql_upper)
-            if match:
-                operations.add(match.group().strip())
-    
-    return operations
-
-def is_critical_for_migration(clause_type, sql_clause):
-    """Determina se l'oggetto è critico per la migrazione basandosi su CLAUSE_TYPE o SQL_CLAUSE."""
-    # Prova prima CLAUSE_TYPE
-    if clause_type and clause_type.strip():
-        clause_type_upper = clause_type.upper()
-    else:
-        # Se CLAUSE_TYPE è vuoto, estrae da SQL_CLAUSE
-        operations = extract_operations_from_sql_clause(sql_clause)
-        clause_type_upper = '; '.join(operations)
-    
-    if not clause_type_upper:
+def is_critical_for_migration(clause_type):
+    """Determina se l'oggetto è critico per la migrazione basandosi su CLAUSE_TYPE."""
+    if not clause_type:
         return 'NO'
     
+    clause_type_upper = clause_type.upper()
     critical_operations = ['INSERT INTO', 'UPDATE', 'DELETE FROM', 'MERGE INTO', 'CREATE TABLE', 'ALTER TABLE']
     
     for op in critical_operations:
@@ -284,7 +249,6 @@ def analyze_sql_object(row):
     """Analizza un singolo oggetto SQL."""
     sql_def = row.get('SQLDefinition', '')
     clause_type = row.get('CLAUSE_TYPE', '')
-    sql_clause = row.get('SQL_CLAUSE', '')
     
     # Analisi pattern
     patterns = analyze_patterns(sql_def)
@@ -296,7 +260,7 @@ def analyze_sql_object(row):
     complexity_score = calculate_complexity_score(sql_def, patterns, dml_count, join_count, dependencies)
     criticality = classify_criticality(complexity_score, dml_count, patterns)
     description = generate_description(sql_def, patterns, dml_count, join_count, dependencies, clause_type)
-    critical_migration = is_critical_for_migration(clause_type, sql_clause)
+    critical_migration = is_critical_for_migration(clause_type)
     
     return {
         'Critico_Migrazione': critical_migration,
