@@ -8,5 +8,5 @@ EXCEL_ROOT_PATH = rf'{user_folder}\Desktop\doValue'
 EXPORT_MCODE_PATH = rf'{user_folder}\Desktop\Export M Code'
 
 # extract_db_from_excel.py paths
-EXCEL_INPUT_PATH = rf'{user_folder}\Desktop\Report_Connessioni.xlsx'
-EXCEL_OUTPUT_PATH = rf'{user_folder}\Desktop\Report_Estratto_DB.xlsx'
+EXCEL_INPUT_PATH = rf'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Connessioni verificate.xlsx'
+EXCEL_OUTPUT_PATH = rf'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\Estrazioni parziali\estrazione_dipendenze_sql.xlsx'
