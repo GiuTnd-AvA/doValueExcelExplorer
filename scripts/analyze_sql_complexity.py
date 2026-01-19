@@ -174,7 +174,7 @@ def generate_description(sql_def, patterns, dml_count, join_count, dependencies,
     parts = []
     
     # Tipo di operazione principale
-    if clause_type:
+    if clause_type and isinstance(clause_type, str):
         clause_types = set(clause_type.split('; '))
         if any(op in clause_types for op in ['INSERT INTO', 'UPDATE', 'DELETE FROM', 'MERGE INTO']):
             parts.append("Modifica dati")
@@ -233,7 +233,7 @@ def generate_description(sql_def, patterns, dml_count, join_count, dependencies,
 
 def is_critical_for_migration(clause_type):
     """Determina se l'oggetto è critico per la migrazione basandosi su CLAUSE_TYPE."""
-    if not clause_type:
+    if not clause_type or not isinstance(clause_type, str):
         return 'NO'
     
     clause_type_upper = clause_type.upper()
