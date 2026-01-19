@@ -285,13 +285,13 @@ def main():
     # Trova tutti i file di estrazione
     base_path = Path(INPUT_PATH)
     parent_dir = base_path.parent
-    base_name = base_path.stem
+    base_name_full = base_path.name  # Include .xlsx
     
-    # Pattern: {base_name}_parziale_*.xlsx
-    files = list(parent_dir.glob(f"{base_name}_parziale_*.xlsx"))
+    # Pattern: {base_name}.xlsx_parziale_*.xlsx (es. estrazione_dipendenze_sql.xlsx_parziale_oggetti_1_50.xlsx)
+    files = list(parent_dir.glob(f"{base_name_full}_parziale_*.xlsx"))
     
     if not files:
-        print(f"ERRORE: Nessun file trovato con pattern '{base_name}_parziale_*.xlsx' in {parent_dir}")
+        print(f"ERRORE: Nessun file trovato con pattern '{base_name_full}_parziale_*.xlsx' in {parent_dir}")
         return
     
     print(f"Trovati {len(files)} file da analizzare:\n")
