@@ -28,24 +28,6 @@ def extract_unique_tables(df, column_name='Table'):
     
     return tables
 
-def extract_dependencies(df, column_name='Dipendenze'):
-    """Estrae tutte le dipendenze dalla colonna, gestendo valori separati da punto e virgola."""
-    if column_name not in df.columns:
-        print(f"ATTENZIONE: Colonna '{column_name}' non trovata!")
-        return set()
-    
-    dependencies = set()
-    for value in df[column_name].dropna():
-        if isinstance(value, str):
-            # Split per ';' se ci sono più dipendenze nella stessa cella
-            deps = value.split(';')
-            for dep in deps:
-                dep_clean = dep.strip().lower()
-                if dep_clean and dep_clean != 'nessuna':
-                    dependencies.add(dep_clean)
-    
-    return dependencies
-
 def classify_object_type(obj_name):
     """Classifica un oggetto come SP/Function o Tabella basandosi sul nome."""
     obj_lower = obj_name.lower()
@@ -71,24 +53,70 @@ def classify_object_type(obj_name):
     # Default: probabilmente una tabella
     return 'Tabella'
 
-def find_new_objects(tables, dependencies):
-    """Trova oggetti in dipendenze che non sono nelle tabelle e li classifica."""
-    new_objects = dependencies - tables
+def extract_dependencies_with_context(df, table_col='Table', object_col='ObjectName', critical_col='Critico_Migrazione', dep_col='Dipendenze'):
+    """Estrae dipendenze mantenendo il contesto dell'oggetto chiamante."""
+    if dep_col not in df.columns:
+        print(f"ATTENZIONE: Colonna '{dep_col}' non trovata!")
+        return {}
     
-    # Classifica ogni oggetto
-    classified = {
+    # Mappa: dipendenza → lista di (object_name, is_critical)
+    dependency_map = {}
+    
+    for idx, row in df.iterrows():
+        object_name = row.get(object_col, 'Unknown')
+        is_critical = row.get(critical_col, 'NO')
+        dependencies_value = row.get(dep_col)
+        
+        if pd.isna(dependencies_value) or not isinstance(dependencies_value, str):
+            continue
+        
+        # Split per ';' se ci sono più dipendenze
+        deps = dependencies_value.split(';')
+        for dep in deps:
+            dep_clean = dep.strip().lower()
+            if dep_clean and dep_clean != 'nessuna':
+                if dep_clean not in dependency_map:
+                    dependency_map[dep_clean] = []
+                dependency_map[dep_clean].append({
+                    'object_name': object_name,
+                    'is_critical': is_critical
+                })
+    
+    return dependency_map
+
+def find_new_objects_with_context(tables, dependency_map):
+    """Trova oggetti in dipendenze che non sono nelle tabelle, mantenendo il contesto."""
+    results = {
         'tables': [],
         'sp_functions': []
     }
     
-    for obj in sorted(new_objects):
-        obj_type = classify_object_type(obj)
+    for dep_name, callers in dependency_map.items():
+        # Controlla se questa dipendenza è già nelle tabelle analizzate
+        if dep_name in tables:
+            continue
+        
+        # Classifica il tipo
+        obj_type = classify_object_type(dep_name)
+        
+        # Conta chiamanti critici
+        critical_callers = [c for c in callers if c['is_critical'] == 'SÌ']
+        
+        obj_info = {
+            'name': dep_name,
+            'total_callers': len(callers),
+            'critical_callers': len(critical_callers),
+            'called_by': '; '.join([c['object_name'] for c in callers[:5]]),  # Primi 5
+            'called_by_critical': '; '.join([c['object_name'] for c in critical_callers[:5]]) if critical_callers else 'Nessuno',
+            'is_critical_dependency': 'SÌ' if critical_callers else 'NO'
+        }
+        
         if obj_type == 'Tabella':
-            classified['tables'].append(obj)
+            results['tables'].append(obj_info)
         else:
-            classified['sp_functions'].append(obj)
+            results['sp_functions'].append(obj_info)
     
-    return classified
+    return results
 
 # =========================
 # MAIN
@@ -109,18 +137,22 @@ def main():
         tables = extract_unique_tables(df, 'Table')
         print(f"  - Tabelle trovate: {len(tables)}")
         
-        print("\nEstrazione dipendenze...")
-        dependencies = extract_dependencies(df, 'Dipendenze')
-        print(f"  - Dipendenze totali: {len(dependencies)}")
+        print("\nEstrazione dipendenze con contesto...")
+        dependency_map = extract_dependencies_with_context(df, 'Table', 'ObjectName', 'Critico_Migrazione', 'Dipendenze')
+        print(f"  - Dipendenze totali: {len(dependency_map)}")
         
         # Trova nuovi oggetti
         print("\nConfrontando dipendenze con tabelle...")
-        classified_objects = find_new_objects(tables, dependencies)
+        classified_objects = find_new_objects_with_context(tables, dependency_map)
         new_tables = classified_objects['tables']
         new_sp_functions = classified_objects['sp_functions']
         
-        print(f"  - Nuove TABELLE da analizzare: {len(new_tables)}")
-        print(f"  - Nuove SP/FUNCTIONS da analizzare: {len(new_sp_functions)}\n")
+        # Conta dipendenze critiche
+        critical_tables = [t for t in new_tables if t['is_critical_dependency'] == 'SÌ']
+        critical_sp = [s for s in new_sp_functions if s['is_critical_dependency'] == 'SÌ']
+        
+        print(f"  - Nuove TABELLE da analizzare: {len(new_tables)} (di cui {len(critical_tables)} critiche)")
+        print(f"  - Nuove SP/FUNCTIONS da analizzare: {len(new_sp_functions)} (di cui {len(critical_sp)} critiche)\n")
         
         if new_tables or new_sp_functions:
             # Esporta risultati
@@ -130,40 +162,77 @@ def main():
             with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
                 # Sheet 1: Nuove Tabelle
                 if new_tables:
-                    tables_df = pd.DataFrame({
-                        'Nuova_Tabella': new_tables,
-                        'Azione': ['Aggiungere all\'estrazione' for _ in new_tables],
-                        'Note': ['Tabella referenziata ma non analizzata' for _ in new_tables]
-                    })
+                    tables_df = pd.DataFrame([{
+                        'Nuova_Tabella': t['name'],
+                        'Dipendenza_Critica': t['is_critical_dependency'],
+                        'N_Chiamanti_Totali': t['total_callers'],
+                        'N_Chiamanti_Critici': t['critical_callers'],
+                        'Chiamata_Da': t['called_by'],
+                        'Chiamata_Da_Critici': t['called_by_critical'],
+                        'Azione': 'Aggiungere all\'estrazione'
+                    } for t in new_tables])
+                    # Ordina per criticità e numero chiamanti critici
+                    tables_df = tables_df.sort_values(['Dipendenza_Critica', 'N_Chiamanti_Critici'], ascending=[False, False])
                     tables_df.to_excel(writer, sheet_name='Nuove Tabelle', index=False)
                 
                 # Sheet 2: Nuove SP/Functions
                 if new_sp_functions:
-                    sp_df = pd.DataFrame({
-                        'Nuovo_Oggetto': new_sp_functions,
-                        'Tipo_Stimato': ['SP/Function' for _ in new_sp_functions],
-                        'Azione': ['Analizzare dipendenze' for _ in new_sp_functions],
-                        'Note': ['Oggetto chiamato da altri ma non estratto' for _ in new_sp_functions]
-                    })
+                    sp_df = pd.DataFrame([{
+                        'Nuovo_Oggetto': s['name'],
+                        'Dipendenza_Critica': s['is_critical_dependency'],
+                        'N_Chiamanti_Totali': s['total_callers'],
+                        'N_Chiamanti_Critici': s['critical_callers'],
+                        'Chiamata_Da': s['called_by'],
+                        'Chiamata_Da_Critici': s['called_by_critical'],
+                        'Azione': 'Analizzare per migrazione'
+                    } for s in new_sp_functions])
+                    # Ordina per criticità e numero chiamanti critici
+                    sp_df = sp_df.sort_values(['Dipendenza_Critica', 'N_Chiamanti_Critici'], ascending=[False, False])
                     sp_df.to_excel(writer, sheet_name='Nuove SP-Functions', index=False)
                 
-                # Sheet 3: Statistiche
+                # Sheet 3: Solo Dipendenze Critiche (filtro)
+                critical_deps = []
+                for t in new_tables:
+                    if t['is_critical_dependency'] == 'SÌ':
+                        critical_deps.append({
+                            'Tipo': 'Tabella',
+                            'Nome': t['name'],
+                            'N_Chiamanti_Critici': t['critical_callers'],
+                            'Chiamata_Da_Critici': t['called_by_critical']
+                        })
+                for s in new_sp_functions:
+                    if s['is_critical_dependency'] == 'SÌ':
+                        critical_deps.append({
+                            'Tipo': 'SP/Function',
+                            'Nome': s['name'],
+                            'N_Chiamanti_Critici': s['critical_callers'],
+                            'Chiamata_Da_Critici': s['called_by_critical']
+                        })
+                
+                if critical_deps:
+                    critical_df = pd.DataFrame(critical_deps)
+                    critical_df = critical_df.sort_values('N_Chiamanti_Critici', ascending=False)
+                    critical_df.to_excel(writer, sheet_name='Solo Critiche', index=False)
+                
+                # Sheet 4: Statistiche
                 stats_df = pd.DataFrame({
                     'Metrica': [
                         'Tabelle Analizzate', 
                         'Dipendenze Totali', 
                         'Nuove Tabelle',
+                        'Nuove Tabelle Critiche',
                         'Nuove SP/Functions',
-                        '% Nuove Tabelle',
-                        '% Nuove SP/Functions'
+                        'Nuove SP/Functions Critiche',
+                        '% Critiche su Totali'
                     ],
                     'Valore': [
                         len(tables), 
-                        len(dependencies), 
+                        len(dependency_map), 
                         len(new_tables),
+                        len(critical_tables),
                         len(new_sp_functions),
-                        f"{len(new_tables)/len(dependencies)*100:.1f}%" if dependencies else "0%",
-                        f"{len(new_sp_functions)/len(dependencies)*100:.1f}%" if dependencies else "0%"
+                        len(critical_sp),
+                        f"{(len(critical_tables)+len(critical_sp))/(len(new_tables)+len(new_sp_functions))*100:.1f}%" if (new_tables or new_sp_functions) else "0%"
                     ]
                 })
                 stats_df.to_excel(writer, sheet_name='Statistiche', index=False)
@@ -172,18 +241,22 @@ def main():
             
             # Mostra risultati
             if new_tables:
-                print(f"Prime 10 NUOVE TABELLE:")
-                for i, obj in enumerate(new_tables[:10], 1):
-                    print(f"  {i}. {obj}")
-                if len(new_tables) > 10:
-                    print(f"  ... e altre {len(new_tables) - 10} tabelle\n")
+                print(f"Prime 5 NUOVE TABELLE CRITICHE:")
+                critical_first = sorted(new_tables, key=lambda x: (x['is_critical_dependency'] != 'SÌ', -x['critical_callers']))
+                for i, obj in enumerate(critical_first[:5], 1):
+                    crit_flag = "⚠️ CRITICA" if obj['is_critical_dependency'] == 'SÌ' else ""
+                    print(f"  {i}. {obj['name']} {crit_flag}")
+                    print(f"     Chiamata da {obj['critical_callers']} oggetti critici")
+                print()
             
             if new_sp_functions:
-                print(f"Prime 10 NUOVE SP/FUNCTIONS:")
-                for i, obj in enumerate(new_sp_functions[:10], 1):
-                    print(f"  {i}. {obj}")
-                if len(new_sp_functions) > 10:
-                    print(f"  ... e altri {len(new_sp_functions) - 10} oggetti\n")
+                print(f"Prime 5 NUOVE SP/FUNCTIONS CRITICHE:")
+                critical_first = sorted(new_sp_functions, key=lambda x: (x['is_critical_dependency'] != 'SÌ', -x['critical_callers']))
+                for i, obj in enumerate(critical_first[:5], 1):
+                    crit_flag = "⚠️ CRITICA" if obj['is_critical_dependency'] == 'SÌ' else ""
+                    print(f"  {i}. {obj['name']} {crit_flag}")
+                    print(f"     Chiamata da {obj['critical_callers']} oggetti critici")
+                print()
         else:
             print("Nessun nuovo oggetto trovato! Tutte le dipendenze sono già nella lista delle tabelle analizzate.")
     
