@@ -180,6 +180,11 @@ def create_statistics(df_critical, df_tables, df_new_tables, df_new_sp):
     # Conta per criticità tecnica
     tech_counts = df_critical['Criticità_Tecnica'].value_counts()
     
+    # Conta tipi nelle nuove SP/Functions se esiste la colonna ObjectType
+    new_sp_type_counts = {}
+    if 'ObjectType' in df_new_sp.columns and not df_new_sp.empty:
+        new_sp_type_counts = df_new_sp['ObjectType'].value_counts()
+    
     stats = [
         {'Metrica': 'OGGETTI CRITICI', 'Valore': ''},
         {'Metrica': 'Totale Oggetti Critici', 'Valore': len(df_critical)},
@@ -202,6 +207,10 @@ def create_statistics(df_critical, df_tables, df_new_tables, df_new_sp):
         {'Metrica': 'Tabelle Totali Referenziate', 'Valore': len(df_tables)},
         {'Metrica': 'Nuove Tabelle da Analizzare', 'Valore': len(df_new_tables)},
         {'Metrica': 'Nuove SP/Functions da Analizzare', 'Valore': len(df_new_sp)},
+        {'Metrica': '  - Stored Procedures', 'Valore': new_sp_type_counts.get('SQL_STORED_PROCEDURE', 0)},
+        {'Metrica': '  - Scalar Functions', 'Valore': new_sp_type_counts.get('SQL_SCALAR_FUNCTION', 0)},
+        {'Metrica': '  - Table-Valued Functions', 'Valore': new_sp_type_counts.get('SQL_TABLE_VALUED_FUNCTION', 0)},
+        {'Metrica': '  - Triggers', 'Valore': new_sp_type_counts.get('SQL_TRIGGER', 0)},
         {'Metrica': 'Dipendenze Medie per Oggetto', 'Valore': f"{df_critical['N_Dipendenze_Totali'].mean():.1f}"},
     ]
     
@@ -240,7 +249,7 @@ def main():
     
     # 6. Crea statistiche
     print("6. Creazione statistiche...")
-    stats_sheet = create_statistics(df_critical, tables_sheet, new_tables_sheet, new_sp_sheet)
+    stats_sheet = create_statistics(main_sheet, tables_sheet, new_tables_sheet, new_sp_sheet)
     
     # 7. Esporta tutto
     print(f"\n7. Esportazione report finale: {OUTPUT_FILE}")
