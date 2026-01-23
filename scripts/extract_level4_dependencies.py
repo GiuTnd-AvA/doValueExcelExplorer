@@ -769,18 +769,18 @@ def main():
             {'Metrica': 'Nuove Dipendenze L4', 'Valore': len(new_deps_l4)},
             {'Metrica': 'Oggetti da Tabelle L3', 'Valore': len(table_objects_found)},
             {'Metrica': 'Totale Oggetti L4', 'Valore': len(new_deps_l4_total)},
-            {'Metrica': 'Oggetti Estratti', 'Valore': trovati},
-            {'Metrica': 'Oggetti Non Trovati', 'Valore': non_trovati},
+            {'Metrica': 'Oggetti Estratti', 'Valore': len(oggetti_l4)},
+            {'Metrica': 'Oggetti Non Trovati', 'Valore': len(new_deps_l4_total) - len(oggetti_l4) if new_deps_l4_total else 0},
             {'Metrica': '', 'Valore': ''},
             {'Metrica': 'COPERTURA TOTALE', 'Valore': ''},
-            {'Metrica': 'Oggetti Totali (L1+L2+L3+L4)', 'Valore': len(already_extracted) + trovati},
+            {'Metrica': 'Oggetti Totali (L1+L2+L3+L4)', 'Valore': len(already_extracted) + len(oggetti_l4)},
         ]
         pd.DataFrame(stats).to_excel(writer, sheet_name='Statistiche', index=False)
     
     print("\n" + "="*70)
     print("✅ COMPLETATO!")
     print("="*70)
-    print(f"Oggetti L4 estratti: {trovati}")
+    print(f"Oggetti L4 estratti: {len(oggetti_l4)}")
     print(f"Tabelle referenziate L3: {len(critical_tables)}")
 
 if __name__ == "__main__":
