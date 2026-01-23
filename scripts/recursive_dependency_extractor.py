@@ -69,38 +69,75 @@ def extract_sql_definition_multi_db(databases, object_name, preferred_db=None):
         if db != preferred_db:
             search_order.append(db)
     
+    # Prepara varianti del nome da cercare
+    name_variants = []
+    
+    if '.' in object_name:
+        # Ha schema: prova sia con che senza
+        parts = object_name.split('.')
+        schema = parts[0]
+        obj_name = parts[1] if len(parts) > 1 else parts[0]
+        name_variants = [
+            (schema, obj_name),  # schema + nome
+            (None, obj_name)     # solo nome
+        ]
+    else:
+        # Nessuno schema: prova sia dbo che senza
+        name_variants = [
+            ('dbo', object_name),   # dbo.oggetto
+            (None, object_name)      # solo oggetto
+        ]
+    
     # Cerca in ordine
     for db in search_order:
         conn = None
         try:
             conn = get_sql_connection(db)
-            
-            # Query case-insensitive con LOWER()
-            query = """
-            SELECT 
-                o.name AS ObjectName,
-                o.type_desc AS ObjectType,
-                m.definition AS SQLDefinition,
-                SCHEMA_NAME(o.schema_id) AS SchemaName,
-                DB_NAME() AS Database
-            FROM sys.sql_modules m
-            INNER JOIN sys.objects o ON m.object_id = o.object_id
-            WHERE LOWER(o.name) = LOWER(?)
-            """
-            
             cursor = conn.cursor()
-            cursor.execute(query, object_name)
             
-            # Fetch risultati
-            columns = [column[0] for column in cursor.description]
-            rows = cursor.fetchall()
+            # Prova tutte le varianti
+            for schema, obj_name in name_variants:
+                if schema:
+                    query = """
+                    SELECT 
+                        o.name AS ObjectName,
+                        o.type_desc AS ObjectType,
+                        m.definition AS SQLDefinition,
+                        SCHEMA_NAME(o.schema_id) AS SchemaName,
+                        DB_NAME() AS Database
+                    FROM sys.sql_modules m
+                    INNER JOIN sys.objects o ON m.object_id = o.object_id
+                    WHERE LOWER(SCHEMA_NAME(o.schema_id)) = LOWER(?)
+                    AND LOWER(o.name) = LOWER(?)
+                    """
+                    cursor.execute(query, (schema, obj_name))
+                else:
+                    query = """
+                    SELECT 
+                        o.name AS ObjectName,
+                        o.type_desc AS ObjectType,
+                        m.definition AS SQLDefinition,
+                        SCHEMA_NAME(o.schema_id) AS SchemaName,
+                        DB_NAME() AS Database
+                    FROM sys.sql_modules m
+                    INNER JOIN sys.objects o ON m.object_id = o.object_id
+                    WHERE LOWER(o.name) = LOWER(?)
+                    """
+                    cursor.execute(query, obj_name)
+                
+                # Fetch risultati
+                columns = [column[0] for column in cursor.description]
+                rows = cursor.fetchall()
+                
+                if rows:
+                    cursor.close()
+                    conn.close()
+                    # Converti prima riga in dict
+                    result = dict(zip(columns, rows[0]))
+                    return result
+            
             cursor.close()
             conn.close()
-            
-            if rows:
-                # Converti prima riga in dict
-                result = dict(zip(columns, rows[0]))
-                return result
                 
         except Exception as e:
             if conn:
@@ -108,7 +145,6 @@ def extract_sql_definition_multi_db(databases, object_name, preferred_db=None):
                     conn.close()
                 except:
                     pass
-            # Non stampare errore, prova prossimo DB silenziosamente
             continue
     
     return None  # Non trovato in nessun DB
@@ -225,12 +261,11 @@ def load_new_objects_to_analyze():
         for idx, row in df_critical.iterrows():
             obj_name = str(row['Nuovo_Oggetto'])
             
-            # Pulisci nome: rimuovi database, schema, parentesi quadre
-            # Esempi: [DB].[dbo].[sp_test] → sp_test
-            #         dbo.sp_test → sp_test
+            # Pulisci solo parentesi quadre e spazi, ma mantieni schema
+            # Esempi: [dbo].[sp_test] → dbo.sp_test
+            #         dbo.sp_test → dbo.sp_test
             #         sp_test → sp_test
-            parts = obj_name.replace('[', '').replace(']', '').split('.')
-            clean_name = parts[-1].strip()  # Prendi solo ultima parte
+            clean_name = obj_name.replace('[', '').replace(']', '').strip()
             
             # Debug: mostra primi 5 per verifica
             if len(objects) < 5:
