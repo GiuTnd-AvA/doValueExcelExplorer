@@ -105,31 +105,49 @@ def count_joins(sql_def):
         return 0
     return len(re.findall(r'\b(inner\s+join|left\s+join|right\s+join|full\s+join|cross\s+join|join)\b', sql_def.lower()))
 
-def extract_dependencies(sql_def):
-    """Estrae chiamate ad altre SP e funzioni."""
+def extract_tables_from_sql(sql_def):
+    """Estrae tabelle referenziate da FROM/JOIN."""
     if not sql_def:
         return set()
     
-    dependencies = set()
+    tables = set()
+    
+    # Pattern per FROM/JOIN
+    table_pattern = r'(?:FROM|JOIN)\s+(?:\[?[\w]+\]?\.)?\[?([\w]+)\]?'
+    for match in re.finditer(table_pattern, sql_def, re.IGNORECASE):
+        table_name = match.group(1).lower()
+        # Escludi keyword SQL e tabelle temporanee
+        if table_name not in ['select', 'deleted', 'inserted', 'dual', 'information_schema']:
+            if not table_name.startswith('#'):
+                tables.add(table_name)
+    
+    return tables
+
+def extract_objects_from_sql(sql_def):
+    """Estrae SP/Functions/Trigger chiamati."""
+    if not sql_def:
+        return set()
+    
+    objects = set()
     
     # EXEC sp_name o EXECUTE sp_name
     exec_pattern = r'\bexec(?:ute)?\s+(\[?\w+\]?\.\[?\w+\]?\.?\[?\w+\]?)'
     for match in re.finditer(exec_pattern, sql_def.lower()):
         dep = match.group(1).strip()
-        if dep not in ['sp_executesql', 'xp_cmdshell']:  # Escludi system SP comuni
-            dependencies.add(dep)
+        if dep not in ['sp_executesql', 'xp_cmdshell', 'sp_who', 'sp_help']:
+            objects.add(dep)
     
     # Funzioni: dbo.fn_name( o [dbo].[fn_name](
     func_pattern = r'(\[?\w+\]?\.\[?[a-z_]\w+\]?)\s*\('
     for match in re.finditer(func_pattern, sql_def.lower()):
         dep = match.group(1).strip()
         # Escludi funzioni di sistema comuni
-        if not dep.startswith(('cast', 'convert', 'isnull', 'coalesce', 'len', 'substring', 'getdate')):
-            dependencies.add(dep)
+        if not dep.startswith(('cast', 'convert', 'isnull', 'coalesce', 'len', 'substring', 'getdate', 'count', 'sum', 'max', 'min', 'avg')):
+            objects.add(dep)
     
-    return dependencies
+    return objects
 
-def calculate_complexity_score(sql_def, patterns, dml_count, join_count, dependencies):
+def calculate_complexity_score(sql_def, patterns, dml_count, join_count, total_dependencies):
     """Calcola uno score di complessità 0-100."""
     if not sql_def:
         return 0
@@ -153,7 +171,7 @@ def calculate_complexity_score(sql_def, patterns, dml_count, join_count, depende
     score += min(10, join_count * 2)
     
     # Dipendenze (max 10 punti)
-    score += min(10, len(dependencies) * 2)
+    score += min(10, total_dependencies * 2)
     
     return min(100, score)
 
@@ -166,7 +184,7 @@ def classify_criticality(score, dml_count, patterns):
     else:
         return 'BASSA'
 
-def generate_description(sql_def, patterns, dml_count, join_count, dependencies, clause_type):
+def generate_description(sql_def, patterns, dml_count, join_count, total_tables, total_objects, clause_type):
     """Genera una descrizione testuale del comportamento."""
     if not sql_def:
         return "Definizione SQL non disponibile"
@@ -214,10 +232,12 @@ def generate_description(sql_def, patterns, dml_count, join_count, dependencies,
         parts.append("funzioni window")
     
     # Dipendenze
-    if len(dependencies) > 3:
-        parts.append(f"chiama {len(dependencies)} oggetti")
-    elif len(dependencies) > 0:
-        parts.append(f"chiama {len(dependencies)} oggetti")
+    if total_tables > 3 or total_objects > 3:
+        parts.append(f"usa {total_tables} tabelle e {total_objects} oggetti SQL")
+    elif total_tables > 0:
+        parts.append(f"usa {total_tables} tabelle")
+    elif total_objects > 0:
+        parts.append(f"chiama {total_objects} oggetti SQL")
     
     # Complessità generale
     lines = count_lines(sql_def)
@@ -254,10 +274,34 @@ def analyze_sql_object(row):
     patterns = analyze_patterns(sql_def)
     dml_count = count_dml_operations(sql_def, clause_type)
     join_count = count_joins(sql_def)
-    dependencies = extract_dependencies(sql_def)
+    
+    # Estrai dipendenze separate
+    tables = extract_tables_from_sql(sql_def)
+    objects = extract_objects_from_sql(sql_def)
+    
+    total_dependencies = len(tables) + len(objects)
     
     # Calcoli
-    complexity_score = calculate_complexity_score(sql_def, patterns, dml_count, join_count, dependencies)
+    complexity_score = calculate_complexity_score(sql_def, patterns, dml_count, join_count, total_dependencies)
+    criticality = classify_criticality(complexity_score, dml_count, patterns)
+    description = generate_description(sql_def, patterns, dml_count, join_count, len(tables), len(objects), clause_type)
+    critical_migration = is_critical_for_migration(clause_type)
+    
+    return {
+        'Critico_Migrazione': critical_migration,
+        'Descrizione_Comportamento': description,
+        'Complessità_Score': complexity_score,
+        'Criticità_Tecnica': criticality,
+        'Pattern_Identificati': '; '.join(sorted(patterns)) if patterns else 'Nessuno',
+        'Dipendenze_Count': total_dependencies,
+        'Dipendenze_Tabelle': '; '.join(sorted(tables)) if tables else 'Nessuna',
+        'Dipendenze_Tabelle_Count': len(tables),
+        'Dipendenze_Oggetti': '; '.join(sorted(objects)) if objects else 'Nessuna',
+        'Dipendenze_Oggetti_Count': len(objects),
+        'DML_Count': dml_count,
+        'JOIN_Count': join_count,
+        'Righe_Codice': count_lines(sql_def)
+    }
     criticality = classify_criticality(complexity_score, dml_count, patterns)
     description = generate_description(sql_def, patterns, dml_count, join_count, dependencies, clause_type)
     critical_migration = is_critical_for_migration(clause_type)
