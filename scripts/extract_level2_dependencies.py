@@ -102,8 +102,14 @@ def extract_objects_for_table(database, table_name):
         conn.close()
         
     except Exception as e:
-        with print_lock:
-            print(f"⚠️ Errore estrazione oggetti per {table_name} in {database}: {e}")
+        # Skip silently if database is not accessible (e.g., permission denied)
+        error_msg = str(e).lower()
+        if 'login failed' in error_msg or 'cannot open database' in error_msg:
+            # Permission denied - skip without flooding output
+            pass
+        else:
+            with print_lock:
+                print(f"⚠️ Errore estrazione oggetti per {table_name} in {database}: {e}")
         if conn:
             try:
                 conn.close()
@@ -585,7 +591,10 @@ def main():
     for table_name, callers in table_map.items():
         critical_callers = [c for c in callers if c['is_critical'] == 'SÌ']
         if critical_callers:
-            databases_list = list(set([c['database'] for c in critical_callers if c['database']]))
+            # Usa i database dei chiamanti, filtrando valori vuoti
+            databases_list = list(set([c['database'] for c in critical_callers if c.get('database')]))
+            if not databases_list:
+                continue  # Skip se non ci sono database validi
             
             critical_tables.append({
                 'table_name': table_name,

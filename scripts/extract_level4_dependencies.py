@@ -595,7 +595,10 @@ def main():
             if chain and chain != 'Non tracciato':
                 all_chains_l1.update([x.strip() for x in chain.split(';')])
         
-        databases_list = list(set([c['database'] for c in callers if c['database']]))
+        # Usa i database dei chiamanti, filtrando valori vuoti
+        databases_list = list(set([c['database'] for c in callers if c.get('database')]))
+        if not databases_list:
+            continue  # Skip se non ci sono database validi
         
         critical_tables.append({
             'table_name': table_name,
