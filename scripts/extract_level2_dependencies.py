@@ -10,7 +10,6 @@ import re
 # CONFIG
 # =========================
 ANALYZED_FILE_L1 = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\analisi_oggetti_critici.xlsx'
-CONNESSIONI_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\Connessioni_verificate.xlsx'
 OUTPUT_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_2.xlsx'
 
 SQL_SERVER = 'EPCP3'
@@ -284,12 +283,13 @@ def extract_tables_with_context(df, table_col='Dipendenze_Tabelle'):
     
     return table_map
 
-def find_new_dependencies(tables_set, dependency_map):
-    """Trova nuove dipendenze SQL non presenti nella lista originale."""
+def find_new_dependencies(already_extracted, dependency_map):
+    """Trova nuove dipendenze SQL non già estratte in L1."""
     new_objects = []
     
     for dep_name, callers in dependency_map.items():
-        if dep_name in tables_set:
+        # Escludi oggetti già estratti in L1
+        if dep_name in already_extracted:
             continue
         
         obj_type = classify_dependency_type(dep_name)
@@ -330,40 +330,32 @@ def main():
     print("ESTRAZIONE DIPENDENZE LIVELLO 2 (con GAP ANALYSIS + TABELLE)")
     print("="*70)
     
-    # 1. Carica lista tabelle originali da Connessioni_verificate
-    print("\n1. Caricamento lista tabelle originali...")
-    try:
-        df_connessioni = pd.read_excel(CONNESSIONI_FILE)
-        if 'Table' in df_connessioni.columns:
-            original_tables = set(df_connessioni['Table'].str.lower().str.strip())
-            print(f"   Tabelle originali: {len(original_tables)}")
-        else:
-            print("   ERRORE: Colonna 'Table' non trovata in Connessioni_verificate")
-            return
-    except Exception as e:
-        print(f"   ERRORE caricamento Connessioni: {e}")
-        return
-    
-    # 2. Carica oggetti livello 1 (analizzati)
-    print("\n2. Caricamento oggetti livello 1 analizzati...")
+    # 1. Carica oggetti livello 1 (analizzati)
+    print("\n1. Caricamento oggetti livello 1 analizzati...")
     try:
         df_l1 = pd.read_excel(ANALYZED_FILE_L1)
+        # Crea set di oggetti già estratti (lowercase per confronto)
+        already_extracted_l1 = set(df_l1['ObjectName'].str.lower().str.strip())
+        print(f"   Oggetti livello 1 totali: {len(df_l1)}")
+        print(f"   Set oggetti L1 per gap analysis: {len(already_extracted_l1)}")
+        
+        # Filtra solo oggetti critici per elaborazione
         df_l1_critical = df_l1[df_l1['Critico_Migrazione'] == 'SÌ'].copy()
         print(f"   Oggetti livello 1 critici: {len(df_l1_critical)}")
     except Exception as e:
         print(f"ERRORE: {e}")
         return
     
-    # 3. GAP ANALYSIS: trova nuove dipendenze OGGETTI SQL
-    print("\n3. Gap Analysis - Identificazione nuove dipendenze Oggetti SQL...")
+    # 2. GAP ANALYSIS: trova nuove dipendenze OGGETTI SQL
+    print("\n2. Gap Analysis - Identificazione nuove dipendenze Oggetti SQL...")
     dependency_map = extract_dependencies_with_context(df_l1_critical)
     print(f"   Dipendenze oggetti SQL totali: {len(dependency_map)}")
     
-    new_deps = find_new_dependencies(original_tables, dependency_map)
+    new_deps = find_new_dependencies(already_extracted_l1, dependency_map)
     print(f"   Nuovi Oggetti SQL critici da estrarre: {len(new_deps)}")
     
-    # 4. Traccia TABELLE referenziate E trova oggetti associati
-    print("\n4. Tracciamento tabelle referenziate + estrazione oggetti associati...")
+    # 3. Traccia TABELLE referenziate E trova oggetti associati
+    print("\n3. Tracciamento tabelle referenziate + estrazione oggetti associati...")
     table_map = extract_tables_with_context(df_l1_critical)
     print(f"   Tabelle totali referenziate: {len(table_map)}")
     
@@ -417,8 +409,8 @@ def main():
         print("\n   Nessuna nuova dipendenza critica trovata!")
         # Esporta comunque le tabelle
     
-    # 5. Estrai SQLDefinition oggetti livello 2
-    print("\n5. Estrazione SQLDefinition oggetti livello 2...\n")
+    # 4. Estrai SQLDefinition oggetti livello 2
+    print("\n4. Estrazione SQLDefinition oggetti livello 2...\n")
     
     oggetti_l2 = []
     trovati = 0
@@ -495,8 +487,8 @@ def main():
     print(f"\n   Oggetti trovati: {trovati}/{len(new_deps_total)}")
     print(f"   Oggetti non trovati: {non_trovati}/{len(new_deps_total)}")
     
-    # 6. Crea sheet dipendenze dettagliate
-    print("\n6. Creazione dipendenze dettagliate...")
+    # 5. Crea sheet dipendenze dettagliate
+    print("\n5. Creazione dipendenze dettagliate...")
     
     dipendenze_dettagliate = []
     
@@ -540,8 +532,8 @@ def main():
     
     df_deps_dettagliate = pd.DataFrame(dipendenze_dettagliate)
     
-    # 7. Export multi-sheet
-    print(f"\n7. Export: {OUTPUT_FILE}")
+    # 6. Export multi-sheet
+    print(f"\n6. Export: {OUTPUT_FILE}")
     
     with pd.ExcelWriter(OUTPUT_FILE, engine='openpyxl') as writer:
         # Sheet 1: Oggetti Livello 1
@@ -562,12 +554,14 @@ def main():
         # Sheet 5: Statistiche
         stats = [
             {'Metrica': 'LIVELLO 1', 'Valore': ''},
-            {'Metrica': 'Oggetti Critici', 'Valore': len(df_l1_critical)},
+            {'Metrica': 'Oggetti Totali L1', 'Valore': len(df_l1)},
+            {'Metrica': 'Oggetti Critici L1', 'Valore': len(df_l1_critical)},
             {'Metrica': '', 'Valore': ''},
             {'Metrica': 'GAP ANALYSIS', 'Valore': ''},
-            {'Metrica': 'Tabelle Originali', 'Valore': len(original_tables)},
             {'Metrica': 'Dipendenze Oggetti SQL Trovate', 'Valore': len(dependency_map)},
-            {'Metrica': 'Nuove Dipendenze Critiche', 'Valore': len(new_deps)},
+            {'Metrica': 'Nuove Dipendenze Critiche (Gap)', 'Valore': len(new_deps)},
+            {'Metrica': 'Oggetti da Tabelle', 'Valore': len(table_objects_found)},
+            {'Metrica': 'Totale Oggetti L2 da Estrarre', 'Valore': len(new_deps_total)},
             {'Metrica': 'Tabelle Referenziate Totali', 'Valore': len(table_map)},
             {'Metrica': 'Tabelle Referenziate Critiche', 'Valore': len(critical_tables)},
             {'Metrica': '', 'Valore': ''},
