@@ -75,6 +75,7 @@ def extract_sql_definition_multi_db(databases, object_name, preferred_db=None):
         try:
             conn = get_sql_connection(db)
             
+            # Query case-insensitive con LOWER()
             query = """
             SELECT 
                 o.name AS ObjectName,
@@ -84,7 +85,7 @@ def extract_sql_definition_multi_db(databases, object_name, preferred_db=None):
                 DB_NAME() AS Database
             FROM sys.sql_modules m
             INNER JOIN sys.objects o ON m.object_id = o.object_id
-            WHERE o.name = ?
+            WHERE LOWER(o.name) = LOWER(?)
             """
             
             cursor = conn.cursor()
@@ -103,7 +104,10 @@ def extract_sql_definition_multi_db(databases, object_name, preferred_db=None):
                 
         except Exception as e:
             if conn:
-                conn.close()
+                try:
+                    conn.close()
+                except:
+                    pass
             # Non stampare errore, prova prossimo DB silenziosamente
             continue
     
@@ -219,9 +223,19 @@ def load_new_objects_to_analyze():
         # Estrai nomi oggetti
         objects = []
         for idx, row in df_critical.iterrows():
-            obj_name = row['Nuovo_Oggetto']
-            # Pulisci nome (rimuovi schema se presente)
-            clean_name = obj_name.split('.')[-1].replace('[', '').replace(']', '')
+            obj_name = str(row['Nuovo_Oggetto'])
+            
+            # Pulisci nome: rimuovi database, schema, parentesi quadre
+            # Esempi: [DB].[dbo].[sp_test] → sp_test
+            #         dbo.sp_test → sp_test
+            #         sp_test → sp_test
+            parts = obj_name.replace('[', '').replace(']', '').split('.')
+            clean_name = parts[-1].strip()  # Prendi solo ultima parte
+            
+            # Debug: mostra primi 5 per verifica
+            if len(objects) < 5:
+                print(f"  Debug: '{obj_name}' → '{clean_name}'")
+            
             objects.append({
                 'name': clean_name,
                 'full_name': obj_name,
@@ -233,6 +247,8 @@ def load_new_objects_to_analyze():
         
     except Exception as e:
         print(f"ERRORE caricamento nuove SP/Functions: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def recursive_extraction(databases, known_objects, level=2):
@@ -279,6 +295,7 @@ def recursive_extraction(databases, known_objects, level=2):
     
     # Estrai oggetti
     all_analyzed = []
+    not_found = []
     for i, obj in enumerate(to_extract):
         obj_name = obj['name']
         preferred_db = obj.get('database')
@@ -299,12 +316,22 @@ def recursive_extraction(databases, known_objects, level=2):
                 # Aggiungi a known_objects
                 known_objects[obj_name.lower()] = result['Database']
                 
-                print(f"  ✓ {obj_name} trovato in {result['Database']}")
+                if (i+1) <= 10:  # Mostra primi 10 trovati
+                    print(f"  ✓ {obj_name} trovato in {result['Database']}")
             else:
-                print(f"  ✗ {obj_name} NON trovato in nessun database")
+                not_found.append(obj_name)
+                if len(not_found) <= 10:  # Mostra primi 10 non trovati
+                    print(f"  ✗ {obj_name} NON trovato in nessun database")
             
         except Exception as e:
             print(f"  ERRORE {obj_name}: {e}")
+    
+    if not_found:
+        print(f"\n⚠ Oggetti non trovati: {len(not_found)}/{len(to_extract)}")
+        print("Possibili cause:")
+        print("  - Oggetti sono tabelle/viste (non hanno SQLDefinition)")
+        print("  - Nomi nel file includono prefissi non riconosciuti")
+        print("  - Oggetti non esistono nei database disponibili")
     
     if not all_analyzed:
         print("Nessun oggetto estratto a questo livello")
