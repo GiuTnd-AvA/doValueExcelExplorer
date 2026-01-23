@@ -146,18 +146,7 @@ def process_table_batch(table_batch_info, new_deps):
                     })
     
     return results
-        
-        cursor.close()
-        conn.close()
-        
-    except Exception as e:
-        if conn:
-            try:
-                conn.close()
-            except:
-                pass
-    
-    return objects_found
+
 
 def extract_sql_definition(database, object_name):
     """Estrae SQLDefinition di un oggetto specifico (include TRIGGER)."""
@@ -835,8 +824,8 @@ def main():
             {'Metrica': 'Tabelle Referenziate Critiche', 'Valore': len(critical_tables)},
             {'Metrica': '', 'Valore': ''},
             {'Metrica': 'LIVELLO 2', 'Valore': ''},
-            {'Metrica': 'Oggetti Estratti', 'Valore': trovati},
-            {'Metrica': 'Oggetti Non Trovati', 'Valore': non_trovati},
+            {'Metrica': 'Oggetti Estratti', 'Valore': len(oggetti_l2)},
+            {'Metrica': 'Oggetti Non Trovati', 'Valore': len(new_deps_total) - len(oggetti_l2) if new_deps_total else 0},
             {'Metrica': '', 'Valore': ''},
             {'Metrica': 'DIPENDENZE', 'Valore': ''},
             {'Metrica': 'Totale Relazioni Oggetti', 'Valore': len(df_deps_dettagliate)},
