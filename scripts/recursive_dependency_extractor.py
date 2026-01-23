@@ -235,18 +235,18 @@ def load_new_objects_to_analyze():
         print(f"ERRORE caricamento nuove SP/Functions: {e}")
         return []
 
-def recursive_extraction(databases, known_objects, level=1):
+def recursive_extraction(databases, known_objects, level=2):
     """Estrazione ricorsiva dipendenze."""
     print(f"\n{'='*60}")
     print(f"LIVELLO {level} - Estrazione dipendenze")
     print(f"{'='*60}")
     
-    if level > MAX_LEVELS:
-        print(f"Raggiunto massimo livello di ricorsione ({MAX_LEVELS})")
+    if level > MAX_LEVELS + 1:  # MAX_LEVELS=5, quindi max livello 6
+        print(f"Raggiunto massimo livello di ricorsione (livello {MAX_LEVELS + 1})")
         return pd.DataFrame()
     
     # Carica oggetti da analizzare
-    if level == 1:
+    if level == 2:
         new_objects = load_new_objects_to_analyze()
     else:
         # Leggi dal file del livello precedente
@@ -403,7 +403,7 @@ def main():
     # Estrazione ricorsiva
     print("\n4. Avvio estrazione ricorsiva...")
     try:
-        df_all = recursive_extraction(databases, known_objects, level=1)
+        df_all = recursive_extraction(databases, known_objects, level=2)
         
         if not df_all.empty:
             # Salva file consolidato
