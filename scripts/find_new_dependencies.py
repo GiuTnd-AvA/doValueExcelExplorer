@@ -129,6 +129,9 @@ def find_new_objects_with_context(tables, dependency_map):
         caller_types = set([c['object_type'] for c in callers])
         critical_caller_types = set([c['object_type'] for c in critical_callers]) if critical_callers else set()
         
+        # Estrai nomi oggetti critici chiamanti
+        critical_caller_names = [c['object_name'] for c in critical_callers] if critical_callers else []
+        
         obj_info = {
             'name': dep_name,
             'object_type': obj_type,
@@ -138,6 +141,7 @@ def find_new_objects_with_context(tables, dependency_map):
             'critical_caller_types': '; '.join(sorted(critical_caller_types)) if critical_caller_types else 'Nessuno',
             'called_by': '; '.join([c['object_name'] for c in callers[:5]]),  # Primi 5
             'called_by_critical': '; '.join([c['object_name'] for c in critical_callers[:5]]) if critical_callers else 'Nessuno',
+            'critical_caller_names': '; '.join(critical_caller_names) if critical_caller_names else 'Nessuno',
             'is_critical_dependency': 'SÌ' if critical_callers else 'NO'
         }
         
@@ -201,6 +205,7 @@ def main():
                         'Tipi_Chiamanti_Critici': t['critical_caller_types'],
                         'Chiamata_Da': t['called_by'],
                         'Chiamata_Da_Critici': t['called_by_critical'],
+                        'Oggetti_Critici_Partenza': t['critical_caller_names'],
                         'Azione': 'Aggiungere all\'estrazione'
                     } for t in new_tables])
                     # Ordina per criticità e numero chiamanti critici
@@ -219,6 +224,7 @@ def main():
                         'Tipi_Chiamanti_Critici': s['critical_caller_types'],
                         'Chiamata_Da': s['called_by'],
                         'Chiamata_Da_Critici': s['called_by_critical'],
+                        'Oggetti_Critici_Partenza': s['critical_caller_names'],
                         'Azione': 'Analizzare per migrazione'
                     } for s in new_sp_functions])
                     # Ordina per criticità e numero chiamanti critici
