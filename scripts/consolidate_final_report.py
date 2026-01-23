@@ -216,6 +216,57 @@ def create_statistics(df_critical, df_tables, df_new_tables, df_new_sp):
     
     return pd.DataFrame(stats)
 
+def create_denormalized_dependencies_sheet(df_critical):
+    """Crea sheet denormalizzato dove ogni dipendenza ha una riga separata."""
+    if df_critical.empty:
+        return pd.DataFrame()
+    
+    denorm_rows = []
+    
+    for idx, row in df_critical.iterrows():
+        server = row.get('Server', '')
+        database = row.get('Database', '')
+        object_name = row.get('ObjectName', '')
+        object_type = row.get('ObjectType', '')
+        critico = row.get('Critico_Migrazione', '')
+        dependencies_str = row.get('Dipendenze', '')
+        
+        # Parse dipendenze
+        if pd.isna(dependencies_str) or not isinstance(dependencies_str, str) or dependencies_str.lower() == 'nessuna':
+            # Oggetto senza dipendenze - crea comunque una riga
+            denorm_rows.append({
+                'Server': server,
+                'Database': database,
+                'ObjectName': object_name,
+                'ObjectType_Parent': object_type,
+                'Dipendenza': 'NESSUNA',
+                'ObjectType_Dipendenza': '',
+                'Critico_Migrazione': critico
+            })
+        else:
+            # Split dipendenze per ';'
+            deps = [d.strip() for d in dependencies_str.split(';') if d.strip()]
+            
+            for dep in deps:
+                dep_type = classify_dependency_type(dep)
+                
+                denorm_rows.append({
+                    'Server': server,
+                    'Database': database,
+                    'ObjectName': object_name,
+                    'ObjectType_Parent': object_type,
+                    'Dipendenza': dep,
+                    'ObjectType_Dipendenza': dep_type,
+                    'Critico_Migrazione': critico
+                })
+    
+    result_df = pd.DataFrame(denorm_rows)
+    
+    # Ordina per Server, Database, ObjectName, Dipendenza
+    result_df = result_df.sort_values(['Server', 'Database', 'ObjectName', 'Dipendenza'])
+    
+    return result_df
+
 # =========================
 # MAIN
 # =========================
@@ -251,10 +302,15 @@ def main():
     print("6. Creazione statistiche...")
     stats_sheet = create_statistics(main_sheet, tables_sheet, new_tables_sheet, new_sp_sheet)
     
-    # 7. Esporta tutto
-    print(f"\n7. Esportazione report finale: {OUTPUT_FILE}")
+    # 7. Crea sheet denormalizzato dipendenze
+    print("7. Creazione sheet denormalizzato dipendenze...")
+    denorm_sheet = create_denormalized_dependencies_sheet(df_critical)
+    
+    # 8. Esporta tutto
+    print(f"\n8. Esportazione report finale: {OUTPUT_FILE}")
     with pd.ExcelWriter(OUTPUT_FILE, engine='openpyxl') as writer:
         main_sheet.to_excel(writer, sheet_name='Oggetti Critici', index=False)
+        denorm_sheet.to_excel(writer, sheet_name='Dipendenze Dettagliate', index=False)
         tables_sheet.to_excel(writer, sheet_name='Tabelle Referenziate', index=False)
         new_tables_sheet.to_excel(writer, sheet_name='Nuove Tabelle', index=False)
         new_sp_sheet.to_excel(writer, sheet_name='Nuove SP-Functions', index=False)
@@ -263,6 +319,7 @@ def main():
     print("\n=== Report Finale Completato ===")
     print(f"\nRiepilogo:")
     print(f"  - Oggetti critici: {len(main_sheet)}")
+    print(f"  - Dipendenze dettagliate (righe): {len(denorm_sheet)}")
     print(f"  - Tabelle referenziate: {len(tables_sheet)}")
     print(f"  - Nuove tabelle: {len(new_tables_sheet)}")
     print(f"  - Nuove SP/Functions: {len(new_sp_sheet)}")
