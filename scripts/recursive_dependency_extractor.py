@@ -232,27 +232,25 @@ def analyze_object(row):
 # =========================
 
 def load_known_objects():
-    """Carica tutti gli oggetti già analizzati con info database dal report finale."""
+    """Carica solo gli oggetti ESTRATTI (livello 1) dal report finale."""
     known = {}  # {object_name: database}
     
     try:
-        # Carica oggetti critici dallo sheet "Oggetti Critici"
+        # Carica SOLO oggetti critici (livello 1 già estratto)
         df_critical = pd.read_excel(REPORT_FILE, sheet_name='Oggetti Critici')
         for idx, row in df_critical.iterrows():
             obj_name = str(row['ObjectName']).lower()
             # Database non è nello sheet Oggetti Critici, usiamo placeholder
             known[obj_name] = 'Unknown'
         
-        # Carica anche le dipendenze già estratte (evita di riestrarle)
-        df_deps = pd.read_excel(REPORT_FILE, sheet_name=SHEET_DIPENDENZE)
-        for idx, row in df_deps.iterrows():
-            dep_name = str(row['Dipendenza']).lower()
-            if dep_name != 'nessuna':
-                known[dep_name] = row.get('Database', 'Unknown')
+        print(f"Oggetti livello 1 (già estratti): {len(known)}")
         
-        print(f"Oggetti già analizzati: {len(known)}")
+        # NON caricare le dipendenze - quelle sono da estrarre ora!
+        
     except Exception as e:
         print(f"ATTENZIONE: Non posso caricare {REPORT_FILE}: {e}")
+        import traceback
+        traceback.print_exc()
     
     return known
 
