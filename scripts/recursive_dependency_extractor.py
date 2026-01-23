@@ -13,9 +13,9 @@ sys.path.append(str(Path(__file__).parent))
 # =========================
 # CONFIG
 # =========================
-# File input
-NEW_DEPS_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\analisi_sqldefinition_criticità_nuove_dipendenze.xlsx'
-ANALYZED_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\analisi_oggetti_critici.xlsx'
+# File input - REPORT FINALE MIGRAZIONE già consolidato
+REPORT_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\REPORT_FINALE_MIGRAZIONE.xlsx'
+SHEET_DIPENDENZE = 'Dipendenze Dettagliate'
 
 # Output
 OUTPUT_DIR = Path(r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\Dipendenze Ricorsive')
@@ -232,56 +232,74 @@ def analyze_object(row):
 # =========================
 
 def load_known_objects():
-    """Carica tutti gli oggetti già analizzati con info database."""
+    """Carica tutti gli oggetti già analizzati con info database dal report finale."""
     known = {}  # {object_name: database}
     
-    # Carica oggetti critici
     try:
-        df_analyzed = pd.read_excel(ANALYZED_FILE)
-        for idx, row in df_analyzed.iterrows():
+        # Carica oggetti critici dallo sheet "Oggetti Critici"
+        df_critical = pd.read_excel(REPORT_FILE, sheet_name='Oggetti Critici')
+        for idx, row in df_critical.iterrows():
             obj_name = str(row['ObjectName']).lower()
-            db = row.get('Database', 'Unknown')
-            known[obj_name] = db
-        print(f"Oggetti critici caricati: {len(known)}")
+            # Database non è nello sheet Oggetti Critici, usiamo placeholder
+            known[obj_name] = 'Unknown'
+        
+        # Carica anche le dipendenze già estratte (evita di riestrarle)
+        df_deps = pd.read_excel(REPORT_FILE, sheet_name=SHEET_DIPENDENZE)
+        for idx, row in df_deps.iterrows():
+            dep_name = str(row['Dipendenza']).lower()
+            if dep_name != 'nessuna':
+                known[dep_name] = row.get('Database', 'Unknown')
+        
+        print(f"Oggetti già analizzati: {len(known)}")
     except Exception as e:
-        print(f"ATTENZIONE: Non posso caricare {ANALYZED_FILE}: {e}")
+        print(f"ATTENZIONE: Non posso caricare {REPORT_FILE}: {e}")
     
     return known
 
-def load_new_objects_to_analyze():
-    """Carica nuove SP/Functions da file dipendenze."""
+def load_dependencies_to_analyze():
+    """Carica dipendenze non-tabella dal report finale da analizzare al livello 2."""
     try:
-        df_new_sp = pd.read_excel(NEW_DEPS_FILE, sheet_name='Nuove SP-Functions')
+        df = pd.read_excel(REPORT_FILE, sheet_name=SHEET_DIPENDENZE)
         
-        # Filtra solo critiche
-        df_critical = df_new_sp[df_new_sp['Dipendenza_Critica'] == 'SÌ'].copy()
+        print(f"Dipendenze totali caricate: {len(df)}")
         
-        # Estrai nomi oggetti
+        # Filtra solo dipendenze non-tabella (SP/Functions/Triggers)
+        df_filtered = df[
+            (df['ObjectType_Dipendenza'] != 'Tabella') & 
+            (df['Dipendenza'] != 'NESSUNA')
+        ].copy()
+        
+        print(f"Dipendenze filtrate (no tabelle): {len(df_filtered)}")
+        
+        # Raggruppa per dipendenza per evitare duplicati
+        # Mantieni info del primo oggetto chiamante per database/server
         objects = []
-        for idx, row in df_critical.iterrows():
-            obj_name = str(row['Nuovo_Oggetto'])
-            
-            # Pulisci solo parentesi quadre e spazi, ma mantieni schema
-            # Esempi: [dbo].[sp_test] → dbo.sp_test
-            #         dbo.sp_test → dbo.sp_test
-            #         sp_test → sp_test
-            clean_name = obj_name.replace('[', '').replace(']', '').strip()
-            
-            # Debug: mostra primi 5 per verifica
-            if len(objects) < 5:
-                print(f"  Debug: '{obj_name}' → '{clean_name}'")
-            
-            objects.append({
-                'name': clean_name,
-                'full_name': obj_name,
-                'type': row.get('ObjectType', 'Unknown')
-            })
+        seen = set()
         
-        print(f"Nuove SP/Functions critiche da analizzare: {len(objects)}")
+        for idx, row in df_filtered.iterrows():
+            dep_name = str(row['Dipendenza'])
+            clean_name = dep_name.replace('[', '').replace(']', '').strip()
+            
+            if clean_name.lower() not in seen:
+                seen.add(clean_name.lower())
+                
+                objects.append({
+                    'name': clean_name,
+                    'full_name': dep_name,
+                    'type': row.get('ObjectType_Dipendenza', 'Unknown'),
+                    'database': row.get('Database', None),  # DB dell'oggetto chiamante
+                    'server': row.get('Server', 'EPCP3')
+                })
+                
+                # Debug primi 10
+                if len(objects) <= 10:
+                    print(f"  Debug: '{dep_name}' → '{clean_name}' (DB: {row.get('Database')})")
+        
+        print(f"Dipendenze uniche da analizzare (livello 2): {len(objects)}")
         return objects
         
     except Exception as e:
-        print(f"ERRORE caricamento nuove SP/Functions: {e}")
+        print(f"ERRORE caricamento dipendenze: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -298,7 +316,7 @@ def recursive_extraction(databases, known_objects, level=2):
     
     # Carica oggetti da analizzare
     if level == 2:
-        new_objects = load_new_objects_to_analyze()
+        new_objects = load_dependencies_to_analyze()
     else:
         # Leggi dal file del livello precedente
         prev_file = OUTPUT_DIR / f"livello_{level-1}_nuove_dipendenze.xlsx"
