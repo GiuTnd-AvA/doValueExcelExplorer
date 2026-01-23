@@ -352,7 +352,7 @@ def process_object_batch(batch_objects, databases_list, already_extracted):
     return results
 
 
-def process_table_batch(table_batch_info, new_deps):
+def process_table_batch(table_batch_info, new_deps, already_extracted):
     """
     Processa batch di tabelle in parallelo.
     Returns lista oggetti trovati per le tabelle.
@@ -368,9 +368,10 @@ def process_table_batch(table_batch_info, new_deps):
             objects_for_table = extract_objects_for_table(db, table_name)
             
             for obj in objects_for_table:
-                # Evita duplicati con new_deps
+                # Evita duplicati con new_deps E oggetti già estratti
                 obj_name_lower = obj['name'].lower()
-                if not any(d['name'].lower() == obj_name_lower for d in new_deps):
+                if not any(d['name'].lower() == obj_name_lower for d in new_deps) \
+                   and obj_name_lower not in already_extracted:
                     results.append({
                         'name': obj['name'],
                         'object_type': obj['type'],
@@ -611,7 +612,7 @@ def main():
         
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {
-                executor.submit(process_table_batch, batch, new_deps_l3): i
+                executor.submit(process_table_batch, batch, new_deps_l3, already_extracted): i
                 for i, batch in enumerate(table_batches)
             }
             
