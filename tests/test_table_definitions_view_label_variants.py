@@ -8,8 +8,8 @@ WORK = os.path.abspath(os.path.join(BASE, os.pardir))
 if WORK not in sys.path:
     sys.path.insert(0, WORK)
 
-import Get_Table_Definitions_From_Excel as mod
-from Get_Table_Definitions_From_Excel import TableDefinitionExtractor
+import analisi_viste.Get_Table_Definitions_From_Excel as mod
+from analisi_viste.Get_Table_Definitions_From_Excel import TableDefinitionExtractor
 
 
 def test_view_with_english_label_uses_view_definition(tmp_path):

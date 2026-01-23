@@ -1,7 +1,7 @@
 import os
 import tempfile
 from openpyxl import Workbook
-from Append_Views_From_Excel import ViewsDDLAppender
+from analisi_viste.Append_Views_From_Excel import ViewsDDLAppender
 
 def create_excel(rows):
     wb = Workbook()

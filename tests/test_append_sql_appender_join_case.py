@@ -7,7 +7,7 @@ WORK = os.path.abspath(os.path.join(BASE, os.pardir))
 if WORK not in sys.path:
     sys.path.insert(0, WORK)
 
-from Append_Sql_Files_From_Excel import SqlFilesAppender
+from analisi_viste.Append_Sql_Files_From_Excel import SqlFilesAppender
 
 TMP = os.path.join(WORK, 'tmp_test_append_join')
 os.makedirs(TMP, exist_ok=True)

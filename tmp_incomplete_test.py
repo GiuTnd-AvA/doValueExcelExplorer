@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, 'c:/Users/giuseppe.tanda/Desktop/doValueExcelExplorer')
-from ExtractSqlTables import extract_matches, _strip_sql_comments
+from analisi_viste.ExtractSqlTables import extract_matches, _strip_sql_comments
 
 # Test case 1: dbo.CARTESIO_' + @variable
 sql1 = "right outer join dbo.CARTESIO_' + @v_data_rif_aaaammgg + '_CLUSTER_PRATICA_T as CL"

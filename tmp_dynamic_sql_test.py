@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, 'c:/Users/giuseppe.tanda/Desktop/doValueExcelExplorer')
-from ExtractSqlTables import extract_matches, _strip_sql_comments
+from analisi_viste.ExtractSqlTables import extract_matches, _strip_sql_comments
 
 # Test dynamic SQL pattern
 sql = """set @v_sql = 'if object_id(''dbo.' + @v_nome_tabella_finale + ''') is not null drop table dbo.' + @v_nome_tabella_finale + ';';"""

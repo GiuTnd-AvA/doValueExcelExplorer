@@ -12,8 +12,8 @@ BL = os.path.join(ROOT, "BusinessLogic")
 if BL not in sys.path:
     sys.path.insert(0, BL)
 
-import Table_Existence_Checker as mod
-from Table_Existence_Checker import TableExistenceChecker
+import analisi_viste.Table_Existence_Checker as mod
+from analisi_viste.Table_Existence_Checker import TableExistenceChecker
 
 
 def _write_input_excel(path, rows, header):
@@ -153,7 +153,7 @@ def test_checker_includes_views(tmp_path, monkeypatch):
     # Abilita ricerca viste (semantico per il test; logica mockata)
     try:
         import importlib
-        import Table_Existence_Checker as checker_mod
+        import analisi_viste.Table_Existence_Checker as checker_mod
         checker_mod.INCLUDE_VIEWS = True
     except Exception:
         pass

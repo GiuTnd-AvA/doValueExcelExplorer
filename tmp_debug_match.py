@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(0, 'c:/Users/giuseppe.tanda/Desktop/doValueExcelExplorer')
 import re
-from ExtractSqlTables import IDENTIFIER, QUALIFIED, CLAUSE_PATTERNS
+from analisi_viste.ExtractSqlTables import IDENTIFIER, QUALIFIED, CLAUSE_PATTERNS
 
 sql = """set @v_sql = 'if object_id(''dbo.' + @v_nome_tabella_finale + ''') is not null drop table dbo.' + @v_nome_tabella_finale + ';';"""
 
