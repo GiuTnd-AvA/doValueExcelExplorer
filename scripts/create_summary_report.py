@@ -140,13 +140,13 @@ def create_summary_report():
         if pd.isna(chiamanti) or chiamanti == 'nan':
             chiamanti = ''
         
-        # Dipendenze oggetti L3
-        dip_oggetti = str(obj_l2_row.get('Dipendenze_Oggetti_L3', ''))
+        # Dipendenze oggetti
+        dip_oggetti = str(obj_l2_row.get('Dipendenze_Oggetti', ''))
         if pd.isna(dip_oggetti) or dip_oggetti == 'nan':
             dip_oggetti = ''
         
-        # Dipendenze tabelle L3
-        dip_tabelle = str(obj_l2_row.get('Dipendenze_Tabelle_L3', ''))
+        # Dipendenze tabelle
+        dip_tabelle = str(obj_l2_row.get('Dipendenze_Tabelle', ''))
         if pd.isna(dip_tabelle) or dip_tabelle == 'nan':
             dip_tabelle = ''
         
@@ -203,13 +203,13 @@ def create_summary_report():
             if pd.isna(chiamanti) or chiamanti == 'nan':
                 chiamanti = ''
             
-            # Dipendenze oggetti L4
-            dip_oggetti = str(obj_l3_row.get('Dipendenze_Oggetti_L4', ''))
+            # Dipendenze oggetti
+            dip_oggetti = str(obj_l3_row.get('Dipendenze_Oggetti', ''))
             if pd.isna(dip_oggetti) or dip_oggetti == 'nan':
                 dip_oggetti = ''
             
-            # Dipendenze tabelle L4
-            dip_tabelle = str(obj_l3_row.get('Dipendenze_Tabelle_L4', ''))
+            # Dipendenze tabelle
+            dip_tabelle = str(obj_l3_row.get('Dipendenze_Tabelle', ''))
             if pd.isna(dip_tabelle) or dip_tabelle == 'nan':
                 dip_tabelle = ''
             
@@ -266,11 +266,11 @@ def create_summary_report():
             if pd.isna(chiamanti) or chiamanti == 'nan':
                 chiamanti = ''
             
-            dip_oggetti = str(obj_l4_row.get('Dipendenze_Oggetti_L5', ''))
+            dip_oggetti = str(obj_l4_row.get('Dipendenze_Oggetti', ''))
             if pd.isna(dip_oggetti) or dip_oggetti == 'nan':
                 dip_oggetti = ''
             
-            dip_tabelle = str(obj_l4_row.get('Dipendenze_Tabelle_L5', ''))
+            dip_tabelle = str(obj_l4_row.get('Dipendenze_Tabelle', ''))
             if pd.isna(dip_tabelle) or dip_tabelle == 'nan':
                 dip_tabelle = ''
             
