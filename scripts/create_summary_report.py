@@ -103,8 +103,8 @@ def create_summary_report():
         
         # Tabella origine (dalla prima dipendenza tabella se disponibile)
         tabella_origine = ''
-        if dip_tabelle:
-            tabelle_list = [t.strip() for t in dip_tabelle.split(',')]
+        if dip_tabelle and dip_tabelle not in ['Nessuna', '']:
+            tabelle_list = [t.strip() for t in dip_tabelle.split(';')]
             if tabelle_list:
                 tabella_origine = tabelle_list[0]
         
