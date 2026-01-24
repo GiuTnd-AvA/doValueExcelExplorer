@@ -17,6 +17,8 @@ INPUT_FILE_L1 = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Espor
 OUTPUT_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_4.xlsx'
 
 SQL_SERVER = 'EPCP3'
+# Lista completa dei 9 database sul server EPCP3
+AVAILABLE_DATABASES = ['ams', 'CORESQL7', 'ANALISI', 's1057', 'BASEDATI_BI', 'EPC_BI', 'S1259', 'gestito', 'S1057B']
 MAX_WORKERS = 4  # Parallelize processing
 BATCH_SIZE = 100  # Process objects in batches
 
@@ -209,10 +211,14 @@ def extract_sql_definitions_batch(database, object_names):
         
         # Query 1: Oggetti con schema specificato
         if schema_objects:
-            placeholders = ','.join(['(?,?)'] * len(schema_objects))
+            # Costruisci condizioni OR per ogni coppia schema.object
+            conditions = []
             params = []
             for schema, obj, _ in schema_objects:
+                conditions.append("(LOWER(SCHEMA_NAME(o.schema_id)) = ? AND LOWER(o.name) = ?)")
                 params.extend([schema, obj])
+            
+            where_clause = " OR ".join(conditions)
             
             query = f"""
             SELECT 
@@ -222,7 +228,7 @@ def extract_sql_definitions_batch(database, object_names):
                 SCHEMA_NAME(o.schema_id) AS SchemaName
             FROM sys.sql_modules m
             INNER JOIN sys.objects o ON m.object_id = o.object_id
-            WHERE (LOWER(SCHEMA_NAME(o.schema_id)), LOWER(o.name)) IN (VALUES {placeholders})
+            WHERE {where_clause}
             """
             cursor.execute(query, params)
             columns = [column[0] for column in cursor.description]
@@ -581,8 +587,8 @@ def main():
     new_deps_l4 = find_new_dependencies_l4(already_extracted, dependency_map)
     print(f"   Nuovi Oggetti SQL L4 da estrarre: {len(new_deps_l4)}")
     
-    # 3. Traccia TABELLE referenziate da L3 E trova oggetti associati CON PARALLEL PROCESSING
-    print("\n3. Tracciamento tabelle referenziate da L3 + estrazione oggetti associati...")
+    # 3. Traccia solo TABELLE referenziate da L3 (per report, non investigare oggetti)
+    print("\n3. Tracciamento tabelle referenziate da L3...")
     table_map = extract_tables_with_context(df_l3)
     print(f"   Tabelle totali referenziate: {len(table_map)}")
     
@@ -610,41 +616,8 @@ def main():
     
     print(f"   Tabelle referenziate da L3: {len(critical_tables)}")
     
-    # Parallel table investigation
-    if critical_tables:
-        print(f"   Investigating {len(critical_tables)} tabelle in parallelo...")
-        
-        table_batches = []
-        for i in range(0, len(critical_tables), BATCH_SIZE):
-            table_batches.append(critical_tables[i:i + BATCH_SIZE])
-        
-        table_objects_found = []
-        processed_tables = 0
-        
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {
-                executor.submit(process_table_batch, batch, new_deps_l4, already_extracted): i
-                for i, batch in enumerate(table_batches)
-            }
-            
-            for future in as_completed(futures):
-                batch_idx = futures[future]
-                try:
-                    batch_results = future.result()
-                    table_objects_found.extend(batch_results)
-                    processed_tables += len(table_batches[batch_idx])
-                    
-                    with print_lock:
-                        print(f"   Tabelle investigate: {processed_tables}/{len(critical_tables)}")
-                except Exception as e:
-                    with print_lock:
-                        print(f"   ⚠️ Errore batch tabelle {batch_idx}: {e}")
-        
-        print(f"   Oggetti SQL trovati su tabelle: {len(table_objects_found)}")
-    else:
-        table_objects_found = []
-    
-    new_deps_l4_total = new_deps_l4 + table_objects_found
+    # Usa solo oggetti da gap analysis (no table investigation)
+    new_deps_l4_total = new_deps_l4
     print(f"   Totale oggetti L4 da estrarre: {len(new_deps_l4_total)}")
     
     # 4. Estrai SQLDefinition oggetti livello 4 CON PARALLEL BATCH PROCESSING
