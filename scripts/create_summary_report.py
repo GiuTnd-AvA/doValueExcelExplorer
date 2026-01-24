@@ -57,6 +57,8 @@ def create_summary_report():
     
     # Carica i dati
     df_analisi = pd.read_excel(analisi_path)
+    # Filtra solo oggetti critici
+    df_analisi = df_analisi[df_analisi['Critico'] == True]
     df_l1 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 1")
     df_l2 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 2")
     
