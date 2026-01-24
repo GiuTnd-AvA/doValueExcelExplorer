@@ -57,8 +57,13 @@ def create_summary_report():
     
     # Carica i dati
     df_analisi = pd.read_excel(analisi_path)
-    # Filtra solo oggetti critici
-    df_analisi = df_analisi[df_analisi['Critico'] == True]
+    # Filtra solo oggetti critici per migrazione (Critico_Migrazione = "SI")
+    if 'Critico_Migrazione' in df_analisi.columns:
+        df_analisi = df_analisi[df_analisi['Critico_Migrazione'] == 'SI']
+        print(f"✓ Filtrate {len(df_analisi)} tabelle critiche per migrazione")
+    else:
+        print(f"⚠ Colonna 'Critico_Migrazione' non trovata, usando tutte le {len(df_analisi)} righe")
+    
     df_l1 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 1")
     df_l2 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 2")
     
