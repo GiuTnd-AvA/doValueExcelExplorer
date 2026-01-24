@@ -79,17 +79,25 @@ def create_summary_report():
     else:
         df_l4 = None
     
-    print(f"✓ Oggetti L1: {len(df_analisi)}")
+    # Merge df_l1 con df_analisi per avere solo oggetti critici
+    # df_l1 ha le dipendenze, df_analisi ha il flag Critico_Migrazione
+    df_l1_filtered = df_l1.merge(
+        df_analisi[['NomeOggetto', 'Critico_Migrazione']], 
+        on='NomeOggetto', 
+        how='inner'
+    )
+    
+    print(f"✓ Oggetti L1 (filtrati critici): {len(df_l1_filtered)}")
     print(f"✓ Oggetti L2: {len(df_l2)}")
     
     print("\n" + "=" * 80)
     print("CREAZIONE SHEET L1")
     print("=" * 80)
     
-    # Sheet L1: Oggetti L1 dall'analisi
+    # Sheet L1: Oggetti L1 dall'analisi (solo critici)
     summary_l1_rows = []
     
-    for _, obj_row in df_analisi.iterrows():
+    for _, obj_row in df_l1_filtered.iterrows():
         obj_name = obj_row.get('NomeOggetto', '')
         obj_type = obj_row.get('TipoOggetto', '')
         obj_server = obj_row.get('Server', '')
