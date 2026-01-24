@@ -346,33 +346,43 @@ def process_object_batch(batch_objects, databases_list, already_extracted_l1):
     # Processa ogni database con batch query
     for db_name, objs in db_objects.items():
         if db_name == 'Unknown':
-            # Fallback: prova tutti i database L1
+            # Fallback: cerca in tutti i database disponibili
             object_names = [obj['OggettoDipendente'] for obj in objs]
-            found = False
+            objects_found_count = 0
+            
+            with print_lock:
+                print(f"   Cercando {len(object_names)} oggetti in {len(databases_list)} database...")
             
             for try_db in databases_list:
-                defs = extract_sql_definitions_batch(try_db, object_names)
-                if defs:
-                    found = True
-                    for obj_info in objs:
-                        obj_name = obj_info['OggettoDipendente']
-                        if obj_name in defs:
-                            def_info = defs[obj_name]
-                            results.append({
-                                'ObjectName': obj_name,
-                                'ObjectType': def_info['ObjectType'],
-                                'SQLDefinition': def_info['SQLDefinition'],
-                                'Database': try_db,
-                                'SchemaName': def_info['SchemaName'],
-                                'Chiamante_L1': obj_info['Chiamanti'],
-                                'Chiamante_L1_Database': obj_info['Chiamanti_Database'],
-                                'DipendenzaOriginale': obj_info.get('DipendenzaOriginale', '')
-                            })
-                    break
+                try:
+                    defs = extract_sql_definitions_batch(try_db, object_names)
+                    if defs:
+                        for obj_info in objs:
+                            obj_name = obj_info['OggettoDipendente']
+                            if obj_name in defs:
+                                def_info = defs[obj_name]
+                                results.append({
+                                    'ObjectName': obj_name,
+                                    'ObjectType': def_info['ObjectType'],
+                                    'SQLDefinition': def_info['SQLDefinition'],
+                                    'Database': try_db,
+                                    'SchemaName': def_info['SchemaName'],
+                                    'Chiamante_L1': obj_info['Chiamanti'],
+                                    'Chiamante_L1_Database': obj_info['Chiamanti_Database'],
+                                    'DipendenzaOriginale': obj_info.get('DipendenzaOriginale', '')
+                                })
+                                objects_found_count += 1
+                                # Rimuovi oggetto dalla lista per non cercarlo negli altri DB
+                                object_names = [o for o in object_names if o != obj_name]
+                except Exception as e:
+                    with print_lock:
+                        print(f"   ⚠️ Errore ricerca in DB {try_db}: {e}")
             
-            if not found:
-                with print_lock:
-                    print(f"⚠️ Oggetti non trovati in nessun DB: {[obj['OggettoDipendente'] for obj in objs]}")
+            with print_lock:
+                print(f"   Trovati {objects_found_count}/{len(objs)} oggetti")
+                if objects_found_count < len(objs):
+                    not_found = [obj['OggettoDipendente'] for obj in objs if obj['OggettoDipendente'] in object_names]
+                    print(f"   Non trovati: {not_found[:10]}")
         else:
             # Database noto: batch query diretta
             object_names = [obj['OggettoDipendente'] for obj in objs]
