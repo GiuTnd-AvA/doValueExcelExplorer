@@ -443,8 +443,8 @@ def extract_dependencies_from_sql(sql_definition):
     
     return {'tables': list(tables), 'objects': list(objects)}
 
-def extract_dependencies_with_context(df, dep_col='Dipendenze_Oggetti_L4'):
-    """Estrae dipendenze oggetti L4 con contesto chiamante (da L3)."""
+def extract_dependencies_with_context(df, dep_col='Dipendenze_Oggetti'):
+    """Estrae dipendenze oggetti con contesto chiamante."""
     dependency_map = {}
     
     for idx, row in df.iterrows():
@@ -475,7 +475,7 @@ def extract_dependencies_with_context(df, dep_col='Dipendenze_Oggetti_L4'):
     
     return dependency_map
 
-def extract_tables_with_context(df, table_col='Dipendenze_Tabelle_L4'):
+def extract_tables_with_context(df, table_col='Dipendenze_Tabelle'):
     """Estrae tabelle referenziate L4 con contesto chiamante."""
     table_map = {}
     
@@ -631,29 +631,22 @@ def main():
         print(f"   Usando {MAX_WORKERS} workers paralleli con batch size {BATCH_SIZE}\n")
         
         # Prepara dati per batch processing
-        databases_l3 = list(df_l3['Database'].dropna().unique())
+        # Usa la lista hardcoded dei 9 database disponibili
+        databases_l3 = AVAILABLE_DATABASES
+        print(f"   Database disponibili per ricerca: {len(databases_l3)} database")
         
-        # Prepara oggetti con database di origine
+        # Prepara oggetti - forza ricerca in tutti i database disponibili
         objects_to_extract = []
         for obj_info in new_deps_l4_total:
             object_name = obj_info['name']
             clean_name = object_name.replace('[', '').replace(']', '').strip()
             
-            # Trova database da chiamanti
-            database_found = None
-            caller_dbs = []
-            for caller_info in obj_info['callers_list']:
-                db_candidate = caller_info.get('database', '')
-                if db_candidate:
-                    caller_dbs.append(db_candidate)
-            
-            database_found = caller_dbs[0] if caller_dbs else None
-            
+            # Non usare database specifico - forza ricerca in tutti i DB disponibili
             objects_to_extract.append({
                 'OggettoDipendente': clean_name,
-                'Database': database_found,
+                'Database': None,  # Forza ricerca in tutti i database
                 'Chiamanti': obj_info['caller_names'],
-                'Chiamanti_Database': '; '.join(caller_dbs) if caller_dbs else '',
+                'Chiamanti_Database': '',
                 'DipendenzaOriginale': obj_info.get('called_by', '')
             })
         

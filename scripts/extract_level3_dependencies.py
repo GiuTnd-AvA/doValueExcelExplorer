@@ -442,8 +442,8 @@ def extract_dependencies_from_sql(sql_definition):
     
     return {'tables': list(tables), 'objects': list(objects)}
 
-def extract_dependencies_with_context(df, dep_col='Dipendenze_Oggetti_L3'):
-    """Estrae dipendenze oggetti L3 con contesto chiamante (da L2)."""
+def extract_dependencies_with_context(df, dep_col='Dipendenze_Oggetti'):
+    """Estrae dipendenze oggetti con contesto chiamante."""
     dependency_map = {}
     
     for idx, row in df.iterrows():
@@ -474,7 +474,7 @@ def extract_dependencies_with_context(df, dep_col='Dipendenze_Oggetti_L3'):
     
     return dependency_map
 
-def extract_tables_with_context(df, table_col='Dipendenze_Tabelle_L3'):
+def extract_tables_with_context(df, table_col='Dipendenze_Tabelle'):
     """Estrae tabelle referenziate L3 con contesto chiamante."""
     table_map = {}
     
@@ -623,29 +623,22 @@ def main():
         print(f"   Usando {MAX_WORKERS} workers paralleli con batch size {BATCH_SIZE}\n")
         
         # Prepara dati per batch processing
-        databases_l2 = list(df_l2['Database'].dropna().unique())
+        # Usa la lista hardcoded dei 9 database disponibili
+        databases_l2 = AVAILABLE_DATABASES
+        print(f"   Database disponibili per ricerca: {len(databases_l2)} database")
         
-        # Prepara oggetti con database di origine
+        # Prepara oggetti - forza ricerca in tutti i database disponibili
         objects_to_extract = []
         for obj_info in new_deps_l3_total:
             object_name = obj_info['name']
             clean_name = object_name.replace('[', '').replace(']', '').strip()
             
-            # Trova database da chiamanti
-            database_found = None
-            caller_dbs = []
-            for caller_info in obj_info['callers_list']:
-                db_candidate = caller_info.get('database', '')
-                if db_candidate:
-                    caller_dbs.append(db_candidate)
-            
-            database_found = caller_dbs[0] if caller_dbs else None
-            
+            # Non usare database specifico - forza ricerca in tutti i DB disponibili
             objects_to_extract.append({
                 'OggettoDipendente': clean_name,
-                'Database': database_found,
+                'Database': None,  # Forza ricerca in tutti i database
                 'Chiamanti': obj_info['caller_names'],
-                'Chiamanti_Database': '; '.join(caller_dbs) if caller_dbs else '',
+                'Chiamanti_Database': '',
                 'DipendenzaOriginale': obj_info.get('called_by', '')
             })
         
@@ -700,8 +693,8 @@ def main():
             tables_l4 = deps_l4['tables']
             objects_l4 = deps_l4['objects']
             
-            tables_l4_str = '; '.join(tables_l4) if tables_l4 else 'Nessuna'
-            objects_l4_str = '; '.join(objects_l4) if objects_l4 else 'Nessuna'
+            tables_str = '; '.join(tables_l4) if tables_l4 else 'Nessuna'
+            objects_str = '; '.join(objects_l4) if objects_l4 else 'Nessuna'
             
             oggetti_l3.append({
                 'Livello': 3,
@@ -713,10 +706,10 @@ def main():
                 'Oggetti_Chiamanti_L2': result['Chiamante_L2'],
                 'Catena_Origine_L1': 'L1→L2→L3',  # Simplified chain
                 'N_Chiamanti_L2': result['Chiamante_L2'].count(';') + 1 if result['Chiamante_L2'] else 0,
-                'Dipendenze_Tabelle_L4': tables_l4_str,
-                'N_Tabelle_L4': len(tables_l4),
-                'Dipendenze_Oggetti_L4': objects_l4_str,
-                'N_Oggetti_L4': len(objects_l4),
+                'Dipendenze_Tabelle': tables_str,
+                'N_Tabelle': len(tables_l4),
+                'Dipendenze_Oggetti': objects_str,
+                'N_Oggetti': len(objects_l4),
                 'SQLDefinition': sql_def
             })
     
@@ -725,9 +718,9 @@ def main():
     
     dipendenze_dettagliate = []
     
-    # Dipendenze L2 → L3 (OGGETTI)
+    # Dipendenze L2 → potenziali L3 (OGGETTI)
     for i, row_l2 in df_l2.iterrows():
-        deps_objects = row_l2.get('Dipendenze_Oggetti_L3', '')
+        deps_objects = row_l2.get('Dipendenze_Oggetti', '')
         if isinstance(deps_objects, str) and deps_objects != 'Nessuna':
             deps = [d.strip() for d in deps_objects.split(';') if d.strip()]
             for dep in deps:
@@ -744,11 +737,11 @@ def main():
                     'Livello_Dipendenza': 3
                 })
     
-    # Dipendenze L3 → L4 (OGGETTI)
+    # Dipendenze L3 → potenziali L4 (OGGETTI)
     for obj_l3 in oggetti_l3:
-        objects_l4_str = obj_l3['Dipendenze_Oggetti_L4']
-        if objects_l4_str != 'Nessuna':
-            deps = [d.strip() for d in objects_l4_str.split(';') if d.strip()]
+        objects_str = obj_l3['Dipendenze_Oggetti']
+        if objects_str != 'Nessuna':
+            deps = [d.strip() for d in objects_str.split(';') if d.strip()]
             for dep in deps:
                 dep_type = classify_dependency_type(dep)
                 dipendenze_dettagliate.append({
@@ -760,7 +753,7 @@ def main():
                     'Dipendenza': dep,
                     'Tipo_Dipendenza': 'Oggetto SQL',
                     'ObjectType_Dipendenza': dep_type,
-                    'Livello_Dipendenza': 4
+                    'Livello_Dipendenza': 'Potenziale L4'
                 })
     
     df_deps_dettagliate = pd.DataFrame(dipendenze_dettagliate)
