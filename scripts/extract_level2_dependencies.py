@@ -255,10 +255,14 @@ def extract_sql_definitions_batch(database, object_names):
         
         # Query 1: Oggetti con schema specificato
         if schema_objects:
-            placeholders = ','.join(['(?,?)'] * len(schema_objects))
+            # Costruisci condizioni OR per ogni coppia schema.object
+            conditions = []
             params = []
             for schema, obj, _ in schema_objects:
+                conditions.append("(LOWER(SCHEMA_NAME(o.schema_id)) = ? AND LOWER(o.name) = ?)")
                 params.extend([schema, obj])
+            
+            where_clause = " OR ".join(conditions)
             
             query = f"""
             SELECT 
@@ -268,7 +272,7 @@ def extract_sql_definitions_batch(database, object_names):
                 SCHEMA_NAME(o.schema_id) AS SchemaName
             FROM sys.sql_modules m
             INNER JOIN sys.objects o ON m.object_id = o.object_id
-            WHERE (LOWER(SCHEMA_NAME(o.schema_id)), LOWER(o.name)) IN (VALUES {placeholders})
+            WHERE {where_clause}
             """
             cursor.execute(query, params)
             columns = [column[0] for column in cursor.description]
