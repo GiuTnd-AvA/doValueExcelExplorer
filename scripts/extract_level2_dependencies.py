@@ -553,7 +553,7 @@ def find_new_dependencies(already_extracted, dependency_map):
 
 def main():
     print("="*70)
-    print("ESTRAZIONE DIPENDENZE LIVELLO 2 (con GAP ANALYSIS + TABELLE)")
+    print("ESTRAZIONE DIPENDENZE LIVELLO 2 (solo GAP ANALYSIS)")
     print("="*70)
     
     # 1. Carica oggetti livello 1 (analizzati)
@@ -572,7 +572,7 @@ def main():
         print(f"ERRORE: {e}")
         return
     
-    # 2. GAP ANALYSIS: trova nuove dipendenze OGGETTI SQL
+    # 2. GAP ANALYSIS: trova nuove dipendenze OGGETTI SQL (solo sys.sql_expression_dependencies)
     print("\n2. Gap Analysis - Identificazione nuove dipendenze Oggetti SQL...")
     dependency_map = extract_dependencies_with_context(df_l1_critical)
     print(f"   Dipendenze oggetti SQL totali: {len(dependency_map)}")
@@ -580,8 +580,8 @@ def main():
     new_deps = find_new_dependencies(already_extracted_l1, dependency_map)
     print(f"   Nuovi Oggetti SQL critici da estrarre: {len(new_deps)}")
     
-    # 3. Traccia TABELLE referenziate E trova oggetti associati CON PARALLEL PROCESSING
-    print("\n3. Tracciamento tabelle referenziate + estrazione oggetti associati...")
+    # 3. Traccia solo TABELLE referenziate (per report, non investigare oggetti)
+    print("\n3. Tracciamento tabelle referenziate...")
     table_map = extract_tables_with_context(df_l1_critical)
     print(f"   Tabelle totali referenziate: {len(table_map)}")
     
@@ -605,43 +605,8 @@ def main():
     
     print(f"   Tabelle critiche referenziate: {len(critical_tables)}")
     
-    # Parallel table investigation
-    if critical_tables:
-        print(f"   Investigating {len(critical_tables)} tabelle in parallelo...")
-        
-        # Split tables in batches
-        table_batches = []
-        for i in range(0, len(critical_tables), BATCH_SIZE):
-            table_batches.append(critical_tables[i:i + BATCH_SIZE])
-        
-        table_objects_found = []
-        processed_tables = 0
-        
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {
-                executor.submit(process_table_batch, batch, new_deps, already_extracted_l1): i
-                for i, batch in enumerate(table_batches)
-            }
-            
-            for future in as_completed(futures):
-                batch_idx = futures[future]
-                try:
-                    batch_results = future.result()
-                    table_objects_found.extend(batch_results)
-                    processed_tables += len(table_batches[batch_idx])
-                    
-                    with print_lock:
-                        print(f"   Tabelle investigate: {processed_tables}/{len(critical_tables)}")
-                except Exception as e:
-                    with print_lock:
-                        print(f"   ⚠️ Errore batch tabelle {batch_idx}: {e}")
-        
-        print(f"   Oggetti SQL trovati su tabelle: {len(table_objects_found)}")
-    else:
-        table_objects_found = []
-    
-    # Unisci oggetti trovati da gap analysis + investigazione tabelle
-    new_deps_total = new_deps + table_objects_found
+    # Usa solo oggetti da gap analysis (no table investigation)
+    new_deps_total = new_deps
     print(f"   Totale oggetti L2 da estrarre: {len(new_deps_total)}")
     
     if not new_deps_total:
@@ -731,13 +696,13 @@ def main():
         for result in all_results:
             sql_def = result['SQLDefinition']
             
-            # Estrai dipendenze livello 3 (separate: tabelle + oggetti)
-            deps_l3 = extract_dependencies_from_sql(sql_def)
-            tables_l3 = deps_l3['tables']
-            objects_l3 = deps_l3['objects']
+            # Estrai dipendenze (tabelle + oggetti) - non etichettare come L3
+            deps = extract_dependencies_from_sql(sql_def)
+            tables = deps['tables']
+            objects = deps['objects']
             
-            tables_l3_str = '; '.join(tables_l3) if tables_l3 else 'Nessuna'
-            objects_l3_str = '; '.join(objects_l3) if objects_l3 else 'Nessuna'
+            tables_str = '; '.join(tables) if tables else 'Nessuna'
+            objects_str = '; '.join(objects) if objects else 'Nessuna'
             
             oggetti_l2.append({
                 'Livello': 2,
@@ -748,10 +713,10 @@ def main():
                 'SchemaName': result['SchemaName'],
                 'Oggetti_Chiamanti_L1': result['Chiamante_L1'],
                 'N_Chiamanti_Critici': result['Chiamante_L1'].count(';') + 1 if result['Chiamante_L1'] else 0,
-                'Dipendenze_Tabelle_L3': tables_l3_str,
-                'N_Tabelle_L3': len(tables_l3),
-                'Dipendenze_Oggetti_L3': objects_l3_str,
-                'N_Oggetti_L3': len(objects_l3),
+                'Dipendenze_Tabelle': tables_str,
+                'N_Tabelle': len(tables),
+                'Dipendenze_Oggetti': objects_str,
+                'N_Oggetti': len(objects),
                 'SQLDefinition': sql_def
             })
     
@@ -779,11 +744,11 @@ def main():
                     'Livello_Dipendenza': 2
                 })
     
-    # Dipendenze L2 → L3 (OGGETTI)
+    # Dipendenze L2 → potenziali L3 (OGGETTI)
     for obj_l2 in oggetti_l2:
-        objects_l3_str = obj_l2['Dipendenze_Oggetti_L3']
-        if objects_l3_str != 'Nessuna':
-            deps = [d.strip() for d in objects_l3_str.split(';') if d.strip()]
+        objects_str = obj_l2['Dipendenze_Oggetti']
+        if objects_str != 'Nessuna':
+            deps = [d.strip() for d in objects_str.split(';') if d.strip()]
             for dep in deps:
                 dep_type = classify_dependency_type(dep)
                 dipendenze_dettagliate.append({
@@ -795,7 +760,7 @@ def main():
                     'Dipendenza': dep,
                     'Tipo_Dipendenza': 'Oggetto SQL',
                     'ObjectType_Dipendenza': dep_type,
-                    'Livello_Dipendenza': 3
+                    'Livello_Dipendenza': 'Potenziale L3'
                 })
     
     df_deps_dettagliate = pd.DataFrame(dipendenze_dettagliate)
@@ -828,7 +793,6 @@ def main():
             {'Metrica': 'GAP ANALYSIS', 'Valore': ''},
             {'Metrica': 'Dipendenze Oggetti SQL Trovate', 'Valore': len(dependency_map)},
             {'Metrica': 'Nuove Dipendenze Critiche (Gap)', 'Valore': len(new_deps)},
-            {'Metrica': 'Oggetti da Tabelle', 'Valore': len(table_objects_found)},
             {'Metrica': 'Totale Oggetti L2 da Estrarre', 'Valore': len(new_deps_total)},
             {'Metrica': 'Tabelle Referenziate Totali', 'Valore': len(table_map)},
             {'Metrica': 'Tabelle Referenziate Critiche', 'Valore': len(critical_tables)},
