@@ -11,10 +11,10 @@ import threading
 # =========================
 # CONFIG
 # =========================
-INPUT_FILE_L3 = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_3.xlsx'
-INPUT_FILE_L2 = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_2.xlsx'
-INPUT_FILE_L1 = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\analisi_oggetti_critici.xlsx'
-OUTPUT_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_4.xlsx'
+INPUT_FILE_L3 = rf'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_3.xlsx'
+INPUT_FILE_L2 = rf'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_2.xlsx'
+INPUT_FILE_L1 = rf'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\analisi_oggetti_critici.xlsx'
+OUTPUT_FILE = rf'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_4.xlsx'
 
 SQL_SERVER = 'EPCP3'
 # Lista completa dei 9 database sul server EPCP3
@@ -744,7 +744,6 @@ def main():
             {'Metrica': 'LIVELLO 4 - SUMMARY', 'Valore': ''},
             {'Metrica': 'Oggetti Già Estratti (L1+L2+L3)', 'Valore': len(already_extracted)},
             {'Metrica': 'Nuove Dipendenze L4', 'Valore': len(new_deps_l4)},
-            {'Metrica': 'Oggetti da Tabelle L3', 'Valore': len(table_objects_found)},
             {'Metrica': 'Totale Oggetti L4', 'Valore': len(new_deps_l4_total)},
             {'Metrica': 'Oggetti Estratti', 'Valore': len(oggetti_l4)},
             {'Metrica': 'Oggetti Non Trovati', 'Valore': len(new_deps_l4_total) - len(oggetti_l4) if new_deps_l4_total else 0},
