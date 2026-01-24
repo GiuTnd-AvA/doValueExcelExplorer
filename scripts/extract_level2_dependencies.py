@@ -15,6 +15,8 @@ ANALYZED_FILE_L1 = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Es
 OUTPUT_FILE = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\DIPENDENZE_LIVELLO_2.xlsx'
 
 SQL_SERVER = 'EPCP3'
+# Lista completa dei 9 database sul server EPCP3
+AVAILABLE_DATABASES = ['ams', 'CORESQL7', 'ANALISI', 's1057', 'BASEDATI_BI', 'EPC_BI', 'S1259', 'gestito', 'S1057B']
 MAX_WORKERS = 4  # Parallelize processing
 BATCH_SIZE = 100  # Process objects in batches
 
@@ -624,29 +626,22 @@ def main():
         print(f"   Usando {MAX_WORKERS} workers paralleli con batch size {BATCH_SIZE}\n")
         
         # Prepara dati per batch processing
-        databases_l1 = list(df_l1_critical['Database'].dropna().unique())
+        # Usa la lista hardcoded dei 9 database disponibili
+        databases_l1 = AVAILABLE_DATABASES
+        print(f"   Database disponibili per ricerca: {len(databases_l1)} database")
         
-        # Prepara oggetti con database di origine
+        # Prepara oggetti - forza ricerca in tutti i database disponibili
         objects_to_extract = []
         for obj_info in new_deps_total:
             object_name = obj_info['name']
             clean_name = object_name.replace('[', '').replace(']', '').strip()
             
-            # Trova database da chiamanti
-            database_found = None
-            caller_dbs = []
-            for caller_info in obj_info['callers_list']:
-                db_candidate = caller_info.get('database', '')
-                if db_candidate:
-                    caller_dbs.append(db_candidate)
-            
-            database_found = caller_dbs[0] if caller_dbs else None
-            
+            # Non usare database specifico - forza ricerca in tutti i DB disponibili
             objects_to_extract.append({
                 'OggettoDipendente': clean_name,
-                'Database': database_found,
+                'Database': None,  # Forza ricerca in tutti i database
                 'Chiamanti': obj_info['critical_caller_names'],
-                'Chiamanti_Database': '; '.join(caller_dbs) if caller_dbs else '',
+                'Chiamanti_Database': '',
                 'DipendenzaOriginale': obj_info.get('called_by_critical', '')
             })
         
