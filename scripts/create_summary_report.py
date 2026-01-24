@@ -59,6 +59,12 @@ def create_summary_report():
     df_l1 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 1")
     df_l2 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 2")
     
+    # Debug: mostra info L1
+    print(f"DEBUG L1: {len(df_l1)} righe")
+    print(f"DEBUG L1 colonne: {list(df_l1.columns)}")
+    if len(df_l1) > 0:
+        print(f"DEBUG L1 prima riga: {df_l1.iloc[0].to_dict()}")
+    
     if has_l3:
         df_l3 = pd.read_excel(l3_path, sheet_name="Oggetti Livello 3")
         print(f"✓ Oggetti L3: {len(df_l3)}")
