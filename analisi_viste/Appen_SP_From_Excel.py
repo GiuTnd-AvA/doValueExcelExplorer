@@ -30,12 +30,12 @@ class SPDDLAppender:
 
     Richiede intestazioni (case-insensitive, spazi tollerati):
     - server
-    - database
+    - database (alias: db)
     - schema
     - table
-    - nome oggetto
-    - tipo oggetto
-    - script creazione
+    - nome oggetto (alias: object name)
+    - tipo oggetto (alias: object type)
+    - script creazione (alias: DDL)
     """
 
     REQUIRED_HEADERS = [
@@ -47,6 +47,12 @@ class SPDDLAppender:
         "tipo oggetto",
         "script creazione",
     ]
+    HEADER_ALIASES = {
+        "database": ["db"],
+        "tipo oggetto": ["object type", "tipooggetto", "objecttype"],
+        "script creazione": ["ddl", "scriptcreazione"],
+        "nome oggetto": ["nome", "object name", "oggetto", "nomeoggetto", "objectname"],
+    }
 
     def __init__(
         self,
@@ -77,23 +83,20 @@ class SPDDLAppender:
     @staticmethod
     def _is_stored_procedure(tipo: str) -> bool:
         t = (tipo or "").strip().lower()
-        # accetta varie forme comuni
         return (
             t == "stored procedure"
             or t == "storedprocedure"
             or t == "procedure"
             or t == "procedura"
             or t == "sp"
-            or ("proc" in t)  # es. "sql stored proc"
+            or ("proc" in t)
         )
 
     @staticmethod
     def _extract_proc_from_ddl(ddl: str) -> Dict[str, Optional[str]]:
-        """Tenta di estrarre schema e nome proc dalla DDL."""
         if not ddl:
             return {"schema": None, "name": None}
         text = str(ddl)
-        # CREATE [OR ALTER] PROCEDURE [schema].[name]
         m = re.search(
             r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+\[([^\]]+)\]\s*\.\s*\[([^\]]+)\]",
             text,
@@ -101,7 +104,6 @@ class SPDDLAppender:
         )
         if m:
             return {"schema": m.group(1), "name": m.group(2)}
-        # CREATE PROCEDURE [name]
         m = re.search(
             r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+\[([^\]]+)\]",
             text,
@@ -109,7 +111,6 @@ class SPDDLAppender:
         )
         if m:
             return {"schema": None, "name": m.group(1)}
-        # CREATE PROCEDURE schema.name
         m = re.search(
             r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+([a-zA-Z0-9_]+)\s*\.\s*([a-zA-Z0-9_]+)\b",
             text,
@@ -117,7 +118,6 @@ class SPDDLAppender:
         )
         if m:
             return {"schema": m.group(1), "name": m.group(2)}
-        # Name only
         m = re.search(
             r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+([a-zA-Z0-9_]+)\b",
             text,
@@ -139,25 +139,33 @@ class SPDDLAppender:
             if not rows:
                 return []
             headers = [self._norm_header(h) for h in (rows[0] or [])]
-            # Mappa header -> indice
             idx_map: Dict[str, int] = {}
             for needed in self.REQUIRED_HEADERS:
                 if needed in headers:
                     idx_map[needed] = headers.index(needed)
-                else:
-                    # Prova varianti senza spazi
-                    needed_compact = needed.replace(" ", "")
-                    found_idx = None
-                    for i, h in enumerate(headers):
-                        if h.replace(" ", "") == needed_compact:
-                            found_idx = i
+                    continue
+                needed_compact = needed.replace(" ", "")
+                found_idx = None
+                for i, h in enumerate(headers):
+                    if h.replace(" ", "") == needed_compact:
+                        found_idx = i
+                        break
+                if found_idx is None:
+                    for alias in self.HEADER_ALIASES.get(needed, []):
+                        alias_norm = self._norm_header(alias)
+                        alias_compact = alias_norm.replace(" ", "")
+                        for i, h in enumerate(headers):
+                            if h == alias_norm or h.replace(" ", "") == alias_compact:
+                                found_idx = i
+                                break
+                        if found_idx is not None:
                             break
-                    if found_idx is not None:
-                        idx_map[needed] = found_idx
-                    else:
-                        raise RuntimeError(f"Colonna richiesta non trovata: '{needed}'")
+                if found_idx is not None:
+                    idx_map[needed] = found_idx
+                else:
+                    raise RuntimeError(f"Colonna richiesta non trovata: '{needed}'")
 
-            data_rows = rows[1:]  # salta intestazione
+            data_rows = rows[1:]
             out: List[Dict[str, str]] = []
             for r in data_rows:
                 if not r:
@@ -173,11 +181,10 @@ class SPDDLAppender:
                 server = get("server")
                 db = get("database")
                 schema = get("schema")
-                table = get("table")  # presente nelle colonne, ma per SP useremo Nome Oggetto
+                table = get("table")
                 nome_oggetto = get("nome oggetto")
                 ddl = get("script creazione")
 
-                # Se manca il nome oggetto, prova a estrarlo dalla DDL
                 if (not nome_oggetto) and ddl:
                     parsed = self._extract_proc_from_ddl(ddl)
                     if parsed["name"]:
