@@ -59,7 +59,7 @@ def analyze_level_hybrid(df_level, level_name):
         # Solo Dipendenze (no DML/DDL)
         critici_solo_deps = df_level[
             (df_level['Critico_Migrazione'] == 'SÌ') & 
-            (df_level['Motivo_Criticità'].str.contains('Dipendenze \(', na=False)) &
+            (df_level['Motivo_Criticità'].str.contains('Dipendenze \\(', na=False, regex=True)) &
             (~df_level['Motivo_Criticità'].str.contains('DML/DDL', na=False))
         ]
         
@@ -94,16 +94,21 @@ def analyze_level_hybrid(df_level, level_name):
     db_dist = critici_totali['Database'].value_counts() if num_critici > 0 else pd.Series()
     
     # Distribuzione per criticità tecnica
-    if 'Criticità_Tecnica' in critici_totali.columns:
+    if num_critici > 0 and 'Criticità_Tecnica' in critici_totali.columns:
         crit_tech_dist = critici_totali['Criticità_Tecnica'].value_counts()
     else:
         crit_tech_dist = pd.Series()
     
     # Top oggetti per ReferenceCount
-    if 'ReferenceCount' in critici_totali.columns:
-        top_refs = critici_totali.nlargest(10, 'ReferenceCount')[
-            ['Database', 'Schema', 'ObjectName', 'ObjectType', 'ReferenceCount', 'Motivo_Criticità']
-        ]
+    if num_critici > 0 and 'ReferenceCount' in critici_totali.columns:
+        # Verifica che tutte le colonne necessarie esistano
+        required_cols = ['Database', 'Schema', 'ObjectName', 'ObjectType', 'ReferenceCount', 'Motivo_Criticità']
+        available_cols = [col for col in required_cols if col in critici_totali.columns]
+        
+        if len(available_cols) >= 5:  # Almeno le colonne base
+            top_refs = critici_totali.nlargest(10, 'ReferenceCount')[available_cols]
+        else:
+            top_refs = pd.DataFrame()
     else:
         top_refs = pd.DataFrame()
     
@@ -417,7 +422,7 @@ def generate_md_report(sheets, analyses):
     lines.append(f"| SOLO Dipendenze (50+ refs) | {total_critici_solo_deps} |")
     lines.append(f"| ENTRAMBI (DML/DDL + Dipendenze) | {total_critici_entrambi} |")
     lines.append(f"| **TOTALE** | **{total_critici}** |")
-    lines.append("")}
+    lines.append("")
     
     lines.append("### Per livello:")
     lines.append("")
