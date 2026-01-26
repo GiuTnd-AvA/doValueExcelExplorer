@@ -70,76 +70,58 @@ def load_tables_data(summary_path):
         return {}
 
 def extract_tables_from_level(df_level, df_dependencies, level_name):
-    """Estrae tabelle da un livello."""
-    print(f"\n  Analisi {level_name}...")
+    """Estrae tabelle da un livello.
     
-    # Debug: mostra colonne disponibili
-    print(f"    Colonne livello: {list(df_level.columns[:5])}..." if len(df_level.columns) > 5 else f"    Colonne livello: {list(df_level.columns)}")
-    if df_dependencies is not None and not df_dependencies.empty:
-        print(f"    Colonne dipendenze: {list(df_dependencies.columns[:5])}..." if len(df_dependencies.columns) > 5 else f"    Colonne dipendenze: {list(df_dependencies.columns)}")
+    LOGICA:
+    - L1: Colonna 'Table' (tabella iniziale) + Colonna 'Dipendenze_Tabelle' (separate da ;)
+    - L2-L4: Solo colonna 'Dipendenze_Tabelle' (separate da ;)
+    """
+    print(f"\n  Analisi {level_name}...")
     
     tables_info = []
     
-    # Tabelle dalle dipendenze (priorità 1 - ha più info)
-    if df_dependencies is not None and not df_dependencies.empty:
-        # Cerca colonna Table (varianti)
-        table_col = None
-        for col in ['Table', 'TableName', 'Nome_Tabella']:
-            if col in df_dependencies.columns:
-                table_col = col
-                break
-        
-        # Cerca colonna Database (varianti)
-        db_col = None
-        for col in ['Database', 'DatabaseName', 'DB']:
-            if col in df_dependencies.columns:
-                db_col = col
-                break
-        
-        if table_col and db_col:
-            for _, row in df_dependencies.drop_duplicates(subset=[db_col, table_col]).iterrows():
-                table_name = str(row[table_col]).strip()
-                db_name = str(row[db_col]).strip().upper()
-                
-                if table_name and table_name != 'nan' and db_name and db_name != 'NAN':
-                    tables_info.append({
-                        'Database': db_name,
-                        'Table': table_name,
-                        'Source': 'Dipendenze',
-                        'Level': level_name
-                    })
-            print(f"    Tabelle da dipendenze: {len(tables_info)}")
-        else:
-            print(f"    ⚠ Dipendenze: colonne Table/Database non trovate")
-    
-    # Tabelle dal livello principale (solo L1 tipicamente)
-    table_col_level = None
-    for col in ['Table', 'TableName', 'Nome_Tabella']:
-        if col in df_level.columns:
-            table_col_level = col
-            break
-    
-    db_col_level = None
-    for col in ['Database', 'DatabaseName', 'DB']:
-        if col in df_level.columns:
-            db_col_level = col
-            break
-    
-    if table_col_level and db_col_level:
-        for _, row in df_level.drop_duplicates(subset=[db_col_level, table_col_level]).iterrows():
-            table_name = str(row[table_col_level]).strip()
-            db_name = str(row[db_col_level]).strip().upper()
+    # 1. Tabelle INIZIALI (solo L1 - dalla colonna Table)
+    if 'Table' in df_level.columns and 'Database' in df_level.columns:
+        for _, row in df_level.iterrows():
+            table_name = str(row['Table']).strip()
+            db_name = str(row['Database']).strip().upper()
             
             if table_name and table_name != 'nan' and db_name and db_name != 'NAN':
-                # Evita duplicati
-                if not any(t['Database'] == db_name and t['Table'] == table_name for t in tables_info):
-                    tables_info.append({
-                        'Database': db_name,
-                        'Table': table_name,
-                        'Source': 'Iniziale',
-                        'Level': level_name
-                    })
-        print(f"    Tabelle da livello (no duplicati): {sum(1 for t in tables_info if t['Source'] == 'Iniziale')}")
+                tables_info.append({
+                    'Database': db_name,
+                    'Table': table_name,
+                    'Source': 'Tabella Iniziale',
+                    'Level': level_name
+                })
+        print(f"    Tabelle iniziali (da colonna Table): {len(tables_info)}")
+    
+    # 2. Tabelle REFERENZIATE (dalla colonna Dipendenze_Tabelle - separati da ;)
+    deps_tables_count = 0
+    if 'Dipendenze_Tabelle' in df_level.columns and 'Database' in df_level.columns:
+        for _, row in df_level.iterrows():
+            db_name = str(row['Database']).strip().upper()
+            dipendenze = str(row.get('Dipendenze_Tabelle', '')).strip()
+            
+            if dipendenze and dipendenze != 'nan' and dipendenze != 'Nessuna':
+                # Split per ;
+                tabelle_deps = [t.strip() for t in dipendenze.split(';') if t.strip()]
+                
+                for table_dep in tabelle_deps:
+                    # Rimuovi dbo. se presente
+                    if table_dep.startswith('dbo.'):
+                        table_dep = table_dep[4:]
+                    
+                    # Evita duplicati
+                    if not any(t['Database'] == db_name and t['Table'] == table_dep for t in tables_info):
+                        tables_info.append({
+                            'Database': db_name,
+                            'Table': table_dep,
+                            'Source': 'Dipendenza',
+                            'Level': level_name
+                        })
+                        deps_tables_count += 1
+        
+        print(f"    Tabelle da dipendenze (separate da ;): {deps_tables_count}")
     
     # Converti in DataFrame
     df_tables = pd.DataFrame(tables_info)
