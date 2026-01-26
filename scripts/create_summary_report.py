@@ -59,12 +59,6 @@ def create_summary_report():
     df_l1 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 1")
     df_l2 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 2")
     
-    # Debug: mostra info L1
-    print(f"DEBUG L1: {len(df_l1)} righe")
-    print(f"DEBUG L1 colonne: {list(df_l1.columns)}")
-    if len(df_l1) > 0:
-        print(f"DEBUG L1 prima riga: {df_l1.iloc[0].to_dict()}")
-    
     if has_l3:
         df_l3 = pd.read_excel(l3_path, sheet_name="Oggetti Livello 3")
         print(f"✓ Oggetti L3: {len(df_l3)}")
@@ -88,8 +82,8 @@ def create_summary_report():
     summary_l1_rows = []
     
     for _, obj_row in df_l1.iterrows():
-        obj_name = obj_row.get('NomeOggetto', '')
-        obj_type = obj_row.get('TipoOggetto', '')
+        obj_name = obj_row.get('ObjectName', '')
+        obj_type = obj_row.get('ObjectType', '')
         obj_server = obj_row.get('Server', '')
         obj_db = obj_row.get('Database', '')
         
@@ -135,8 +129,8 @@ def create_summary_report():
     summary_l2_rows = []
     
     for _, obj_l2_row in df_l2.iterrows():
-        obj_name = obj_l2_row.get('NomeOggetto', '')
-        obj_type = obj_l2_row.get('TipoOggetto', '')
+        obj_name = obj_l2_row.get('ObjectName', '')
+        obj_type = obj_l2_row.get('ObjectType', '')
         obj_server = obj_l2_row.get('Server', '')
         obj_db = obj_l2_row.get('Database', '')
         
@@ -198,8 +192,8 @@ def create_summary_report():
     
     if has_l3 and df_l3 is not None:
         for _, obj_l3_row in df_l3.iterrows():
-            obj_name = obj_l3_row.get('NomeOggetto', '')
-            obj_type = obj_l3_row.get('TipoOggetto', '')
+            obj_name = obj_l3_row.get('ObjectName', '')
+            obj_type = obj_l3_row.get('ObjectType', '')
             obj_server = obj_l3_row.get('Server', '')
             obj_db = obj_l3_row.get('Database', '')
             
@@ -329,7 +323,7 @@ def create_summary_report():
                        (df_l3 if has_l3 else None, 'L3'), 
                        (df_l4 if has_l4 else None, 'L4')]:
         if df is not None and len(df) > 0:
-            obj_type_col = 'TipoOggetto' if level == 'L1' else 'ObjectType'
+            obj_type_col = 'ObjectType'
             if obj_type_col in df.columns:
                 for obj_type in df[obj_type_col].unique():
                     count = len(df[df[obj_type_col] == obj_type])
@@ -362,6 +356,133 @@ def create_summary_report():
     print(f"✓ Statistiche globali create: {len(df_stats_global)} metriche")
     
     print("\n" + "=" * 80)
+    print("CREAZIONE SHEET DIPENDENZE RELAZIONI")
+    print("=" * 80)
+    
+    # Crea uno sheet con dipendenze "esplode" - una riga per ogni relazione
+    relation_rows = []
+    
+    # L1: Oggetto → Tabelle/Oggetti dipendenti
+    for _, obj_row in df_l1.iterrows():
+        obj_name = obj_row.get('ObjectName', '')
+        obj_type = obj_row.get('ObjectType', '')
+        obj_server = obj_row.get('Server', '')
+        obj_db = obj_row.get('Database', '')
+        
+        # Tabelle
+        dip_tabelle = str(obj_row.get('Dipendenze_Tabelle', ''))
+        if dip_tabelle and dip_tabelle not in ['nan', 'Nessuna', '']:
+            for table in dip_tabelle.split(';'):
+                table = table.strip()
+                if table:
+                    relation_rows.append({
+                        'Livello': 'L1',
+                        'Server': obj_server,
+                        'DB': obj_db,
+                        'Oggetto Origine': obj_name,
+                        'Tipo Origine': obj_type,
+                        'Relazione': 'Dipende da',
+                        'Oggetto Destinazione': table,
+                        'Tipo Destinazione': 'TABELLA',
+                        'Tipo Dipendenza': 'Tabella'
+                    })
+        
+        # Oggetti
+        dip_oggetti = str(obj_row.get('Dipendenze_Oggetti', ''))
+        if dip_oggetti and dip_oggetti not in ['nan', 'Nessuna', '']:
+            for obj in dip_oggetti.split(';'):
+                obj = obj.strip()
+                if obj:
+                    relation_rows.append({
+                        'Livello': 'L1',
+                        'Server': obj_server,
+                        'DB': obj_db,
+                        'Oggetto Origine': obj_name,
+                        'Tipo Origine': obj_type,
+                        'Relazione': 'Dipende da',
+                        'Oggetto Destinazione': obj,
+                        'Tipo Destinazione': 'OGGETTO SQL',
+                        'Tipo Dipendenza': 'Oggetto'
+                    })
+    
+    # L2: Oggetti_Chiamanti_L1 → L2 Object
+    for _, obj_row in df_l2.iterrows():
+        obj_name = obj_row.get('ObjectName', '')
+        obj_type = obj_row.get('ObjectType', '')
+        obj_server = obj_row.get('Server', '')
+        obj_db = obj_row.get('Database', '')
+        
+        chiamanti = str(obj_row.get('Oggetti_Chiamanti_L1', ''))
+        if chiamanti and chiamanti not in ['nan', '']:
+            for chiamante in chiamanti.split(';'):
+                chiamante = chiamante.strip()
+                if chiamante:
+                    relation_rows.append({
+                        'Livello': 'L2',
+                        'Server': obj_server,
+                        'DB': obj_db,
+                        'Oggetto Origine': chiamante,
+                        'Tipo Origine': 'L1',
+                        'Relazione': 'Chiama',
+                        'Oggetto Destinazione': obj_name,
+                        'Tipo Destinazione': obj_type,
+                        'Tipo Dipendenza': 'Chiamata L1→L2'
+                    })
+    
+    # L3: Similar pattern
+    if has_l3 and df_l3 is not None:
+        for _, obj_row in df_l3.iterrows():
+            obj_name = obj_row.get('ObjectName', '')
+            obj_type = obj_row.get('ObjectType', '')
+            obj_server = obj_row.get('Server', '')
+            obj_db = obj_row.get('Database', '')
+            
+            chiamanti = str(obj_row.get('Oggetti_Chiamanti_L2', ''))
+            if chiamanti and chiamanti not in ['nan', '']:
+                for chiamante in chiamanti.split(';'):
+                    chiamante = chiamante.strip()
+                    if chiamante:
+                        relation_rows.append({
+                            'Livello': 'L3',
+                            'Server': obj_server,
+                            'DB': obj_db,
+                            'Oggetto Origine': chiamante,
+                            'Tipo Origine': 'L2',
+                            'Relazione': 'Chiama',
+                            'Oggetto Destinazione': obj_name,
+                            'Tipo Destinazione': obj_type,
+                            'Tipo Dipendenza': 'Chiamata L2→L3'
+                        })
+    
+    # L4: Similar pattern
+    if has_l4 and df_l4 is not None:
+        for _, obj_row in df_l4.iterrows():
+            obj_name = obj_row.get('ObjectName', '')
+            obj_type = obj_row.get('ObjectType', '')
+            obj_server = obj_row.get('Server', '')
+            obj_db = obj_row.get('Database', '')
+            
+            chiamanti = str(obj_row.get('Oggetti_Chiamanti_L3', ''))
+            if chiamanti and chiamanti not in ['nan', '']:
+                for chiamante in chiamanti.split(';'):
+                    chiamante = chiamante.strip()
+                    if chiamante:
+                        relation_rows.append({
+                            'Livello': 'L4',
+                            'Server': obj_server,
+                            'DB': obj_db,
+                            'Oggetto Origine': chiamante,
+                            'Tipo Origine': 'L3',
+                            'Relazione': 'Chiama',
+                            'Oggetto Destinazione': obj_name,
+                            'Tipo Destinazione': obj_type,
+                            'Tipo Dipendenza': 'Chiamata L3→L4'
+                        })
+    
+    df_relations = pd.DataFrame(relation_rows)
+    print(f"✓ Relazioni create: {len(df_relations)} righe")
+    
+    print("\n" + "=" * 80)
     print("SALVATAGGIO FILE EXCEL")
     print("=" * 80)
     
@@ -376,6 +497,7 @@ def create_summary_report():
         if has_l4 and len(df_summary_l4) > 0:
             df_summary_l4.to_excel(writer, sheet_name='L4', index=False)
         df_stats_global.to_excel(writer, sheet_name='Statistiche Globali', index=False)
+        df_relations.to_excel(writer, sheet_name='Dipendenze Relazioni', index=False)
     print(f"✓ File salvato: {output_path}")
     
     print("\n" + "=" * 80)

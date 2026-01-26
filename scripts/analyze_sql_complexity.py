@@ -360,10 +360,75 @@ def main():
             # Combina con dati originali
             result_df = pd.concat([df, analysis_df], axis=1)
             
-            # Esporta risultati
+            # Crea sheet "Oggetti_Tabelle_Esploso" - una riga per ogni oggetto→tabella
+            obj_table_rows = []
+            for idx, row in result_df.iterrows():
+                obj_name = row.get('ObjectName', '')
+                obj_type = row.get('ObjectType', '')
+                obj_server = row.get('Server', '')
+                obj_db = row.get('Database', '')
+                critico_migr = row.get('Critico_Migrazione', '')
+                criticita_tec = row.get('Criticità_Tecnica', '')
+                
+                # Esplode tabelle
+                tables_str = row.get('Dipendenze_Tabelle', '')
+                if pd.notna(tables_str) and tables_str not in ['Nessuna', '']:
+                    tables = [t.strip() for t in str(tables_str).split(';') if t.strip()]
+                    for table in tables:
+                        obj_table_rows.append({
+                            'ObjectName': obj_name,
+                            'ObjectType': obj_type,
+                            'Server': obj_server,
+                            'Database': obj_db,
+                            'Critico_Migrazione': critico_migr,
+                            'Criticità_Tecnica': criticita_tec,
+                            'Tabella_Dipendente': table,
+                            'Tipo_Relazione': 'DIPENDE_DA_TABELLA'
+                        })
+            
+            df_obj_tables = pd.DataFrame(obj_table_rows)
+            
+            # Crea sheet "Oggetti_Oggetti_Esploso" - una riga per ogni oggetto→oggetto
+            obj_obj_rows = []
+            for idx, row in result_df.iterrows():
+                obj_name = row.get('ObjectName', '')
+                obj_type = row.get('ObjectType', '')
+                obj_server = row.get('Server', '')
+                obj_db = row.get('Database', '')
+                critico_migr = row.get('Critico_Migrazione', '')
+                criticita_tec = row.get('Criticità_Tecnica', '')
+                
+                # Esplode oggetti
+                objects_str = row.get('Dipendenze_Oggetti', '')
+                if pd.notna(objects_str) and objects_str not in ['Nessuna', '']:
+                    objects = [o.strip() for o in str(objects_str).split(';') if o.strip()]
+                    for obj_dep in objects:
+                        obj_obj_rows.append({
+                            'ObjectName': obj_name,
+                            'ObjectType': obj_type,
+                            'Server': obj_server,
+                            'Database': obj_db,
+                            'Critico_Migrazione': critico_migr,
+                            'Criticità_Tecnica': criticita_tec,
+                            'Oggetto_Dipendente': obj_dep,
+                            'Tipo_Relazione': 'DIPENDE_DA_OGGETTO'
+                        })
+            
+            df_obj_objects = pd.DataFrame(obj_obj_rows)
+            
+            # Esporta risultati con multi-sheet
             output_path = file_path.parent / f"{file_path.stem}{OUTPUT_SUFFIX}.xlsx"
-            result_df.to_excel(output_path, index=False)
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                result_df.to_excel(writer, sheet_name='Oggetti', index=False)
+                if len(df_obj_tables) > 0:
+                    df_obj_tables.to_excel(writer, sheet_name='Oggetti_Tabelle_Esploso', index=False)
+                if len(df_obj_objects) > 0:
+                    df_obj_objects.to_excel(writer, sheet_name='Oggetti_Oggetti_Esploso', index=False)
+            
             print(f"  - Esportato: {output_path.name}")
+            print(f"  - Sheet Oggetti: {len(result_df)} righe")
+            print(f"  - Sheet Oggetti_Tabelle_Esploso: {len(df_obj_tables)} relazioni")
+            print(f"  - Sheet Oggetti_Oggetti_Esploso: {len(df_obj_objects)} relazioni")
             
             # Statistiche
             criticita_counts = analysis_df['Criticità_Tecnica'].value_counts()
