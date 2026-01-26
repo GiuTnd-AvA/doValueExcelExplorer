@@ -148,14 +148,25 @@ def load_summary_report(summary_path):
 def apply_hybrid_criticality(df_level, df_reference_counts, level_name):
     """
     Applica logica ibrida di criticità:
-    - Critico se ha DML/DDL (logica originale)
-    - OPPURE se ha ReferenceCount >= soglia (nuova logica)
+    - L1: Critico se ha DML/DDL OPPURE ReferenceCount >= soglia
+    - L2-L4: TUTTI critici per definizione (dipendenze di L1) + aggiungi ReferenceCount
     """
     print(f"\n  Elaborazione {level_name}...")
     
+    # Controlla se esiste colonna Critico_Migrazione
+    has_criticality_column = 'Critico_Migrazione' in df_level.columns and df_level['Critico_Migrazione'].notna().any()
+    
     # Backup colonne originali
-    df_level['Critico_Migrazione_Original'] = df_level.get('Critico_Migrazione', '')
-    df_level['Criticità_Tecnica_Original'] = df_level.get('Criticità_Tecnica', '')
+    if has_criticality_column:
+        df_level['Critico_Migrazione_Original'] = df_level['Critico_Migrazione']
+    else:
+        # L2-L4: tutti sono critici per definizione
+        df_level['Critico_Migrazione_Original'] = 'SÌ'
+    
+    if 'Criticità_Tecnica' in df_level.columns:
+        df_level['Criticità_Tecnica_Original'] = df_level['Criticità_Tecnica']
+    else:
+        df_level['Criticità_Tecnica_Original'] = ''
     
     # Gestisci colonna Schema (potrebbe non esistere o chiamarsi diversamente)
     if 'Schema' not in df_level.columns:
@@ -164,49 +175,74 @@ def apply_hybrid_criticality(df_level, df_reference_counts, level_name):
         else:
             df_level['Schema'] = 'dbo'  # Default
     
+    # Normalizza per merge (uppercase)
+    df_level['Database_Merge'] = df_level['Database'].str.upper()
+    df_level['Schema_Merge'] = df_level['Schema'].str.upper()
+    df_level['ObjectName_Merge'] = df_level['ObjectName'].str.upper()
+    
     # Merge con reference counts
     df_merged = df_level.merge(
         df_reference_counts[['Database', 'SchemaName', 'ObjectName', 'ReferenceCount']],
-        left_on=['Database', 'Schema', 'ObjectName'],
+        left_on=['Database_Merge', 'Schema_Merge', 'ObjectName_Merge'],
         right_on=['Database', 'SchemaName', 'ObjectName'],
-        how='left'
+        how='left',
+        suffixes=('', '_ref')
     )
     
-    # Rimuovi colonna duplicata SchemaName se diversa da Schema
-    if 'SchemaName' in df_merged.columns and 'Schema' in df_merged.columns:
-        df_merged = df_merged.drop(columns=['SchemaName'])
+    # Rimuovi colonne temporanee merge
+    df_merged = df_merged.drop(columns=['Database_Merge', 'Schema_Merge', 'ObjectName_Merge'], errors='ignore')
+    
+    # Rimuovi colonne duplicate dal merge
+    for col in ['Database_ref', 'SchemaName', 'ObjectName_ref']:
+        if col in df_merged.columns:
+            df_merged = df_merged.drop(columns=[col])
     
     # Riempie NaN in ReferenceCount con 0
     df_merged['ReferenceCount'] = df_merged['ReferenceCount'].fillna(0).astype(int)
     
     # Logica ibrida
-    # 1. Critico se era già critico per DML/DDL
-    was_critical_dml = df_merged['Critico_Migrazione_Original'] == 'SÌ'
-    
-    # 2. Critico se ReferenceCount >= soglia
-    is_critical_deps = df_merged['ReferenceCount'] >= REFERENCE_COUNT_THRESHOLD
-    
-    # 3. Applica OR logico
-    df_merged['Critico_Migrazione'] = 'NO'
-    df_merged.loc[was_critical_dml | is_critical_deps, 'Critico_Migrazione'] = 'SÌ'
-    
-    # 4. Aggiungi motivazione criticità
-    df_merged['Motivo_Criticità'] = ''
-    df_merged.loc[was_critical_dml & is_critical_deps, 'Motivo_Criticità'] = 'DML/DDL + Dipendenze'
-    df_merged.loc[was_critical_dml & ~is_critical_deps, 'Motivo_Criticità'] = 'DML/DDL'
-    df_merged.loc[~was_critical_dml & is_critical_deps, 'Motivo_Criticità'] = f'Dipendenze ({REFERENCE_COUNT_THRESHOLD}+ refs)'
-    
-    # 5. Aggiorna Criticità_Tecnica per nuovi critici
-    df_merged['Criticità_Tecnica'] = df_merged['Criticità_Tecnica_Original']
-    
-    # Per oggetti che diventano critici solo per dipendenze
-    newly_critical = (~was_critical_dml) & is_critical_deps
-    df_merged.loc[newly_critical, 'Criticità_Tecnica'] = 'DIPENDENZE_CRITICHE'
-    
-    # Stats
-    original_critical = df_merged['Critico_Migrazione_Original'].eq('SÌ').sum()
-    new_critical = df_merged['Critico_Migrazione'].eq('SÌ').sum()
-    added_critical = new_critical - original_critical
+    if has_criticality_column:
+        # L1: logica completa DML/DDL OR Dipendenze
+        was_critical_dml = df_merged['Critico_Migrazione_Original'] == 'SÌ'
+        is_critical_deps = df_merged['ReferenceCount'] >= REFERENCE_COUNT_THRESHOLD
+        
+        # Applica OR logico
+        df_merged['Critico_Migrazione'] = 'NO'
+        df_merged.loc[was_critical_dml | is_critical_deps, 'Critico_Migrazione'] = 'SÌ'
+        
+        # Motivazione criticità
+        df_merged['Motivo_Criticità'] = ''
+        df_merged.loc[was_critical_dml & is_critical_deps, 'Motivo_Criticità'] = 'DML/DDL + Dipendenze'
+        df_merged.loc[was_critical_dml & ~is_critical_deps, 'Motivo_Criticità'] = 'DML/DDL'
+        df_merged.loc[~was_critical_dml & is_critical_deps, 'Motivo_Criticità'] = f'Dipendenze ({REFERENCE_COUNT_THRESHOLD}+ refs)'
+        
+        # Aggiorna Criticità_Tecnica per nuovi critici
+        df_merged['Criticità_Tecnica'] = df_merged['Criticità_Tecnica_Original']
+        newly_critical = (~was_critical_dml) & is_critical_deps
+        df_merged.loc[newly_critical, 'Criticità_Tecnica'] = 'DIPENDENZE_CRITICHE'
+        
+        # Stats
+        original_critical = df_merged['Critico_Migrazione_Original'].eq('SÌ').sum()
+        new_critical = df_merged['Critico_Migrazione'].eq('SÌ').sum()
+        added_critical = new_critical - original_critical
+        
+    else:
+        # L2-L4: TUTTI critici per definizione (dipendenze di L1)
+        df_merged['Critico_Migrazione'] = 'SÌ'
+        
+        # Motivazione basata solo su dipendenze se presenti
+        df_merged['Motivo_Criticità'] = 'Dipendenza L1 (Bottom-Up)'
+        high_deps = df_merged['ReferenceCount'] >= REFERENCE_COUNT_THRESHOLD
+        df_merged.loc[high_deps, 'Motivo_Criticità'] = f'Dipendenza L1 + Dipendenze ({REFERENCE_COUNT_THRESHOLD}+ refs)'
+        
+        # Criticità tecnica
+        df_merged['Criticità_Tecnica'] = 'DIPENDENZA_L1'
+        df_merged.loc[high_deps, 'Criticità_Tecnica'] = 'DIPENDENZA_L1 + REFS_CRITICHE'
+        
+        # Stats
+        original_critical = 0  # Non c'erano critici marcati originalmente
+        new_critical = len(df_merged)  # Tutti sono critici ora
+        added_critical = new_critical
     
     print(f"    Critici originali (DML/DDL):     {original_critical}")
     print(f"    Critici nuovi (Dipendenze):      {added_critical}")
@@ -257,34 +293,40 @@ def export_hybrid_report(sheets_hybrid, stats, df_reference_counts):
         # Sheet Summary con statistiche ibrido
         summary_data = []
         summary_data.append({
-            'Informazione': 'Criterio Criticità',
-            'Valore': f'IBRIDO: DML/DDL OR ReferenceCount >= {REFERENCE_COUNT_THRESHOLD}'
+            'Livello': 'GENERALE',
+            'Metrica': 'Criterio Criticità',
+            'Valore': f'IBRIDO: (L1) DML/DDL OR ReferenceCount >= {REFERENCE_COUNT_THRESHOLD} | (L2-L4) Tutti critici (dipendenze L1)'
         })
         summary_data.append({
-            'Informazione': 'Data Generazione',
+            'Livello': 'GENERALE',
+            'Metrica': 'Data Generazione',
             'Valore': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
         })
-        summary_data.append({'Informazione': '', 'Valore': ''})
+        summary_data.append({'Livello': '', 'Metrica': '', 'Valore': ''})
         
         for level in ['L1', 'L2', 'L3', 'L4']:
             if level in stats:
                 summary_data.append({
-                    'Informazione': f'{level} - Totale oggetti',
+                    'Livello': level,
+                    'Metrica': 'Totale oggetti',
                     'Valore': stats[level]['total']
                 })
                 summary_data.append({
-                    'Informazione': f'{level} - Critici originali (DML/DDL)',
+                    'Livello': level,
+                    'Metrica': 'Critici totali (ibrido)',
+                    'Valore': stats[level]['critical_hybrid']
+                })
+                summary_data.append({
+                    'Livello': level,
+                    'Metrica': 'Critici originali',
                     'Valore': stats[level]['critical_original']
                 })
                 summary_data.append({
-                    'Informazione': f'{level} - Critici aggiunti (Dipendenze)',
+                    'Livello': level,
+                    'Metrica': 'Aggiunti (dipendenze)',
                     'Valore': stats[level]['added']
                 })
-                summary_data.append({
-                    'Informazione': f'{level} - Critici TOTALI (Ibrido)',
-                    'Valore': stats[level]['critical_hybrid']
-                })
-                summary_data.append({'Informazione': '', 'Valore': ''})
+                summary_data.append({'Livello': '', 'Metrica': '', 'Valore': ''})
         
         df_summary = pd.DataFrame(summary_data)
         df_summary.to_excel(writer, sheet_name='Summary_Hybrid', index=False)
