@@ -279,12 +279,25 @@ def analyze_sql_object(row):
     tables = extract_tables_from_sql(sql_def)
     objects = extract_objects_from_sql(sql_def)
     
-    total_dependencies = len(tables) + len(objects)
+    # IMPORTANTE: Rimuovi tabelle dagli oggetti
+    # Le tabelle possono apparire in objects con schema tipo [dbo].[tabella]
+    # Confronta solo il nome della tabella (lowercase)
+    tables_lowercase = {t.lower() for t in tables}
+    objects_filtered = set()
+    
+    for obj in objects:
+        # Estrai solo il nome dell'oggetto (rimuovi schema e parentesi)
+        obj_name = obj.split('.')[-1].strip('[]').lower()
+        # Aggiungi solo se NON è una tabella
+        if obj_name not in tables_lowercase:
+            objects_filtered.add(obj)
+    
+    total_dependencies = len(tables) + len(objects_filtered)
     
     # Calcoli
     complexity_score = calculate_complexity_score(sql_def, patterns, dml_count, join_count, total_dependencies)
     criticality = classify_criticality(complexity_score, dml_count, patterns)
-    description = generate_description(sql_def, patterns, dml_count, join_count, len(tables), len(objects), clause_type)
+    description = generate_description(sql_def, patterns, dml_count, join_count, len(tables), len(objects_filtered), clause_type)
     critical_migration = is_critical_for_migration(clause_type)
     
     return {
@@ -296,24 +309,8 @@ def analyze_sql_object(row):
         'Dipendenze_Count': total_dependencies,
         'Dipendenze_Tabelle': '; '.join(sorted(tables)) if tables else 'Nessuna',
         'Dipendenze_Tabelle_Count': len(tables),
-        'Dipendenze_Oggetti': '; '.join(sorted(objects)) if objects else 'Nessuna',
-        'Dipendenze_Oggetti_Count': len(objects),
-        'DML_Count': dml_count,
-        'JOIN_Count': join_count,
-        'Righe_Codice': count_lines(sql_def)
-    }
-    criticality = classify_criticality(complexity_score, dml_count, patterns)
-    description = generate_description(sql_def, patterns, dml_count, join_count, dependencies, clause_type)
-    critical_migration = is_critical_for_migration(clause_type)
-    
-    return {
-        'Critico_Migrazione': critical_migration,
-        'Descrizione_Comportamento': description,
-        'Complessità_Score': complexity_score,
-        'Criticità_Tecnica': criticality,
-        'Pattern_Identificati': '; '.join(sorted(patterns)) if patterns else 'Nessuno',
-        'Dipendenze_Count': len(dependencies),
-        'Dipendenze': '; '.join(sorted(dependencies)) if dependencies else 'Nessuna',
+        'Dipendenze_Oggetti': '; '.join(sorted(objects_filtered)) if objects_filtered else 'Nessuna',
+        'Dipendenze_Oggetti_Count': len(objects_filtered),
         'DML_Count': dml_count,
         'JOIN_Count': join_count,
         'Righe_Codice': count_lines(sql_def)
