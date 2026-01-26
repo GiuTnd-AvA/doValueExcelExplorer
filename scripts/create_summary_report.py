@@ -59,428 +59,167 @@ def create_summary_report():
     df_l1 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 1")
     df_l2 = pd.read_excel(l2_path, sheet_name="Oggetti Livello 2")
     
+    # Carica sheet esplosi L1 e L2
+    try:
+        df_l1_tab_espl = pd.read_excel(l2_path, sheet_name="L1_Oggetti_Tabelle_Esploso")
+        df_l1_obj_espl = pd.read_excel(l2_path, sheet_name="L1_Oggetti_Oggetti_Esploso")
+        print(f"✓ L1 Tabelle Esploso: {len(df_l1_tab_espl)} relazioni")
+        print(f"✓ L1 Oggetti Esploso: {len(df_l1_obj_espl)} relazioni")
+    except:
+        df_l1_tab_espl = pd.DataFrame()
+        df_l1_obj_espl = pd.DataFrame()
+        print(f"⚠ Sheet esplosi L1 non trovati")
+    
+    try:
+        df_l2_tab_espl = pd.read_excel(l2_path, sheet_name="L2_Oggetti_Tabelle_Esploso")
+        df_l2_obj_espl = pd.read_excel(l2_path, sheet_name="L2_Oggetti_Oggetti_Esploso")
+        print(f"✓ L2 Tabelle Esploso: {len(df_l2_tab_espl)} relazioni")
+        print(f"✓ L2 Oggetti Esploso: {len(df_l2_obj_espl)} relazioni")
+    except:
+        df_l2_tab_espl = pd.DataFrame()
+        df_l2_obj_espl = pd.DataFrame()
+        print(f"⚠ Sheet esplosi L2 non trovati")
+    
     if has_l3:
         df_l3 = pd.read_excel(l3_path, sheet_name="Oggetti Livello 3")
         print(f"✓ Oggetti L3: {len(df_l3)}")
+        # Carica sheet esplosi L3
+        try:
+            df_l3_tab_espl = pd.read_excel(l3_path, sheet_name="L3_Oggetti_Tabelle_Esploso")
+            df_l3_obj_espl = pd.read_excel(l3_path, sheet_name="L3_Oggetti_Oggetti_Esploso")
+            print(f"✓ L3 Tabelle Esploso: {len(df_l3_tab_espl)} relazioni")
+            print(f"✓ L3 Oggetti Esploso: {len(df_l3_obj_espl)} relazioni")
+        except:
+            df_l3_tab_espl = pd.DataFrame()
+            df_l3_obj_espl = pd.DataFrame()
     else:
         df_l3 = None
+        df_l3_tab_espl = pd.DataFrame()
+        df_l3_obj_espl = pd.DataFrame()
     
     if has_l4:
         df_l4 = pd.read_excel(l4_path, sheet_name="Oggetti Livello 4")
         print(f"✓ Oggetti L4: {len(df_l4)}")
+        # Carica sheet esplosi L4
+        try:
+            df_l4_tab_espl = pd.read_excel(l4_path, sheet_name="L4_Oggetti_Tabelle_Esploso")
+            df_l4_obj_espl = pd.read_excel(l4_path, sheet_name="L4_Oggetti_Oggetti_Esploso")
+            print(f"✓ L4 Tabelle Esploso: {len(df_l4_tab_espl)} relazioni")
+            print(f"✓ L4 Oggetti Esploso: {len(df_l4_obj_espl)} relazioni")
+        except:
+            df_l4_tab_espl = pd.DataFrame()
+            df_l4_obj_espl = pd.DataFrame()
     else:
         df_l4 = None
+        df_l4_tab_espl = pd.DataFrame()
+        df_l4_obj_espl = pd.DataFrame()
     
     print(f"✓ Oggetti L1: {len(df_l1)}")
     print(f"✓ Oggetti L2: {len(df_l2)}")
     
     print("\n" + "=" * 80)
-    print("CREAZIONE SHEET L1")
+    print("CREAZIONE SHEET CONTEGGI")
     print("=" * 80)
     
-    # Sheet L1: Oggetti L1 (già solo critici da DIPENDENZE_LIVELLO_2.xlsx)
-    summary_l1_rows = []
+    # Calcola statistiche aggregate da dataframe
+    conteggi_rows = []
     
-    for _, obj_row in df_l1.iterrows():
-        obj_name = obj_row.get('ObjectName', '')
-        obj_type = obj_row.get('ObjectType', '')
-        obj_server = obj_row.get('Server', '')
-        obj_db = obj_row.get('Database', '')
-        
-        # Dipendenze tabelle
-        dip_tabelle = str(obj_row.get('Dipendenze_Tabelle', ''))
-        if pd.isna(dip_tabelle) or dip_tabelle == 'nan':
-            dip_tabelle = ''
-        
-        # Dipendenze oggetti
-        dip_oggetti = str(obj_row.get('Dipendenze_Oggetti', ''))
-        if pd.isna(dip_oggetti) or dip_oggetti == 'nan':
-            dip_oggetti = ''
-        
-        # Estrai tipi oggetti dalle dipendenze
-        tipo_oggetti = extract_object_types(dip_oggetti)
-        
-        # Tabella origine (dalla prima dipendenza tabella se disponibile)
-        tabella_origine = ''
-        if dip_tabelle and dip_tabelle not in ['Nessuna', '']:
-            tabelle_list = [t.strip() for t in dip_tabelle.split(';')]
-            if tabelle_list:
-                tabella_origine = tabelle_list[0]
-        
-        summary_l1_rows.append({
-            'Server': obj_server,
-            'DB': obj_db,
-            'Tabella origine': tabella_origine,
-            'Oggetti associati': obj_name,
-            'Tipo oggetto': obj_type,
-            'Dipendenze Oggetti': dip_oggetti,
-            'Tipo oggetti': tipo_oggetti,
-            'Dipendenze Tabelle': dip_tabelle
-        })
+    # Header
+    conteggi_rows.append({'Livello': 'SOMMARIO', 'Metrica': 'Oggetti Totali', 'Valore': '', 'Dettaglio': ''})
     
-    df_summary_l1 = pd.DataFrame(summary_l1_rows)
-    print(f"✓ Righe create per L1: {len(df_summary_l1)}")
-    
-    print("\n" + "=" * 80)
-    print("CREAZIONE SHEET L2")
-    print("=" * 80)
-    
-    # Sheet L2: Oggetti L1 -> Oggetti L2
-    summary_l2_rows = []
-    
-    for _, obj_l2_row in df_l2.iterrows():
-        obj_name = obj_l2_row.get('ObjectName', '')
-        obj_type = obj_l2_row.get('ObjectType', '')
-        obj_server = obj_l2_row.get('Server', '')
-        obj_db = obj_l2_row.get('Database', '')
-        
-        # Oggetti chiamanti L1
-        chiamanti = str(obj_l2_row.get('Oggetti_Chiamanti_L1', ''))
-        if pd.isna(chiamanti) or chiamanti == 'nan':
-            chiamanti = ''
-        
-        # Dipendenze oggetti
-        dip_oggetti = str(obj_l2_row.get('Dipendenze_Oggetti', ''))
-        if pd.isna(dip_oggetti) or dip_oggetti == 'nan':
-            dip_oggetti = ''
-        
-        # Dipendenze tabelle
-        dip_tabelle = str(obj_l2_row.get('Dipendenze_Tabelle', ''))
-        if pd.isna(dip_tabelle) or dip_tabelle == 'nan':
-            dip_tabelle = ''
-        
-        # Estrai tipi oggetti
-        tipo_oggetti = extract_object_types(dip_oggetti)
-        
-        # Se ha chiamanti, crea una riga per ogni chiamante
-        if chiamanti:
-            for chiamante in chiamanti.split(','):
-                chiamante = chiamante.strip()
-                if chiamante:
-                    summary_l2_rows.append({
-                        'Server': obj_server,
-                        'DB': obj_db,
-                        'Tabella origine': chiamante,  # L'oggetto L1 chiamante
-                        'Oggetti associati': obj_name,
-                        'Tipo oggetto': obj_type,
-                        'Dipendenze Oggetti': dip_oggetti,
-                        'Tipo oggetti': tipo_oggetti,
-                        'Dipendenze Tabelle': dip_tabelle
+    # Conta oggetti per livello
+    for level, df_level in [('L1', df_l1), ('L2', df_l2), ('L3', df_l3), ('L4', df_l4)]:
+        if df_level is not None and len(df_level) > 0:
+            count_total = len(df_level)
+            conteggi_rows.append({
+                'Livello': level,
+                'Metrica': 'Numero Oggetti',
+                'Valore': count_total,
+                'Dettaglio': f'{count_total} oggetti SQL'
+            })
+            
+            # Conta per tipo oggetto
+            if 'ObjectType' in df_level.columns:
+                type_counts = df_level['ObjectType'].value_counts()
+                for obj_type, count in type_counts.items():
+                    conteggi_rows.append({
+                        'Livello': level,
+                        'Metrica': f'  - {obj_type}',
+                        'Valore': count,
+                        'Dettaglio': ''
                     })
-        else:
-            # Nessun chiamante specifico
-            summary_l2_rows.append({
-                'Server': obj_server,
-                'DB': obj_db,
-                'Tabella origine': '',
-                'Oggetti associati': obj_name,
-                'Tipo oggetto': obj_type,
-                'Dipendenze Oggetti': dip_oggetti,
-                'Tipo oggetti': tipo_oggetti,
-                'Dipendenze Tabelle': dip_tabelle
+    
+    # Header dipendenze
+    conteggi_rows.append({'Livello': '', 'Metrica': '', 'Valore': '', 'Dettaglio': ''})
+    conteggi_rows.append({'Livello': 'DIPENDENZE', 'Metrica': 'Relazioni Tabelle/Oggetti', 'Valore': '', 'Dettaglio': ''})
+    
+    # Conta dipendenze da exploded sheets
+    for level, df_tab, df_obj in [
+        ('L1', df_l1_tab_espl, df_l1_obj_espl),
+        ('L2', df_l2_tab_espl, df_l2_obj_espl),
+        ('L3', df_l3_tab_espl, df_l3_obj_espl),
+        ('L4', df_l4_tab_espl, df_l4_obj_espl)
+    ]:
+        if df_tab is not None and len(df_tab) > 0:
+            count_tab_relations = len(df_tab)
+            unique_tables = df_tab['Tabella_Dipendente'].nunique() if 'Tabella_Dipendente' in df_tab.columns else 0
+            conteggi_rows.append({
+                'Livello': level,
+                'Metrica': 'Relazioni → Tabelle',
+                'Valore': count_tab_relations,
+                'Dettaglio': f'{unique_tables} tabelle uniche'
+            })
+        
+        if df_obj is not None and len(df_obj) > 0:
+            count_obj_relations = len(df_obj)
+            unique_objects = df_obj['Oggetto_Dipendente'].nunique() if 'Oggetto_Dipendente' in df_obj.columns else 0
+            conteggi_rows.append({
+                'Livello': level,
+                'Metrica': 'Relazioni → Oggetti SQL',
+                'Valore': count_obj_relations,
+                'Dettaglio': f'{unique_objects} oggetti unici'
             })
     
-    df_summary_l2 = pd.DataFrame(summary_l2_rows)
-    print(f"✓ Righe create per L2: {len(df_summary_l2)}")
+    df_conteggi = pd.DataFrame(conteggi_rows)
+    print(f"✓ Sheet Conteggi creato: {len(df_conteggi)} righe di statistiche")
     
-    print("\n" + "=" * 80)
-    print("CREAZIONE SHEET L3")
-    print("=" * 80)
+    # Prepara i nomi degli sheet per l'export
+    sheets_to_export = []
     
-    # Sheet L3: Oggetti L2 -> Oggetti L3
-    summary_l3_rows = []
+    # L1 + exploded sheets
+    sheets_to_export.append(('L1', df_l1))
+    if df_l1_tab_espl is not None and len(df_l1_tab_espl) > 0:
+        sheets_to_export.append(('Tabelle_Esplose_L1', df_l1_tab_espl))
+    if df_l1_obj_espl is not None and len(df_l1_obj_espl) > 0:
+        sheets_to_export.append(('Oggetti_Esplosi_L1', df_l1_obj_espl))
     
-    if has_l3 and df_l3 is not None:
-        for _, obj_l3_row in df_l3.iterrows():
-            obj_name = obj_l3_row.get('ObjectName', '')
-            obj_type = obj_l3_row.get('ObjectType', '')
-            obj_server = obj_l3_row.get('Server', '')
-            obj_db = obj_l3_row.get('Database', '')
-            
-            # Oggetti chiamanti L2
-            chiamanti = str(obj_l3_row.get('Oggetti_Chiamanti_L2', ''))
-            if pd.isna(chiamanti) or chiamanti == 'nan':
-                chiamanti = ''
-            
-            # Dipendenze oggetti
-            dip_oggetti = str(obj_l3_row.get('Dipendenze_Oggetti', ''))
-            if pd.isna(dip_oggetti) or dip_oggetti == 'nan':
-                dip_oggetti = ''
-            
-            # Dipendenze tabelle
-            dip_tabelle = str(obj_l3_row.get('Dipendenze_Tabelle', ''))
-            if pd.isna(dip_tabelle) or dip_tabelle == 'nan':
-                dip_tabelle = ''
-            
-            # Estrai tipi oggetti
-            tipo_oggetti = extract_object_types(dip_oggetti)
-            
-            # Se ha chiamanti, crea una riga per ogni chiamante
-            if chiamanti:
-                for chiamante in chiamanti.split(','):
-                    chiamante = chiamante.strip()
-                    if chiamante:
-                        summary_l3_rows.append({
-                            'Server': obj_server,
-                            'DB': obj_db,
-                            'Tabella origine': chiamante,  # L'oggetto L2 chiamante
-                            'Oggetti associati': obj_name,
-                            'Tipo oggetto': obj_type,
-                            'Dipendenze Oggetti': dip_oggetti,
-                            'Tipo oggetti': tipo_oggetti,
-                            'Dipendenze Tabelle': dip_tabelle
-                        })
-            else:
-                # Nessun chiamante specifico
-                summary_l3_rows.append({
-                    'Server': obj_server,
-                    'DB': obj_db,
-                    'Tabella origine': '',
-                    'Oggetti associati': obj_name,
-                    'Tipo oggetto': obj_type,
-                    'Dipendenze Oggetti': dip_oggetti,
-                    'Tipo oggetti': tipo_oggetti,
-                    'Dipendenze Tabelle': dip_tabelle
-                })
-    else:
-        print("⚠ Sheet L3 non disponibile (file mancante)")
+    # L2 + exploded sheets
+    sheets_to_export.append(('L2', df_l2))
+    if df_l2_tab_espl is not None and len(df_l2_tab_espl) > 0:
+        sheets_to_export.append(('Tabelle_Esplose_L2', df_l2_tab_espl))
+    if df_l2_obj_espl is not None and len(df_l2_obj_espl) > 0:
+        sheets_to_export.append(('Oggetti_Esplosi_L2', df_l2_obj_espl))
     
-    df_summary_l3 = pd.DataFrame(summary_l3_rows)
-    print(f"✓ Righe create per L3: {len(df_summary_l3)}")
+    # L3 + exploded sheets
+    if has_l3 and df_l3 is not None and len(df_l3) > 0:
+        sheets_to_export.append(('L3', df_l3))
+        if df_l3_tab_espl is not None and len(df_l3_tab_espl) > 0:
+            sheets_to_export.append(('Tabelle_Esplose_L3', df_l3_tab_espl))
+        if df_l3_obj_espl is not None and len(df_l3_obj_espl) > 0:
+            sheets_to_export.append(('Oggetti_Esplosi_L3', df_l3_obj_espl))
     
-    # Sheet L4 (se disponibile)
-    if has_l4 and df_l4 is not None:
-        print("\n" + "=" * 80)
-        print("CREAZIONE SHEET L4")
-        print("=" * 80)
-        
-        summary_l4_rows = []
-        for _, obj_l4_row in df_l4.iterrows():
-            obj_name = obj_l4_row.get('ObjectName', '')
-            obj_type = obj_l4_row.get('ObjectType', '')
-            obj_server = obj_l4_row.get('Server', '')
-            obj_db = obj_l4_row.get('Database', '')
-            
-            chiamanti = str(obj_l4_row.get('Oggetti_Chiamanti_L3', ''))
-            if pd.isna(chiamanti) or chiamanti == 'nan':
-                chiamanti = ''
-            
-            dip_oggetti = str(obj_l4_row.get('Dipendenze_Oggetti', ''))
-            if pd.isna(dip_oggetti) or dip_oggetti == 'nan':
-                dip_oggetti = ''
-            
-            dip_tabelle = str(obj_l4_row.get('Dipendenze_Tabelle', ''))
-            if pd.isna(dip_tabelle) or dip_tabelle == 'nan':
-                dip_tabelle = ''
-            
-            tipo_oggetti = extract_object_types(dip_oggetti)
-            
-            if chiamanti:
-                for chiamante in chiamanti.split(','):
-                    chiamante = chiamante.strip()
-                    if chiamante:
-                        summary_l4_rows.append({
-                            'Server': obj_server,
-                            'DB': obj_db,
-                            'Tabella origine': chiamante,
-                            'Oggetti associati': obj_name,
-                            'Tipo oggetto': obj_type,
-                            'Dipendenze Oggetti': dip_oggetti,
-                            'Tipo oggetti': tipo_oggetti,
-                            'Dipendenze Tabelle': dip_tabelle
-                        })
-            else:
-                summary_l4_rows.append({
-                    'Server': obj_server,
-                    'DB': obj_db,
-                    'Tabella origine': '',
-                    'Oggetti associati': obj_name,
-                    'Tipo oggetto': obj_type,
-                    'Dipendenze Oggetti': dip_oggetti,
-                    'Tipo oggetti': tipo_oggetti,
-                    'Dipendenze Tabelle': dip_tabelle
-                })
-        
-        df_summary_l4 = pd.DataFrame(summary_l4_rows)
-        print(f"✓ Righe create per L4: {len(df_summary_l4)}")
-    else:
-        df_summary_l4 = pd.DataFrame()
+    # L4 + exploded sheets
+    if has_l4 and df_l4 is not None and len(df_l4) > 0:
+        sheets_to_export.append(('L4', df_l4))
+        if df_l4_tab_espl is not None and len(df_l4_tab_espl) > 0:
+            sheets_to_export.append(('Tabelle_Esplose_L4', df_l4_tab_espl))
+        if df_l4_obj_espl is not None and len(df_l4_obj_espl) > 0:
+            sheets_to_export.append(('Oggetti_Esplosi_L4', df_l4_obj_espl))
     
-    print("\n" + "=" * 80)
-    print("CREAZIONE STATISTICHE GLOBALI")
-    print("=" * 80)
+    # Conteggi come ultimo sheet
+    sheets_to_export.append(('Conteggi', df_conteggi))
     
-    # Calcola statistiche avanzate
-    total_objects = len(df_l1) + len(df_l2)
-    if has_l3 and df_l3 is not None:
-        total_objects += len(df_l3)
-    if has_l4 and df_l4 is not None:
-        total_objects += len(df_l4)
-    
-    # Raggruppa per tipo oggetto
-    type_stats = {}
-    for df, level in [(df_l1, 'L1'), (df_l2, 'L2'), 
-                       (df_l3 if has_l3 else None, 'L3'), 
-                       (df_l4 if has_l4 else None, 'L4')]:
-        if df is not None and len(df) > 0:
-            obj_type_col = 'ObjectType'
-            if obj_type_col in df.columns:
-                for obj_type in df[obj_type_col].unique():
-                    count = len(df[df[obj_type_col] == obj_type])
-                    if obj_type not in type_stats:
-                        type_stats[obj_type] = {'L1': 0, 'L2': 0, 'L3': 0, 'L4': 0}
-                    type_stats[obj_type][level] = count
-    
-    stats_rows = [
-        {'Categoria': 'COPERTURA TOTALE', 'Valore': '', 'Dettaglio': ''},
-        {'Categoria': 'Oggetti Totali', 'Valore': total_objects, 'Dettaglio': f'L1+L2+L3+L4'},
-        {'Categoria': 'Oggetti L1', 'Valore': len(df_l1), 'Dettaglio': 'Critici iniziali'},
-        {'Categoria': 'Oggetti L2', 'Valore': len(df_l2), 'Dettaglio': 'Dipendenze L1'},
-    ]
-    
-    if has_l3 and df_l3 is not None:
-        stats_rows.append({'Categoria': 'Oggetti L3', 'Valore': len(df_l3), 'Dettaglio': 'Dipendenze L2'})
-    
-    if has_l4 and df_l4 is not None:
-        stats_rows.append({'Categoria': 'Oggetti L4', 'Valore': len(df_l4), 'Dettaglio': 'Dipendenze L3'})
-    
-    stats_rows.append({'Categoria': '', 'Valore': '', 'Dettaglio': ''})
-    stats_rows.append({'Categoria': 'DISTRIBUZIONE PER TIPO', 'Valore': '', 'Dettaglio': ''})
-    
-    for obj_type, counts in sorted(type_stats.items()):
-        total_type = sum(counts.values())
-        detail = ', '.join([f"{k}:{v}" for k, v in counts.items() if v > 0])
-        stats_rows.append({'Categoria': obj_type, 'Valore': total_type, 'Dettaglio': detail})
-    
-    df_stats_global = pd.DataFrame(stats_rows)
-    print(f"✓ Statistiche globali create: {len(df_stats_global)} metriche")
-    
-    print("\n" + "=" * 80)
-    print("CREAZIONE SHEET DIPENDENZE RELAZIONI")
-    print("=" * 80)
-    
-    # Crea uno sheet con dipendenze "esplode" - una riga per ogni relazione
-    relation_rows = []
-    
-    # L1: Oggetto → Tabelle/Oggetti dipendenti
-    for _, obj_row in df_l1.iterrows():
-        obj_name = obj_row.get('ObjectName', '')
-        obj_type = obj_row.get('ObjectType', '')
-        obj_server = obj_row.get('Server', '')
-        obj_db = obj_row.get('Database', '')
-        
-        # Tabelle
-        dip_tabelle = str(obj_row.get('Dipendenze_Tabelle', ''))
-        if dip_tabelle and dip_tabelle not in ['nan', 'Nessuna', '']:
-            for table in dip_tabelle.split(';'):
-                table = table.strip()
-                if table:
-                    relation_rows.append({
-                        'Livello': 'L1',
-                        'Server': obj_server,
-                        'DB': obj_db,
-                        'Oggetto Origine': obj_name,
-                        'Tipo Origine': obj_type,
-                        'Relazione': 'Dipende da',
-                        'Oggetto Destinazione': table,
-                        'Tipo Destinazione': 'TABELLA',
-                        'Tipo Dipendenza': 'Tabella'
-                    })
-        
-        # Oggetti
-        dip_oggetti = str(obj_row.get('Dipendenze_Oggetti', ''))
-        if dip_oggetti and dip_oggetti not in ['nan', 'Nessuna', '']:
-            for obj in dip_oggetti.split(';'):
-                obj = obj.strip()
-                if obj:
-                    relation_rows.append({
-                        'Livello': 'L1',
-                        'Server': obj_server,
-                        'DB': obj_db,
-                        'Oggetto Origine': obj_name,
-                        'Tipo Origine': obj_type,
-                        'Relazione': 'Dipende da',
-                        'Oggetto Destinazione': obj,
-                        'Tipo Destinazione': 'OGGETTO SQL',
-                        'Tipo Dipendenza': 'Oggetto'
-                    })
-    
-    # L2: Oggetti_Chiamanti_L1 → L2 Object
-    for _, obj_row in df_l2.iterrows():
-        obj_name = obj_row.get('ObjectName', '')
-        obj_type = obj_row.get('ObjectType', '')
-        obj_server = obj_row.get('Server', '')
-        obj_db = obj_row.get('Database', '')
-        
-        chiamanti = str(obj_row.get('Oggetti_Chiamanti_L1', ''))
-        if chiamanti and chiamanti not in ['nan', '']:
-            for chiamante in chiamanti.split(';'):
-                chiamante = chiamante.strip()
-                if chiamante:
-                    relation_rows.append({
-                        'Livello': 'L2',
-                        'Server': obj_server,
-                        'DB': obj_db,
-                        'Oggetto Origine': chiamante,
-                        'Tipo Origine': 'L1',
-                        'Relazione': 'Chiama',
-                        'Oggetto Destinazione': obj_name,
-                        'Tipo Destinazione': obj_type,
-                        'Tipo Dipendenza': 'Chiamata L1→L2'
-                    })
-    
-    # L3: Similar pattern
-    if has_l3 and df_l3 is not None:
-        for _, obj_row in df_l3.iterrows():
-            obj_name = obj_row.get('ObjectName', '')
-            obj_type = obj_row.get('ObjectType', '')
-            obj_server = obj_row.get('Server', '')
-            obj_db = obj_row.get('Database', '')
-            
-            chiamanti = str(obj_row.get('Oggetti_Chiamanti_L2', ''))
-            if chiamanti and chiamanti not in ['nan', '']:
-                for chiamante in chiamanti.split(';'):
-                    chiamante = chiamante.strip()
-                    if chiamante:
-                        relation_rows.append({
-                            'Livello': 'L3',
-                            'Server': obj_server,
-                            'DB': obj_db,
-                            'Oggetto Origine': chiamante,
-                            'Tipo Origine': 'L2',
-                            'Relazione': 'Chiama',
-                            'Oggetto Destinazione': obj_name,
-                            'Tipo Destinazione': obj_type,
-                            'Tipo Dipendenza': 'Chiamata L2→L3'
-                        })
-    
-    # L4: Similar pattern
-    if has_l4 and df_l4 is not None:
-        for _, obj_row in df_l4.iterrows():
-            obj_name = obj_row.get('ObjectName', '')
-            obj_type = obj_row.get('ObjectType', '')
-            obj_server = obj_row.get('Server', '')
-            obj_db = obj_row.get('Database', '')
-            
-            chiamanti = str(obj_row.get('Oggetti_Chiamanti_L3', ''))
-            if chiamanti and chiamanti not in ['nan', '']:
-                for chiamante in chiamanti.split(';'):
-                    chiamante = chiamante.strip()
-                    if chiamante:
-                        relation_rows.append({
-                            'Livello': 'L4',
-                            'Server': obj_server,
-                            'DB': obj_db,
-                            'Oggetto Origine': chiamante,
-                            'Tipo Origine': 'L3',
-                            'Relazione': 'Chiama',
-                            'Oggetto Destinazione': obj_name,
-                            'Tipo Destinazione': obj_type,
-                            'Tipo Dipendenza': 'Chiamata L3→L4'
-                        })
-    
-    df_relations = pd.DataFrame(relation_rows)
-    print(f"✓ Relazioni create: {len(df_relations)} righe")
+    print(f"✓ Preparati {len(sheets_to_export)} sheet per l'export")
     
     print("\n" + "=" * 80)
     print("SALVATAGGIO FILE EXCEL")
@@ -490,66 +229,34 @@ def create_summary_report():
     output_path = base_path / "SUMMARY_REPORT.xlsx"
     
     with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-        df_summary_l1.to_excel(writer, sheet_name='L1', index=False)
-        df_summary_l2.to_excel(writer, sheet_name='L2', index=False)
-        if has_l3 and len(df_summary_l3) > 0:
-            df_summary_l3.to_excel(writer, sheet_name='L3', index=False)
-        if has_l4 and len(df_summary_l4) > 0:
-            df_summary_l4.to_excel(writer, sheet_name='L4', index=False)
-        df_stats_global.to_excel(writer, sheet_name='Statistiche Globali', index=False)
-        df_relations.to_excel(writer, sheet_name='Dipendenze Relazioni', index=False)
-    print(f"✓ File salvato: {output_path}")
+        for sheet_name, df_sheet in sheets_to_export:
+            if df_sheet is not None and len(df_sheet) > 0:
+                df_sheet.to_excel(writer, sheet_name=sheet_name, index=False)
+                print(f"  ✓ Sheet '{sheet_name}': {len(df_sheet)} righe")
+    
+    print(f"\n✓ File salvato: {output_path}")
     
     print("\n" + "=" * 80)
     print("STATISTICHE FINALI")
     print("=" * 80)
-    print(f"Sheet L1: {len(df_summary_l1)} righe")
-    print(f"Sheet L2: {len(df_summary_l2)} righe")
-    if has_l3:
-        print(f"Sheet L3: {len(df_summary_l3)} righe")
-    if has_l4:
-        print(f"Sheet L4: {len(df_summary_l4)} righe")
-    print(f"Sheet Statistiche Globali: {len(df_stats_global)} metriche")
     
-    total_rows = len(df_summary_l1) + len(df_summary_l2)
-    if has_l3:
-        total_rows += len(df_summary_l3)
-    if has_l4:
-        total_rows += len(df_summary_l4)
+    # Calcola totale oggetti
+    total_objects = 0
+    if df_l1 is not None: total_objects += len(df_l1)
+    if df_l2 is not None: total_objects += len(df_l2)
+    if df_l3 is not None: total_objects += len(df_l3)
+    if df_l4 is not None: total_objects += len(df_l4)
     
-    print(f"Totale righe: {total_rows}")
-    print(f"Totale oggetti unici: {total_objects}")
+    # Calcola totale relazioni
+    total_relations = 0
+    for _, df_sheet in sheets_to_export:
+        if df_sheet is not None and 'Esplose' in _:
+            total_relations += len(df_sheet)
+    
+    print(f"Oggetti unici totali: {total_objects}")
+    print(f"Relazioni di dipendenza: {total_relations}")
+    print(f"Sheet totali nel report: {len(sheets_to_export)}")
     print("\n✅ Report di summary completato con successo!")
-
-
-def extract_object_types(dependencies_str):
-    """
-    Estrae i tipi di oggetti da una stringa di dipendenze
-    Esempio: "dbo.usp_GetData, dbo.fn_Calculate" -> "P, FN"
-    """
-    if not dependencies_str or pd.isna(dependencies_str) or dependencies_str == 'nan':
-        return ''
-    
-    types = []
-    deps = [d.strip() for d in str(dependencies_str).split(',')]
-    
-    for dep in deps:
-        if not dep:
-            continue
-        
-        # Identifica il tipo basandosi sul prefisso
-        if dep.startswith('usp_') or dep.startswith('sp_'):
-            types.append('P')  # Stored Procedure
-        elif dep.startswith('fn_') or dep.startswith('udf_'):
-            types.append('FN')  # Function
-        elif dep.startswith('tr_') or dep.startswith('trig_'):
-            types.append('TR')  # Trigger
-        elif dep.startswith('vw_') or dep.startswith('v_'):
-            types.append('V')  # View
-        else:
-            types.append('?')  # Tipo sconosciuto
-    
-    return ', '.join(types)
 
 
 if __name__ == "__main__":

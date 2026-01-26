@@ -721,18 +721,119 @@ def main():
                 'SQLDefinition': sql_def
             })
     
-    # 5. Export multi-sheet
-    print(f"\n5. Export: {OUTPUT_FILE}")
+    # 5. Crea sheet esplosi L3 e L4
+    print("\n5. Creazione sheet esplosi...")
+    
+    # 5.1. L3_Oggetti_Tabelle_Esploso
+    print("   5.1. L3_Oggetti_Tabelle_Esploso...")
+    l3_obj_table_rows = []
+    for _, row_l3 in df_l3.iterrows():
+        tables_str = row_l3.get('Dipendenze_Tabelle', '')
+        if pd.notna(tables_str) and tables_str not in ['Nessuna', '']:
+            tables = [t.strip() for t in str(tables_str).split(';') if t.strip()]
+            for table in tables:
+                l3_obj_table_rows.append({
+                    'Livello': 3,
+                    'ObjectName': row_l3.get('ObjectName', ''),
+                    'ObjectType': row_l3.get('ObjectType', ''),
+                    'Server': row_l3.get('Server', SQL_SERVER),
+                    'Database': row_l3.get('Database', ''),
+                    'Tabella_Dipendente': table,
+                    'Tipo_Relazione': 'DIPENDE_DA_TABELLA',
+                    'Chiamanti_L2': row_l3.get('Oggetti_Chiamanti_L2', '')
+                })
+    df_l3_tab_espl = pd.DataFrame(l3_obj_table_rows)
+    print(f"      ✓ {len(df_l3_tab_espl)} relazioni")
+    
+    # 5.2. L3_Oggetti_Oggetti_Esploso
+    print("   5.2. L3_Oggetti_Oggetti_Esploso...")
+    l3_obj_obj_rows = []
+    for _, row_l3 in df_l3.iterrows():
+        objects_str = row_l3.get('Dipendenze_Oggetti', '')
+        if pd.notna(objects_str) and objects_str not in ['Nessuna', '']:
+            objects = [o.strip() for o in str(objects_str).split(';') if o.strip()]
+            for obj_dep in objects:
+                l3_obj_obj_rows.append({
+                    'Livello': 3,
+                    'ObjectName': row_l3.get('ObjectName', ''),
+                    'ObjectType': row_l3.get('ObjectType', ''),
+                    'Server': row_l3.get('Server', SQL_SERVER),
+                    'Database': row_l3.get('Database', ''),
+                    'Oggetto_Dipendente': obj_dep,
+                    'Tipo_Relazione': 'DIPENDE_DA_OGGETTO',
+                    'Chiamanti_L2': row_l3.get('Oggetti_Chiamanti_L2', '')
+                })
+    df_l3_obj_espl = pd.DataFrame(l3_obj_obj_rows)
+    print(f"      ✓ {len(df_l3_obj_espl)} relazioni")
+    
+    # 5.3. L4_Oggetti_Tabelle_Esploso
+    print("   5.3. L4_Oggetti_Tabelle_Esploso...")
+    l4_obj_table_rows = []
+    for obj_l4 in oggetti_l4:
+        tables_str = obj_l4.get('Dipendenze_Tabelle_L5', '')
+        if tables_str and tables_str != 'Nessuna':
+            tables = [t.strip() for t in tables_str.split(';') if t.strip()]
+            for table in tables:
+                l4_obj_table_rows.append({
+                    'Livello': 4,
+                    'ObjectName': obj_l4.get('ObjectName', ''),
+                    'ObjectType': obj_l4.get('ObjectType', ''),
+                    'Server': obj_l4.get('Server', SQL_SERVER),
+                    'Database': obj_l4.get('Database', ''),
+                    'Tabella_Dipendente': table,
+                    'Tipo_Relazione': 'DIPENDE_DA_TABELLA',
+                    'Chiamanti_L3': obj_l4.get('Oggetti_Chiamanti_L3', '')
+                })
+    df_l4_tab_espl = pd.DataFrame(l4_obj_table_rows)
+    print(f"      ✓ {len(df_l4_tab_espl)} relazioni")
+    
+    # 5.4. L4_Oggetti_Oggetti_Esploso
+    print("   5.4. L4_Oggetti_Oggetti_Esploso...")
+    l4_obj_obj_rows = []
+    for obj_l4 in oggetti_l4:
+        objects_str = obj_l4.get('Dipendenze_Oggetti_L5', '')
+        if objects_str and objects_str != 'Nessuna':
+            objects = [o.strip() for o in objects_str.split(';') if o.strip()]
+            for obj_dep in objects:
+                l4_obj_obj_rows.append({
+                    'Livello': 4,
+                    'ObjectName': obj_l4.get('ObjectName', ''),
+                    'ObjectType': obj_l4.get('ObjectType', ''),
+                    'Server': obj_l4.get('Server', SQL_SERVER),
+                    'Database': obj_l4.get('Database', ''),
+                    'Oggetto_Dipendente': obj_dep,
+                    'Tipo_Relazione': 'DIPENDE_DA_OGGETTO',
+                    'Chiamanti_L3': obj_l4.get('Oggetti_Chiamanti_L3', '')
+                })
+    df_l4_obj_espl = pd.DataFrame(l4_obj_obj_rows)
+    print(f"      ✓ {len(df_l4_obj_espl)} relazioni")
+    
+    # 6. Export multi-sheet
+    print(f"\n6. Export: {OUTPUT_FILE}")
     
     with pd.ExcelWriter(OUTPUT_FILE, engine='openpyxl') as writer:
+        # Sheet 1: Oggetti Livello 3
         df_l3.to_excel(writer, sheet_name='Oggetti Livello 3', index=False)
         
+        # Sheet 2: Oggetti Livello 4
         if oggetti_l4:
             pd.DataFrame(oggetti_l4).to_excel(writer, sheet_name='Oggetti Livello 4', index=False)
         
+        # Sheet 3-6: Sheet esplosi L3 e L4
+        if not df_l3_tab_espl.empty:
+            df_l3_tab_espl.to_excel(writer, sheet_name='L3_Oggetti_Tabelle_Esploso', index=False)
+        if not df_l3_obj_espl.empty:
+            df_l3_obj_espl.to_excel(writer, sheet_name='L3_Oggetti_Oggetti_Esploso', index=False)
+        if not df_l4_tab_espl.empty:
+            df_l4_tab_espl.to_excel(writer, sheet_name='L4_Oggetti_Tabelle_Esploso', index=False)
+        if not df_l4_obj_espl.empty:
+            df_l4_obj_espl.to_excel(writer, sheet_name='L4_Oggetti_Oggetti_Esploso', index=False)
+        
+        # Sheet 7: Tabelle Referenziate L3
         if critical_tables:
             pd.DataFrame(critical_tables).to_excel(writer, sheet_name='Tabelle Referenziate L3', index=False)
         
+        # Sheet 8: Statistiche
         stats = [
             {'Metrica': 'LIVELLO 4 - SUMMARY', 'Valore': ''},
             {'Metrica': 'Oggetti Già Estratti (L1+L2+L3)', 'Valore': len(already_extracted)},
@@ -740,6 +841,12 @@ def main():
             {'Metrica': 'Totale Oggetti L4', 'Valore': len(new_deps_l4_total)},
             {'Metrica': 'Oggetti Estratti', 'Valore': len(oggetti_l4)},
             {'Metrica': 'Oggetti Non Trovati', 'Valore': len(new_deps_l4_total) - len(oggetti_l4) if new_deps_l4_total else 0},
+            {'Metrica': '', 'Valore': ''},
+            {'Metrica': 'DIPENDENZE ESPLOSO', 'Valore': ''},
+            {'Metrica': 'L3 → Tabelle', 'Valore': len(df_l3_tab_espl)},
+            {'Metrica': 'L3 → Oggetti', 'Valore': len(df_l3_obj_espl)},
+            {'Metrica': 'L4 → Tabelle', 'Valore': len(df_l4_tab_espl)},
+            {'Metrica': 'L4 → Oggetti', 'Valore': len(df_l4_obj_espl)},
             {'Metrica': '', 'Valore': ''},
             {'Metrica': 'COPERTURA TOTALE', 'Valore': ''},
             {'Metrica': 'Oggetti Totali (L1+L2+L3+L4)', 'Valore': len(already_extracted) + len(oggetti_l4)},
@@ -749,8 +856,15 @@ def main():
     print("\n" + "="*70)
     print("✅ COMPLETATO!")
     print("="*70)
-    print(f"Oggetti L4 estratti: {len(oggetti_l4)}")
-    print(f"Tabelle referenziate L3: {len(critical_tables)}")
+    print(f"Sheet creati:")
+    print(f"  - Oggetti Livello 3: {len(df_l3)} oggetti")
+    print(f"  - Oggetti Livello 4: {len(oggetti_l4)} oggetti")
+    print(f"  - L3_Oggetti_Tabelle_Esploso: {len(df_l3_tab_espl)} relazioni")
+    print(f"  - L3_Oggetti_Oggetti_Esploso: {len(df_l3_obj_espl)} relazioni")
+    print(f"  - L4_Oggetti_Tabelle_Esploso: {len(df_l4_tab_espl)} relazioni")
+    print(f"  - L4_Oggetti_Oggetti_Esploso: {len(df_l4_obj_espl)} relazioni")
+    print(f"  - Tabelle Referenziate L3: {len(critical_tables)} tabelle")
+    print(f"  - Statistiche")
 
 if __name__ == "__main__":
     main()
