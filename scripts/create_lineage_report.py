@@ -32,7 +32,11 @@ def load_summary_data(summary_path):
     # Carica sheet principali
     for sheet in sheet_names:
         try:
-            data[sheet] = pd.read_excel(summary_path, sheet_name=sheet)
+            df = pd.read_excel(summary_path, sheet_name=sheet)
+            # Normalizza nomi database a uppercase
+            if 'Database' in df.columns:
+                df['Database'] = df['Database'].str.upper()
+            data[sheet] = df
             print(f"  ✓ {sheet}: {len(data[sheet])} righe")
         except Exception as e:
             print(f"  ✗ {sheet}: {e}")
@@ -41,7 +45,11 @@ def load_summary_data(summary_path):
     # Carica exploded sheets
     for sheet in exploded_sheets:
         try:
-            data[sheet] = pd.read_excel(summary_path, sheet_name=sheet)
+            df = pd.read_excel(summary_path, sheet_name=sheet)
+            # Normalizza nomi database a uppercase
+            if 'Database' in df.columns:
+                df['Database'] = df['Database'].str.upper()
+            data[sheet] = df
             print(f"  ✓ {sheet}: {len(data[sheet])} righe")
         except Exception as e:
             print(f"  ✗ {sheet}: {e}")
