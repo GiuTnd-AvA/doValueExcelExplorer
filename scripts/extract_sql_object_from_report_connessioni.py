@@ -85,8 +85,8 @@ def get_variants(schema, table, db_name=None):
 def estrai_sql_objects(engine, query, params, table_label, error_msg):
     import re
     sql_objects = []
-    # Clausole T-SQL da cercare (semplificate per performance)
-    clause_ops = ["INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "CREATE TABLE", "ALTER TABLE", "FROM", "JOIN"]
+    # Clausole T-SQL da cercare (incluso DELETE senza FROM)
+    clause_ops = ["INSERT INTO", "UPDATE", "DELETE FROM", "DELETE", "MERGE INTO", "CREATE TABLE", "ALTER TABLE", "FROM", "JOIN"]
     
     try:
         with engine.connect() as conn:
@@ -99,7 +99,13 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                 found_clause_types = set()
                 
                 if sql_def:
-                    sql_def_l = sql_def.lower()
+                    # Rimuovi righe commentate (-- commento) prima del processing
+                    sql_def_cleaned = '\n'.join([
+                        line for line in sql_def.split('\n') 
+                        if not line.strip().startswith('--')
+                    ])
+                    
+                    sql_def_l = sql_def_cleaned.lower()
                     # Pre-compila le varianti una volta sola
                     variants_lower = [v.lower() for v in get_variants(params['schema'], params['table'], params.get('db_name'))]
                     
@@ -111,19 +117,22 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                                 # Verifica se l'operazione è presente nel codice
                                 if op_l in sql_def_l and v_l in sql_def_l:
                                     # Pattern più flessibile: gestisce spazi multipli, tab, newline
-                                    # Per tutte le clausole usiamo pattern flessibile per catturare anche con spazi/caratteri intermedi
                                     if op_l in ['join', 'from']:
                                         # Per JOIN/FROM: cerca la tabella anche se non immediatamente dopo
-                                        # Pattern: (FROM|JOIN) ... tabella (con max 500 caratteri di distanza)
                                         pattern = rf"{re.escape(op_l)}\b[^;]{{0,500}}?\b{re.escape(v_l)}\b"
+                                    elif op_l == 'delete' and op == 'DELETE':  # DELETE senza FROM
+                                        # Pattern specifico per DELETE table (senza FROM)
+                                        # Deve essere seguito immediatamente dalla tabella
+                                        pattern = rf"\bdelete\s+{re.escape(v_l)}\b"
                                     else:
-                                        # Per INSERT INTO, UPDATE, DELETE FROM, etc.: pattern più tollerante agli spazi
-                                        # Gestisce: INSERT INTO  tabella, INSERT INTO\n\ttabella, etc.
+                                        # Per INSERT INTO, UPDATE, DELETE FROM, etc.
                                         pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}\b"
                                     
-                                    if re.search(pattern, sql_def_l):
+                                    if re.search(pattern, sql_def_l, re.IGNORECASE):
                                         found_clauses.add(f"{op} {v}")
-                                        found_clause_types.add(op)
+                                        # Normalizza CLAUSE_TYPE: DELETE e DELETE FROM → DELETE FROM
+                                        clause_type_normalized = "DELETE FROM" if op == "DELETE" else op
+                                        found_clause_types.add(clause_type_normalized)
                 
                 base = {
                     "Server": params['server'],
