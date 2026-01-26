@@ -146,6 +146,80 @@ def load_summary_report(summary_path):
         print(f"✗ Errore: {e}")
         return {}
 
+def find_missing_critical_objects(sheets_original, df_reference_counts, threshold):
+    """
+    Trova oggetti con ReferenceCount >= soglia NON presenti nel lineage L1-L4.
+    Usa i dati SQL diretti, non dipende da file esterni.
+    """
+    print("\n" + "="*80)
+    print(f"RICERCA OGGETTI CON {threshold}+ REFS NON NEL LINEAGE")
+    print("="*80 + "\n")
+    
+    # Filtra oggetti con refs >= soglia
+    df_high_refs = df_reference_counts[df_reference_counts['ReferenceCount'] >= threshold].copy()
+    print(f"✓ Oggetti SQL con {threshold}+ refs: {len(df_high_refs)}")
+    
+    # Raccogli tutti gli oggetti presenti in L1-L4
+    existing_objects = set()
+    
+    for level in ['L1', 'L2', 'L3', 'L4']:
+        if level not in sheets_original:
+            continue
+        
+        df_level = sheets_original[level]
+        
+        # Normalizza per confronto
+        for _, row in df_level.iterrows():
+            db = str(row.get('Database', '')).upper()
+            schema = str(row.get('Schema', 'dbo')).upper()
+            obj = str(row.get('ObjectName', '')).upper()
+            
+            if pd.notna(db) and pd.notna(obj):
+                key = f"{db}.{schema}.{obj}"
+                existing_objects.add(key)
+    
+    print(f"✓ Oggetti nel lineage L1-L4: {len(existing_objects)}")
+    
+    # Trova oggetti SQL NON nel lineage
+    missing_objects = []
+    
+    for _, row in df_high_refs.iterrows():
+        db = str(row.get('Database', '')).upper()
+        schema = str(row.get('SchemaName', 'dbo')).upper()
+        obj = str(row.get('ObjectName', '')).upper()
+        refs = row.get('ReferenceCount', 0)
+        obj_type = row.get('ObjectType', '')
+        
+        key = f"{db}.{schema}.{obj}"
+        
+        if key not in existing_objects:
+            missing_objects.append({
+                'Database': db,
+                'Schema': schema,
+                'ObjectName': obj,
+                'ObjectType': obj_type,
+                'ReferenceCount': refs
+            })
+    
+    df_missing = pd.DataFrame(missing_objects)
+    
+    print(f"✓ Oggetti MANCANTI con {threshold}+ refs: {len(df_missing)}")
+    
+    if len(df_missing) > 0:
+        print(f"\nPer tipo:")
+        for tipo, count in df_missing['ObjectType'].value_counts().items():
+            print(f"  • {tipo}: {count}")
+        
+        print(f"\nPer database:")
+        for db, count in df_missing['Database'].value_counts().head(5).items():
+            print(f"  • {db}: {count}")
+        
+        print(f"\nTOP 10 per ReferenceCount:")
+        for idx, row in df_missing.nlargest(10, 'ReferenceCount').iterrows():
+            print(f"  • [{row['Database']}].[{row['Schema']}].[{row['ObjectName']}] - {row['ReferenceCount']} refs - {row['ObjectType']}")
+    
+    return df_missing
+
 def load_missing_high_ref_objects(top_ref_path, threshold):
     """
     Carica oggetti con ReferenceCount >= soglia NON presenti nel lineage originale.
@@ -491,8 +565,8 @@ def main():
         print("\n✗ Impossibile caricare SUMMARY_REPORT. Terminazione.")
         return
     
-    # 3. Carica oggetti mancanti con 50+ refs (se esistono)
-    df_missing = load_missing_high_ref_objects(TOP_REF_PATH, REFERENCE_COUNT_THRESHOLD)
+    # 3. Trova oggetti con 50+ refs NON presenti nel lineage (da SQL diretta)
+    df_missing = find_missing_critical_objects(sheets_original, df_reference_counts, REFERENCE_COUNT_THRESHOLD)
     
     # 4. Aggiungi oggetti mancanti a L1 prima della logica hybrid
     if not df_missing.empty and 'L1' in sheets_original:
