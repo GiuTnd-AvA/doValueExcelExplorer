@@ -11,6 +11,7 @@ warnings.filterwarnings('ignore')
 # CONFIG
 # =========================
 SUMMARY_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\SUMMARY_REPORT.xlsx'
+TOP_REF_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\TOP_REFERENCED_ANALYSIS.xlsx'
 OUTPUT_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\SUMMARY_REPORT_HYBRID.xlsx'
 
 # SQL Server
@@ -144,6 +145,84 @@ def load_summary_report(summary_path):
     except Exception as e:
         print(f"✗ Errore: {e}")
         return {}
+
+def load_missing_high_ref_objects(top_ref_path, threshold):
+    """
+    Carica oggetti con ReferenceCount >= soglia NON presenti nel lineage originale.
+    Questi verranno aggiunti a L1 come critici standalone.
+    """
+    print("\n" + "="*80)
+    print(f"CARICAMENTO OGGETTI MANCANTI CON {threshold}+ REFERENCES")
+    print("="*80 + "\n")
+    
+    try:
+        xl_file = pd.ExcelFile(top_ref_path)
+        print(f"Sheet disponibili: {xl_file.sheet_names}")
+        
+        # Prova diversi nomi di sheet
+        sheet_candidates = ['DA_AGGIUNGERE_Critici_Deps', 'Top_Non_Critici', 'Top_Non_Critici_Analysis']
+        
+        df_missing = None
+        sheet_used = None
+        
+        for sheet_name in sheet_candidates:
+            if sheet_name in xl_file.sheet_names:
+                df_missing = pd.read_excel(top_ref_path, sheet_name=sheet_name)
+                sheet_used = sheet_name
+                break
+        
+        if df_missing is None:
+            print(f"✗ Nessuno sheet trovato tra: {sheet_candidates}")
+            print(f"  Oggetti mancanti NON aggiunti (il file potrebbe non esistere ancora)")
+            return pd.DataFrame()
+        
+        print(f"✓ Caricato sheet: {sheet_used} ({len(df_missing)} righe)")
+        
+        # Filtra solo oggetti con ReferenceCount >= soglia
+        if 'ReferenceCount' in df_missing.columns:
+            df_missing = df_missing[df_missing['ReferenceCount'] >= threshold].copy()
+            print(f"✓ Filtrati {len(df_missing)} oggetti con {threshold}+ refs")
+        elif 'Criticità_Dipendenze' in df_missing.columns:
+            df_missing = df_missing[df_missing['Criticità_Dipendenze'] == f'CRITICA ({threshold}+)'].copy()
+            print(f"✓ Filtrati {len(df_missing)} oggetti CRITICA ({threshold}+)")
+        else:
+            print(f"⚠ Colonne: {df_missing.columns.tolist()}")
+            print(f"✗ Impossibile filtrare per criticità")
+            return pd.DataFrame()
+        
+        if df_missing.empty:
+            print(f"✓ Nessun oggetto mancante con {threshold}+ refs (già tutti inclusi)")
+            return pd.DataFrame()
+        
+        # Normalizza
+        if 'Database' in df_missing.columns:
+            df_missing['Database'] = df_missing['Database'].str.upper()
+        if 'Schema' not in df_missing.columns and 'SchemaName' in df_missing.columns:
+            df_missing['Schema'] = df_missing['SchemaName']
+        if 'Schema' in df_missing.columns:
+            df_missing['Schema'] = df_missing['Schema'].str.upper()
+        if 'ObjectName' in df_missing.columns:
+            df_missing['ObjectName'] = df_missing['ObjectName'].str.upper()
+        
+        # Stats
+        print(f"\n✓ TOTALE oggetti mancanti critici: {len(df_missing)}")
+        
+        if 'ObjectType' in df_missing.columns:
+            print(f"\nPer tipo:")
+            for tipo, count in df_missing['ObjectType'].value_counts().items():
+                print(f"  • {tipo}: {count}")
+        
+        if 'Database' in df_missing.columns:
+            print(f"\nPer database:")
+            for db, count in df_missing['Database'].value_counts().head(5).items():
+                print(f"  • {db}: {count}")
+        
+        return df_missing
+        
+    except Exception as e:
+        print(f"✗ Errore: {e}")
+        print(f"  Oggetti mancanti NON aggiunti")
+        return pd.DataFrame()
 
 def apply_hybrid_criticality(df_level, df_reference_counts, level_name):
     """
@@ -412,10 +491,43 @@ def main():
         print("\n✗ Impossibile caricare SUMMARY_REPORT. Terminazione.")
         return
     
-    # 3. Applica logica ibrida
+    # 3. Carica oggetti mancanti con 50+ refs (se esistono)
+    df_missing = load_missing_high_ref_objects(TOP_REF_PATH, REFERENCE_COUNT_THRESHOLD)
+    
+    # 4. Aggiungi oggetti mancanti a L1 prima della logica hybrid
+    if not df_missing.empty and 'L1' in sheets_original:
+        print("\n" + "="*80)
+        print(f"AGGIUNTA {len(df_missing)} OGGETTI MANCANTI A L1")
+        print("="*80 + "\n")
+        
+        df_l1_original = sheets_original['L1']
+        
+        # Prepara oggetti mancanti per integrazione
+        df_missing_prep = df_missing.copy()
+        
+        # Aggiungi/adatta colonne per compatibilità L1
+        df_missing_prep['Critico_Migrazione'] = 'SÌ'
+        df_missing_prep['Criticità_Tecnica'] = 'DIPENDENZE_CRITICHE'
+        
+        # Assicura colonne compatibili
+        for col in df_l1_original.columns:
+            if col not in df_missing_prep.columns:
+                df_missing_prep[col] = None
+        
+        # Riordina colonne come L1
+        df_missing_prep = df_missing_prep[df_l1_original.columns]
+        
+        # Combina
+        sheets_original['L1'] = pd.concat([df_l1_original, df_missing_prep], ignore_index=True)
+        
+        print(f"✓ L1 originale: {len(df_l1_original)} oggetti")
+        print(f"✓ Oggetti aggiunti: {len(df_missing_prep)} oggetti")
+        print(f"✓ L1 nuovo: {len(sheets_original['L1'])} oggetti")
+    
+    # 5. Applica logica ibrida
     sheets_hybrid, stats = generate_hybrid_summary(sheets_original, df_reference_counts)
     
-    # 4. Export nuovo report
+    # 6. Export nuovo report
     export_hybrid_report(sheets_hybrid, stats, df_reference_counts)
     
     print("\n" + "="*80)
