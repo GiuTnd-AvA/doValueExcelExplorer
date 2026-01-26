@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 import warnings
+import pyodbc
 warnings.filterwarnings('ignore')
 
 # =========================
@@ -13,10 +14,104 @@ warnings.filterwarnings('ignore')
 HYBRID_SUMMARY_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\SUMMARY_REPORT_HYBRID.xlsx'
 OUTPUT_TXT = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\TABLES_MIGRATION_REPORT.txt'
 OUTPUT_MD = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\TABLES_MIGRATION_REPORT.md'
+SQL_SERVER = 'EPCP3'
 
 # =========================
 # FUNZIONI
 # =========================
+
+def verify_object_types_sql(df_tables, server_name):
+    """Verifica su SQL Server se ogni oggetto è TABLE o VIEW."""
+    print("\n" + "="*80)
+    print("VERIFICA OBJECT TYPE su SQL Server")
+    print("="*80 + "\n")
+    
+    if df_tables.empty:
+        print("✗ Nessuna tabella da verificare")
+        return df_tables
+    
+    # Raggruppa per database
+    databases = df_tables['Database'].unique()
+    print(f"Database da verificare: {len(databases)}")
+    
+    # Query per verificare tipo oggetto
+    query_template = """
+    SELECT 
+        s.name AS SchemaName,
+        o.name AS ObjectName,
+        o.type_desc AS ObjectType
+    FROM sys.objects o
+    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+    WHERE o.type IN ('U', 'V')  -- U=TABLE, V=VIEW
+        AND o.name IN ({placeholders})
+    """
+    
+    results = []
+    
+    for db in databases:
+        print(f"\n  Database: {db}")
+        
+        # Tabelle per questo database
+        db_tables = df_tables[df_tables['Database'] == db]['Table'].unique()
+        
+        if len(db_tables) == 0:
+            continue
+        
+        try:
+            # Connessione
+            conn_str = f"DRIVER={{SQL Server}};SERVER={server_name};DATABASE={db};Trusted_Connection=yes;"
+            conn = pyodbc.connect(conn_str, timeout=10)
+            cursor = conn.cursor()
+            
+            # Batch di 500 per volta (limite SQL Server IN clause)
+            batch_size = 500
+            for i in range(0, len(db_tables), batch_size):
+                batch = db_tables[i:i+batch_size]
+                placeholders = ','.join(['?' for _ in batch])
+                query = query_template.format(placeholders=placeholders)
+                
+                cursor.execute(query, list(batch))
+                rows = cursor.fetchall()
+                
+                for row in rows:
+                    results.append({
+                        'Database': db,
+                        'Schema': row.SchemaName,
+                        'Table': row.ObjectName,
+                        'ObjectType': 'TABLE' if row.ObjectType == 'USER_TABLE' else 'VIEW'
+                    })
+            
+            conn.close()
+            print(f"    ✓ Verificati {len([r for r in results if r['Database'] == db])} oggetti")
+            
+        except Exception as e:
+            print(f"    ✗ Errore connessione/query: {e}")
+    
+    # Merge risultati con dataframe originale
+    if results:
+        df_results = pd.DataFrame(results)
+        df_tables = df_tables.merge(
+            df_results[['Database', 'Table', 'ObjectType']], 
+            on=['Database', 'Table'], 
+            how='left'
+        )
+        
+        # Oggetti non trovati = UNKNOWN
+        df_tables['ObjectType'] = df_tables['ObjectType'].fillna('UNKNOWN')
+        
+        # Stats
+        type_counts = df_tables['ObjectType'].value_counts()
+        print("\n" + "="*80)
+        print("RISULTATO VERIFICA:")
+        for obj_type, count in type_counts.items():
+            pct = count / len(df_tables) * 100
+            print(f"  • {obj_type:10s}: {count:4d} ({pct:5.1f}%)")
+        print("="*80)
+    else:
+        df_tables['ObjectType'] = 'UNKNOWN'
+        print("\n✗ Nessun risultato dalla verifica SQL")
+    
+    return df_tables
 
 def load_tables_data(summary_path):
     """Carica dati tabelle dal SUMMARY_REPORT_HYBRID."""
@@ -203,6 +298,15 @@ def generate_txt_report(analyses):
         lines.append(f"Database coinvolti:                       {total_databases}")
         lines.append("")
         
+        # Distribuzione per tipo oggetto (TABLE/VIEW)
+        if 'ObjectType' in df_all_tables.columns:
+            lines.append("Distribuzione per tipo oggetto:")
+            type_counts = df_all_tables['ObjectType'].value_counts()
+            for obj_type, count in type_counts.items():
+                pct = count / total_tables * 100
+                lines.append(f"  • {obj_type:10s}: {count:3d} ({pct:5.1f}%)")
+            lines.append("")
+        
         # Distribuzione per livello
         lines.append("Distribuzione per livello:")
         for level in ['L1', 'L2', 'L3', 'L4']:
@@ -279,7 +383,8 @@ def generate_txt_report(analyses):
             table_full = f"[{row['Database']}].[dbo].[{row['Table']}]"
             level_info = row.get('Level', 'N/A')
             source_info = row.get('Source', 'N/A')
-            lines.append(f"  • {table_full:60s} | Livello: {level_info} | Source: {source_info}")
+            obj_type = row.get('ObjectType', 'UNKNOWN')
+            lines.append(f"  • {table_full:60s} | {obj_type:7s} | Lvl: {level_info} | {source_info}")
         
         lines.append("")
     
@@ -294,8 +399,19 @@ def generate_txt_report(analyses):
     lines.append("STRATEGIA MIGRAZIONE:")
     lines.append("")
     lines.append("1️⃣  FASE 0 - Schema e Tabelle")
-    lines.append(f"   • Migrare TUTTE le {total_tables if all_tables else 0} tabelle PRIMA degli oggetti")
-    lines.append("   • Includere: struttura, indici, constraint, FK")
+    lines.append(f"   • Migrare TUTTE le {total_tables if all_tables else 0} oggetti (tabelle + viste) PRIMA degli oggetti")
+    
+    if all_tables and 'ObjectType' in df_all_tables.columns:
+        type_counts = df_all_tables['ObjectType'].value_counts()
+        if 'TABLE' in type_counts:
+            lines.append(f"     - {type_counts['TABLE']} TABLES: struttura, indici, constraint, FK, dati")
+        if 'VIEW' in type_counts:
+            lines.append(f"     - {type_counts['VIEW']} VIEWS: definizione (DOPO le tables)")
+        if 'UNKNOWN' in type_counts:
+            lines.append(f"     - {type_counts['UNKNOWN']} UNKNOWN: verificare manualmente su SQL Server")
+    else:
+        lines.append("   • Includere: struttura, indici, constraint, FK")
+    
     lines.append("   • Verificare: data types compatibility, collation")
     lines.append("")
     
@@ -463,6 +579,28 @@ def main():
         
         if df_level is not None:
             analyses[level] = extract_tables_from_level(df_level, df_deps, level)
+    
+    # Combina tutte le tabelle per verifica SQL
+    all_tables_list = []
+    for level, analysis in analyses.items():
+        if not analysis['df_tables'].empty:
+            all_tables_list.append(analysis['df_tables'])
+    
+    if all_tables_list:
+        df_all_combined = pd.concat(all_tables_list, ignore_index=True)
+        df_all_combined = df_all_combined.drop_duplicates(subset=['Database', 'Table'])
+        
+        # Verifica su SQL Server
+        df_all_combined = verify_object_types_sql(df_all_combined, SQL_SERVER)
+        
+        # Aggiorna analyses con ObjectType
+        for level in analyses:
+            if not analyses[level]['df_tables'].empty:
+                analyses[level]['df_tables'] = analyses[level]['df_tables'].merge(
+                    df_all_combined[['Database', 'Table', 'ObjectType']],
+                    on=['Database', 'Table'],
+                    how='left'
+                )
     
     # Genera report TXT
     generate_txt_report(analyses)
