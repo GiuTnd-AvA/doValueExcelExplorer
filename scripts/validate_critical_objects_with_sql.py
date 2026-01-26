@@ -19,8 +19,9 @@ TOP_N = 1500  # Top N oggetti più referenziati da validare
 
 # Database da analizzare (dalla lista nel progetto)
 DATABASES = [
-    'ANALISI', 'BASEDATI_BI', 'CORESQL7', 'DWH', 
-    'MORTGAGE', 'S1259', 'STAGING', 'STG', 'UTIL'
+    'ANALISI', 'AMS', 'BASEDATI_BI', 'CORESQL7', 'DWH',
+    'EPC_BI', 'GESTITO', 'MORTGAGE', 'S1057', 'S1057B',
+    'S1259', 'STAGING', 'STG', 'UTIL'
 ]
 
 # =========================
@@ -28,39 +29,49 @@ DATABASES = [
 # =========================
 
 def load_critical_objects(summary_path):
-    """Carica TUTTI gli oggetti critici da L1, L2, L3, L4."""
-    print(f"Caricamento oggetti critici da: {summary_path}")
+    """Carica TUTTI gli oggetti da L1, L2, L3, L4 per validazione."""
+    print(f"Caricamento oggetti da: {summary_path}")
     
-    all_critical = []
+    all_objects = []
     
     for level in ['L1', 'L2', 'L3', 'L4']:
         try:
             df_level = pd.read_excel(summary_path, sheet_name=level)
             
-            # Filtra solo critici per migrazione
-            df_critical_level = df_level[df_level['Critico_Migrazione'] == 'SÌ'].copy()
-            df_critical_level['Livello'] = level  # Aggiungi colonna livello
+            # Normalizza nomi database a uppercase
+            if 'Database' in df_level.columns:
+                df_level['Database'] = df_level['Database'].str.upper()
             
-            all_critical.append(df_critical_level)
+            # Carica TUTTI gli oggetti (non solo critici)
+            df_level['Livello'] = level  # Aggiungi colonna livello
             
-            print(f"  ✓ {level}: {len(df_critical_level)} oggetti critici (su {len(df_level)} totali)")
+            all_objects.append(df_level)
+            
+            # Conta critici per stats
+            critici = len(df_level[df_level['Critico_Migrazione'] == 'SÌ']) if 'Critico_Migrazione' in df_level.columns else 0
+            print(f"  ✓ {level}: {len(df_level)} oggetti totali ({critici} critici)")
             
         except Exception as e:
             print(f"  ✗ {level}: {e}")
     
-    if not all_critical:
-        print(f"  ✗ Nessun oggetto critico trovato")
+    if not all_objects:
+        print(f"  ✗ Nessun oggetto trovato")
         return pd.DataFrame()
     
     # Combina tutti i livelli
-    df_all_critical = pd.concat(all_critical, ignore_index=True)
+    df_all = pd.concat(all_objects, ignore_index=True)
     
-    print(f"\n  ✓ TOTALE oggetti critici: {len(df_all_critical)}")
+    print(f"\n  ✓ TOTALE oggetti: {len(df_all)}")
     print(f"    Distribuzione per livello:")
-    for level, count in df_all_critical['Livello'].value_counts().sort_index().items():
+    for level, count in df_all['Livello'].value_counts().sort_index().items():
         print(f"      - {level}: {count} oggetti")
     
-    return df_all_critical
+    # Stats critici totali
+    if 'Critico_Migrazione' in df_all.columns:
+        total_critici = len(df_all[df_all['Critico_Migrazione'] == 'SÌ'])
+        print(f"    Critici totali: {total_critici}")
+    
+    return df_all
 
 def get_engine(server, db_name, driver):
     """Crea engine SQLAlchemy."""
@@ -124,33 +135,33 @@ def normalize_object_name(row):
 def compare_objects(df_critical, df_top_referenced):
     """Confronta oggetti critici con oggetti più referenziati."""
     print("\n" + "="*80)
-    print("CONFRONTO OGGETTI CRITICI vs TOP REFERENZIATI")
+    print("CONFRONTO OGGETTI LINEAGE vs TOP REFERENZIATI")
     print("="*80 + "\n")
     
     # Normalizza nomi per confronto
     critical_set = set(df_critical.apply(normalize_object_name, axis=1))
     referenced_set = set(df_top_referenced.apply(normalize_object_name, axis=1))
     
-    print(f"Oggetti critici identificati: {len(critical_set)}")
+    print(f"Oggetti totali lineage (L1-L4): {len(critical_set)}")
     print(f"Oggetti top referenziati SQL: {len(referenced_set)}")
     print("")
     
     # Match: presenti in entrambi
     match = critical_set.intersection(referenced_set)
-    print(f"✓ Match (critici E top referenced): {len(match)}")
+    print(f"✓ Match (lineage E top referenced): {len(match)}")
     print(f"  Percentuale copertura: {len(match)/len(critical_set)*100:.1f}%")
     print("")
     
-    # Critici NON nei top (possibili falsi positivi o oggetti poco usati ma critici per DML)
+    # Nel lineage NON nei top
     critical_not_in_top = critical_set - referenced_set
-    print(f"⚠ Critici NON nei top referenced: {len(critical_not_in_top)}")
-    print(f"  (Potrebbero essere oggetti critici per DML ma poco referenziati)")
+    print(f"⚠ Nel lineage NON nei top referenced: {len(critical_not_in_top)}")
+    print(f"  (Oggetti nel lineage ma poco referenziati)")
     print("")
     
-    # Top NON critici (possibili oggetti mancanti)
+    # Top NON nel lineage (possibili oggetti mancanti)
     top_not_critical = referenced_set - critical_set
-    print(f"❌ Top referenced NON critici: {len(top_not_critical)}")
-    print(f"  (Oggetti molto usati ma NON identificati come critici)")
+    print(f"❌ Top referenced NON nel lineage: {len(top_not_critical)}")
+    print(f"  (Oggetti molto usati ma NON nel lineage)")
     print("")
     
     return {
@@ -168,15 +179,17 @@ def generate_validation_report(df_critical, df_top_referenced, comparison):
     # Sheet 1: Summary
     summary_data = {
         'Metrica': [
-            'Oggetti Critici Identificati (L1+L2+L3+L4)',
+            'Oggetti Totali Lineage (L1+L2+L3+L4)',
+            'Oggetti Critici (Critico_Migrazione=SÌ)',
             'Oggetti Top Referenced SQL',
             'Match (presenti in entrambi)',
-            'Critici NON nei top',
-            'Top NON critici',
+            'Nel lineage NON nei top',
+            'Top NON nel lineage',
             'Percentuale Copertura'
         ],
         'Valore': [
             len(df_critical),
+            len(df_critical[df_critical['Critico_Migrazione'] == 'SÌ']) if 'Critico_Migrazione' in df_critical.columns else 0,
             len(df_top_referenced),
             len(comparison['match']),
             len(comparison['critical_not_in_top']),
