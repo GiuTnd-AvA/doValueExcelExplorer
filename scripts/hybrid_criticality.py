@@ -157,6 +157,13 @@ def apply_hybrid_criticality(df_level, df_reference_counts, level_name):
     df_level['Critico_Migrazione_Original'] = df_level.get('Critico_Migrazione', '')
     df_level['Criticità_Tecnica_Original'] = df_level.get('Criticità_Tecnica', '')
     
+    # Gestisci colonna Schema (potrebbe non esistere o chiamarsi diversamente)
+    if 'Schema' not in df_level.columns:
+        if 'SchemaName' in df_level.columns:
+            df_level['Schema'] = df_level['SchemaName']
+        else:
+            df_level['Schema'] = 'dbo'  # Default
+    
     # Merge con reference counts
     df_merged = df_level.merge(
         df_reference_counts[['Database', 'SchemaName', 'ObjectName', 'ReferenceCount']],
@@ -165,8 +172,8 @@ def apply_hybrid_criticality(df_level, df_reference_counts, level_name):
         how='left'
     )
     
-    # Rimuovi colonna duplicata SchemaName
-    if 'SchemaName' in df_merged.columns:
+    # Rimuovi colonna duplicata SchemaName se diversa da Schema
+    if 'SchemaName' in df_merged.columns and 'Schema' in df_merged.columns:
         df_merged = df_merged.drop(columns=['SchemaName'])
     
     # Riempie NaN in ReferenceCount con 0
