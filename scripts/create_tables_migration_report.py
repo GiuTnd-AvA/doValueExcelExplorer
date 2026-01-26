@@ -206,6 +206,12 @@ def extract_tables_from_level(df_level, df_dependencies, level_name):
                     if table_dep.startswith('dbo.'):
                         table_dep = table_dep[4:]
                     
+                    # FILTRO: Skippa nomi invalidi
+                    if table_dep.lower() in ['dbo', 'objects', 'sysobjects', 'sysindexes', 'syscolumns']:
+                        continue  # Schema o system tables
+                    if len(table_dep) < 2:
+                        continue  # Nome troppo corto
+                    
                     # Evita duplicati
                     if not any(t['Database'] == db_name and t['Table'] == table_dep for t in tables_info):
                         tables_info.append({
