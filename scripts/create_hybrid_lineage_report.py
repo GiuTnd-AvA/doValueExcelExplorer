@@ -50,23 +50,42 @@ def analyze_level_hybrid(df_level, level_name):
     
     # Distingui per motivo criticità
     if 'Motivo_Criticità' in df_level.columns:
-        critici_dml = df_level[
+        # Solo DML/DDL (no dipendenze)
+        critici_solo_dml = df_level[
             (df_level['Critico_Migrazione'] == 'SÌ') & 
-            (df_level['Motivo_Criticità'].isin(['DML/DDL', 'DML/DDL + Dipendenze']))
+            (df_level['Motivo_Criticità'] == 'DML/DDL')
         ]
-        critici_deps = df_level[
-            (df_level['Critico_Migrazione'] == 'SÌ') & 
-            (df_level['Motivo_Criticità'].str.contains('Dipendenze', na=False))
-        ]
+        
+        # Solo Dipendenze (no DML/DDL)
         critici_solo_deps = df_level[
             (df_level['Critico_Migrazione'] == 'SÌ') & 
             (df_level['Motivo_Criticità'].str.contains('Dipendenze \(', na=False)) &
             (~df_level['Motivo_Criticità'].str.contains('DML/DDL', na=False))
         ]
+        
+        # ENTRAMBI (DML/DDL + Dipendenze)
+        critici_entrambi = df_level[
+            (df_level['Critico_Migrazione'] == 'SÌ') & 
+            (df_level['Motivo_Criticità'] == 'DML/DDL + Dipendenze')
+        ]
+        
+        # Totali con DML (solo_dml + entrambi)
+        critici_dml = df_level[
+            (df_level['Critico_Migrazione'] == 'SÌ') & 
+            (df_level['Motivo_Criticità'].isin(['DML/DDL', 'DML/DDL + Dipendenze']))
+        ]
+        
+        # Totali con Dipendenze (solo_deps + entrambi)
+        critici_deps = df_level[
+            (df_level['Critico_Migrazione'] == 'SÌ') & 
+            (df_level['Motivo_Criticità'].str.contains('Dipendenze', na=False))
+        ]
     else:
+        critici_solo_dml = critici_totali
+        critici_solo_deps = pd.DataFrame()
+        critici_entrambi = pd.DataFrame()
         critici_dml = critici_totali
         critici_deps = pd.DataFrame()
-        critici_solo_deps = pd.DataFrame()
     
     # Distribuzione per tipo
     type_dist = critici_totali['ObjectType'].value_counts() if num_critici > 0 else pd.Series()
@@ -92,9 +111,11 @@ def analyze_level_hybrid(df_level, level_name):
         'level': level_name,
         'total': total,
         'critici_totali': num_critici,
+        'critici_solo_dml': len(critici_solo_dml),
+        'critici_solo_deps': len(critici_solo_deps),
+        'critici_entrambi': len(critici_entrambi),
         'critici_dml': len(critici_dml),
         'critici_deps': len(critici_deps),
-        'critici_solo_deps': len(critici_solo_deps),
         'type_distribution': type_dist,
         'db_distribution': db_dist,
         'crit_tech_distribution': crit_tech_dist,
@@ -134,16 +155,18 @@ def generate_txt_report(sheets, analyses):
     
     total_objects = sum(a['total'] for a in analyses.values())
     total_critici = sum(a['critici_totali'] for a in analyses.values())
-    total_critici_dml = sum(a['critici_dml'] for a in analyses.values())
+    total_critici_solo_dml = sum(a['critici_solo_dml'] for a in analyses.values())
     total_critici_solo_deps = sum(a['critici_solo_deps'] for a in analyses.values())
+    total_critici_entrambi = sum(a['critici_entrambi'] for a in analyses.values())
     
     lines.append(f"Oggetti totali analizzati (L1-L4):           {total_objects}")
     lines.append(f"Oggetti CRITICI da migrare (IBRIDO):         {total_critici} ({total_critici/total_objects*100:.1f}%)")
     lines.append("")
     lines.append("Breakdown per motivo criticità:")
-    lines.append(f"  • Critici per DML/DDL:                     {total_critici_dml}")
+    lines.append(f"  • Critici SOLO per DML/DDL:                {total_critici_solo_dml}")
     lines.append(f"  • Critici SOLO per Dipendenze (50+ refs):  {total_critici_solo_deps}")
-    lines.append(f"  • Critici per ENTRAMBI i motivi:           {total_critici - total_critici_solo_deps - (total_critici_dml - (total_critici - total_critici_solo_deps))}")
+    lines.append(f"  • Critici per ENTRAMBI i motivi:           {total_critici_entrambi}")
+    lines.append(f"  • TOTALE (verifica):                       {total_critici_solo_dml + total_critici_solo_deps + total_critici_entrambi}")
     lines.append("")
     
     # Per livello
@@ -151,7 +174,8 @@ def generate_txt_report(sheets, analyses):
     for level in ['L1', 'L2', 'L3', 'L4']:
         if level in analyses:
             a = analyses[level]
-            lines.append(f"  {level}: {a['critici_totali']:3d} critici / {a['total']:4d} totali ({a['critici_totali']/a['total']*100:5.1f}%) | DML/DDL: {a['critici_dml']} | Solo Deps: {a['critici_solo_deps']}")
+            lines.append(f"  {level}: {a['critici_totali']:3d} critici / {a['total']:4d} totali ({a['critici_totali']/a['total']*100:5.1f}%)")
+            lines.append(f"       Solo DML: {a['critici_solo_dml']} | Solo Deps: {a['critici_solo_deps']} | Entrambi: {a['critici_entrambi']}")
     lines.append("")
     
     # =====================
@@ -176,10 +200,12 @@ def generate_txt_report(sheets, analyses):
         lines.append(f"Oggetti totali:                    {a['total']}")
         lines.append(f"Oggetti CRITICI da migrare:        {a['critici_totali']} ({a['critici_totali']/a['total']*100:.1f}%)")
         lines.append("")
-        lines.append(f"Breakdown:")
-        lines.append(f"  • Con DML/DDL:                   {a['critici_dml']}")
-        lines.append(f"  • Con Dipendenze (50+ refs):     {a['critici_deps']}")
+        lines.append(f"Breakdown per motivo:")
+        lines.append(f"  • SOLO DML/DDL (no dipendenze):  {a['critici_solo_dml']}")
         lines.append(f"  • SOLO Dipendenze (no DML/DDL):  {a['critici_solo_deps']}")
+        lines.append(f"  • ENTRAMBI (DML/DDL + Deps):     {a['critici_entrambi']}")
+        lines.append(f"  • Totale con DML/DDL:            {a['critici_dml']}")
+        lines.append(f"  • Totale con Dipendenze:         {a['critici_deps']}")
         lines.append("")
         
         # Distribuzione per tipo
@@ -376,8 +402,9 @@ def generate_md_report(sheets, analyses):
     
     total_objects = sum(a['total'] for a in analyses.values())
     total_critici = sum(a['critici_totali'] for a in analyses.values())
-    total_critici_dml = sum(a['critici_dml'] for a in analyses.values())
+    total_critici_solo_dml = sum(a['critici_solo_dml'] for a in analyses.values())
     total_critici_solo_deps = sum(a['critici_solo_deps'] for a in analyses.values())
+    total_critici_entrambi = sum(a['critici_entrambi'] for a in analyses.values())
     
     lines.append(f"- **Oggetti totali analizzati (L1-L4):** {total_objects}")
     lines.append(f"- **Oggetti CRITICI da migrare:** {total_critici} ({total_critici/total_objects*100:.1f}%)")
@@ -386,18 +413,20 @@ def generate_md_report(sheets, analyses):
     lines.append("")
     lines.append(f"| Motivo | Count |")
     lines.append(f"|--------|------:|")
-    lines.append(f"| Critici per DML/DDL | {total_critici_dml} |")
-    lines.append(f"| Critici SOLO per Dipendenze (50+ refs) | {total_critici_solo_deps} |")
-    lines.append("")
+    lines.append(f"| SOLO DML/DDL | {total_critici_solo_dml} |")
+    lines.append(f"| SOLO Dipendenze (50+ refs) | {total_critici_solo_deps} |")
+    lines.append(f"| ENTRAMBI (DML/DDL + Dipendenze) | {total_critici_entrambi} |")
+    lines.append(f"| **TOTALE** | **{total_critici}** |")
+    lines.append("")}
     
     lines.append("### Per livello:")
     lines.append("")
-    lines.append("| Livello | Critici | Totali | % | DML/DDL | Solo Deps |")
-    lines.append("|---------|--------:|-------:|--:|--------:|----------:|")
+    lines.append("| Livello | Critici | Totali | % | Solo DML | Solo Deps | Entrambi |")
+    lines.append("|---------|--------:|-------:|--:|---------:|----------:|---------:|")
     for level in ['L1', 'L2', 'L3', 'L4']:
         if level in analyses:
             a = analyses[level]
-            lines.append(f"| {level} | {a['critici_totali']} | {a['total']} | {a['critici_totali']/a['total']*100:.1f}% | {a['critici_dml']} | {a['critici_solo_deps']} |")
+            lines.append(f"| {level} | {a['critici_totali']} | {a['total']} | {a['critici_totali']/a['total']*100:.1f}% | {a['critici_solo_dml']} | {a['critici_solo_deps']} | {a['critici_entrambi']} |")
     lines.append("")
     
     # Dettaglio per livello
@@ -416,9 +445,9 @@ def generate_md_report(sheets, analyses):
         lines.append("")
         lines.append(f"- **Totali:** {a['total']}")
         lines.append(f"- **Critici:** {a['critici_totali']} ({a['critici_totali']/a['total']*100:.1f}%)")
-        lines.append(f"- **Con DML/DDL:** {a['critici_dml']}")
-        lines.append(f"- **Con Dipendenze:** {a['critici_deps']}")
-        lines.append(f"- **SOLO Dipendenze:** {a['critici_solo_deps']}")
+        lines.append(f"  - SOLO DML/DDL: {a['critici_solo_dml']}")
+        lines.append(f"  - SOLO Dipendenze: {a['critici_solo_deps']}")
+        lines.append(f"  - ENTRAMBI: {a['critici_entrambi']}")
         lines.append("")
         
         # Per tipo
@@ -462,6 +491,7 @@ def generate_md_report(sheets, analyses):
     lines.append("   - Azione: Migrare prima degli oggetti dipendenti")
     lines.append("")
     lines.append("3. **MEDIA** - Critici solo per DML/DDL")
+    lines.append(f"   - Count: {total_critici_solo_dml}")
     lines.append("   - Rischio: Operativo (dati)")
     lines.append("   - Azione: Verificare business logic")
     lines.append("")
@@ -554,7 +584,7 @@ def main():
             analyses[level] = analyze_level_hybrid(sheets[level], level)
             a = analyses[level]
             print(f"  ✓ {a['critici_totali']} critici / {a['total']} totali")
-            print(f"    DML/DDL: {a['critici_dml']}, Solo Deps: {a['critici_solo_deps']}")
+            print(f"    Solo DML: {a['critici_solo_dml']} | Solo Deps: {a['critici_solo_deps']} | Entrambi: {a['critici_entrambi']}")
             print("")
     
     # Genera report TXT
