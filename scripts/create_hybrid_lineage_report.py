@@ -241,7 +241,7 @@ def generate_txt_report(sheets, analyses):
         if not a['top_references'].empty:
             lines.append("TOP 10 per dipendenze (ReferenceCount):")
             for i, (idx, row) in enumerate(a['top_references'].iterrows(), start=1):
-                obj_full = f"[{row['Database']}].[{row['Schema']}].[{row['ObjectName']}]"
+                obj_full = f"[{row['Database']}].[{row.get('Schema', 'dbo')}].[{row['ObjectName']}]"
                 motivo = row.get('Motivo_Criticità', 'N/A')
                 ref_count = row.get('ReferenceCount', 0)
                 lines.append(f"  {i:2d}. {obj_full:55s} | {row['ObjectType']:15s} | {ref_count:3.0f} refs | {motivo}")
