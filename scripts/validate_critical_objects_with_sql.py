@@ -134,8 +134,21 @@ def normalize_object_name(row):
     obj_name = row.get('ObjectName', '')
     db = row.get('Database', '') or row.get('DatabaseName', '')
     
+    # Gestisci NaN/None convertendo a stringa
+    if pd.isna(db) or db is None:
+        db = ''
+    if pd.isna(schema) or schema is None:
+        schema = 'dbo'
+    if pd.isna(obj_name) or obj_name is None:
+        obj_name = ''
+    
+    # Converti a stringa e uppercase
+    db = str(db).upper()
+    schema = str(schema).upper()
+    obj_name = str(obj_name).upper()
+    
     # Formato: DATABASE.SCHEMA.OBJECTNAME
-    return f"{db.upper()}.{schema.upper()}.{obj_name.upper()}"
+    return f"{db}.{schema}.{obj_name}"
 
 def compare_objects(df_critical, df_top_referenced):
     """Confronta oggetti critici con oggetti più referenziati usando ReferenceCount dal file HYBRID."""
