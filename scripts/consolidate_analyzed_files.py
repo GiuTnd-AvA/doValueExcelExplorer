@@ -35,26 +35,56 @@ def main():
     # Carica e concatena tutti i file
     print(f"\n2. Caricamento e concatenamento file...")
     
-    all_dataframes = []
+    all_dataframes_oggetti = []
+    all_dataframes_tabelle = []
+    all_dataframes_oggetti_dep = []
     total_rows = 0
     
     for file_path in sorted(analyzed_files):
         try:
-            df = pd.read_excel(file_path)
-            all_dataframes.append(df)
-            total_rows += len(df)
-            print(f"  ✓ {file_path.name}: {len(df)} righe")
+            # Sheet principale "Oggetti"
+            df_oggetti = pd.read_excel(file_path, sheet_name='Oggetti')
+            all_dataframes_oggetti.append(df_oggetti)
+            total_rows += len(df_oggetti)
+            print(f"  ✓ {file_path.name}: {len(df_oggetti)} oggetti")
+            
+            # Sheet "Oggetti_Tabelle_Esploso" (se esiste)
+            try:
+                df_tabelle = pd.read_excel(file_path, sheet_name='Oggetti_Tabelle_Esploso')
+                all_dataframes_tabelle.append(df_tabelle)
+                print(f"    - Oggetti_Tabelle_Esploso: {len(df_tabelle)} relazioni")
+            except:
+                pass
+            
+            # Sheet "Oggetti_Oggetti_Esploso" (se esiste)
+            try:
+                df_oggetti_dep = pd.read_excel(file_path, sheet_name='Oggetti_Oggetti_Esploso')
+                all_dataframes_oggetti_dep.append(df_oggetti_dep)
+                print(f"    - Oggetti_Oggetti_Esploso: {len(df_oggetti_dep)} relazioni")
+            except:
+                pass
+                
         except Exception as e:
             print(f"  ❌ ERRORE caricamento {file_path.name}: {e}")
     
-    if not all_dataframes:
+    if not all_dataframes_oggetti:
         print("\n❌ ERRORE: Nessun file caricato con successo")
         return
     
     # Concatena tutti i DataFrame
-    print(f"\n3. Concatenamento {len(all_dataframes)} DataFrame...")
-    df_consolidated = pd.concat(all_dataframes, ignore_index=True)
-    print(f"  ✓ Totale righe consolidate: {len(df_consolidated)}")
+    print(f"\n3. Concatenamento DataFrame...")
+    df_consolidated = pd.concat(all_dataframes_oggetti, ignore_index=True)
+    print(f"  ✓ Sheet Oggetti: {len(df_consolidated)} righe")
+    
+    df_consolidated_tabelle = pd.DataFrame()
+    if all_dataframes_tabelle:
+        df_consolidated_tabelle = pd.concat(all_dataframes_tabelle, ignore_index=True)
+        print(f"  ✓ Sheet Oggetti_Tabelle_Esploso: {len(df_consolidated_tabelle)} relazioni")
+    
+    df_consolidated_oggetti = pd.DataFrame()
+    if all_dataframes_oggetti_dep:
+        df_consolidated_oggetti = pd.concat(all_dataframes_oggetti_dep, ignore_index=True)
+        print(f"  ✓ Sheet Oggetti_Oggetti_Esploso: {len(df_consolidated_oggetti)} relazioni")
     
     # Verifica colonne critiche
     print(f"\n4. Verifica colonne critiche...")
@@ -98,8 +128,23 @@ def main():
     print(f"\n6. Export file consolidato: {OUTPUT_FILE.name}")
     
     try:
-        df_consolidated.to_excel(OUTPUT_FILE, index=False, engine='openpyxl')
+        with pd.ExcelWriter(OUTPUT_FILE, engine='openpyxl') as writer:
+            # Sheet principale
+            df_consolidated.to_excel(writer, sheet_name='Oggetti', index=False)
+            
+            # Sheet esplosi (se disponibili)
+            if len(df_consolidated_tabelle) > 0:
+                df_consolidated_tabelle.to_excel(writer, sheet_name='Oggetti_Tabelle_Esploso', index=False)
+            
+            if len(df_consolidated_oggetti) > 0:
+                df_consolidated_oggetti.to_excel(writer, sheet_name='Oggetti_Oggetti_Esploso', index=False)
+        
         print(f"  ✓ File salvato con successo")
+        print(f"  ✓ Sheet Oggetti: {len(df_consolidated)} righe")
+        if len(df_consolidated_tabelle) > 0:
+            print(f"  ✓ Sheet Oggetti_Tabelle_Esploso: {len(df_consolidated_tabelle)} relazioni")
+        if len(df_consolidated_oggetti) > 0:
+            print(f"  ✓ Sheet Oggetti_Oggetti_Esploso: {len(df_consolidated_oggetti)} relazioni")
         print(f"  ✓ Percorso: {OUTPUT_FILE}")
     except Exception as e:
         print(f"  ❌ ERRORE durante export: {e}")
