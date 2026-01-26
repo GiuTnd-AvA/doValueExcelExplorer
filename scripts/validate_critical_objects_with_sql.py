@@ -42,20 +42,30 @@ def load_critical_objects(summary_path):
             if 'Database' in df_level.columns:
                 df_level['Database'] = df_level['Database'].str.upper()
             
-            # FILTRA SOLO OGGETTI CRITICI
-            if 'Critico_Migrazione' in df_level.columns:
-                df_critici = df_level[df_level['Critico_Migrazione'] == 'SÌ'].copy()
-                df_critici['Livello'] = level
-                all_objects.append(df_critici)
-                print(f"  ✓ {level}: {len(df_critici)} oggetti critici (su {len(df_level)} totali)")
+            # Logica per L1 vs L2-L4
+            if level == 'L1':
+                # L1: Filtra solo critici se esiste colonna
+                if 'Critico_Migrazione' in df_level.columns:
+                    df_critici = df_level[df_level['Critico_Migrazione'] == 'SÌ'].copy()
+                    df_critici['Livello'] = level
+                    all_objects.append(df_critici)
+                    print(f"  ✓ {level}: {len(df_critici)} oggetti critici (su {len(df_level)} totali)")
+                else:
+                    print(f"  ⚠ {level}: Colonna 'Critico_Migrazione' mancante, carico tutti")
+                    df_level['Livello'] = level
+                    all_objects.append(df_level)
+                    print(f"  ✓ {level}: {len(df_level)} oggetti (tutti considerati critici)")
             else:
-                print(f"  ⚠ {level}: Colonna 'Critico_Migrazione' mancante, salto livello")
+                # L2-L4: TUTTI sono critici per definizione (dipendenze di L1)
+                df_level['Livello'] = level
+                all_objects.append(df_level)
+                print(f"  ✓ {level}: {len(df_level)} oggetti (tutti critici - dipendenze L1)")
             
         except Exception as e:
             print(f"  ✗ {level}: {e}")
     
     if not all_objects:
-        print(f"  ✗ Nessun oggetto critico trovato")
+        print(f"  ✗ Nessun oggetto trovato")
         return pd.DataFrame()
     
     # Combina tutti i livelli
