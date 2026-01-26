@@ -142,13 +142,14 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
     
     return sql_objects
 
-def export_large_dataframe(df, base_path, sheet_name, prefix, batch_num, max_rows=1000000):
+def export_large_dataframe(df, base_path, sheet_name, prefix, table_start, table_end, max_rows=1000000):
+    """Esporta DataFrame con naming: parziale_{prefix}_{table_start}_{table_end}.xlsx"""
     for i in range(0, len(df), max_rows):
         chunk = df[i:i+max_rows]
-        file_path = f"{base_path}_parziale_{prefix}_{batch_num}_{i//max_rows+1}.xlsx"
+        file_path = f"{base_path}_parziale_{prefix}_{table_start}_{table_end}.xlsx"
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             chunk.to_excel(writer, index=False, sheet_name=sheet_name)
-        print(f"Export parziale: {file_path} ({len(chunk)} righe)")
+        print(f"Export parziale: {file_path} ({len(chunk)} righe, tabelle {table_start}-{table_end})")
 
 def process_single_table(idx, row, engine_cache, driver, error_log_lock):
     """Processa una singola tabella - usabile in parallelo."""
@@ -252,7 +253,10 @@ def main():
                 
                 # Export checkpoint
                 if sql_objects:
-                    export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', i // batch_size)
+                    # Calcola range tabelle: da (i - batch_size + 1) a i
+                    table_start = max(START_ROW, i - batch_size + 1)
+                    table_end = i
+                    export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', table_start, table_end)
                     sql_objects.clear()
                 
                 futures.clear()
@@ -270,7 +274,10 @@ def main():
     
     # Export finale
     if sql_objects:
-        export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', (total_rows // batch_size) + 1)
+        # Calcola range tabelle rimanenti
+        last_batch_start = max(START_ROW, total_rows - len(sql_objects) + 1)
+        table_end = total_rows
+        export_large_dataframe(pd.DataFrame(sql_objects), output_path, 'Oggetti T-Sql', 'oggetti', last_batch_start, table_end)
 
     # Log riepilogativo errori
     if error_log:
