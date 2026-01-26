@@ -25,6 +25,12 @@ data = {
         'L3': 45,
         'L4': 9
     },
+    'tipologie': {
+        'Stored Procedure': 320,
+        'Function': 125,
+        'View': 65,
+        'Trigger': 22
+    },
     'database': {
         'AMS': {'count': 148, 'pct': 44},
         'CORESQL7': {'count': 111, 'pct': 33},
@@ -125,22 +131,81 @@ def create_presentation():
     p2.alignment = PP_ALIGN.CENTER
     p2.space_before = Pt(8)
     
-    # ===== SEZIONE 3: DISTRIBUZIONE DATABASE =====
-    y_pos = 5.3
+    # ===== SEZIONE 3: TIPOLOGIE OGGETTI =====
+    y_pos = 5.1
     
-    db_header = slide.shapes.add_textbox(Inches(0.8), Inches(y_pos), Inches(8.4), Inches(0.4))
+    tipo_header = slide.shapes.add_textbox(Inches(0.8), Inches(y_pos), Inches(4), Inches(0.4))
+    tipo_header_frame = tipo_header.text_frame
+    tipo_header_frame.text = "📦 PER TIPOLOGIA"
+    tipo_para = tipo_header_frame.paragraphs[0]
+    tipo_para.font.size = Pt(14)
+    tipo_para.font.bold = True
+    tipo_para.alignment = PP_ALIGN.CENTER
+    
+    # Box tipologie (2x2 grid)
+    y_start = 5.5
+    x_positions = [0.9, 2.8]
+    y_positions = [y_start, y_start + 0.65]
+    box_w = 1.7
+    box_h = 0.55
+    
+    tipo_list = [
+        ('Stored Proc.', data['tipologie']['Stored Procedure']),
+        ('Functions', data['tipologie']['Function']),
+        ('Views', data['tipologie']['View']),
+        ('Triggers', data['tipologie']['Trigger'])
+    ]
+    
+    tipo_colors = [
+        RGBColor(70, 130, 180),   # Steel Blue
+        RGBColor(138, 43, 226),   # Blue Violet
+        RGBColor(220, 20, 60),    # Crimson
+        RGBColor(255, 140, 0)     # Dark Orange
+    ]
+    
+    for idx, (tipo_name, count) in enumerate(tipo_list):
+        row = idx // 2
+        col = idx % 2
+        x_pos = x_positions[col]
+        y_pos_tipo = y_positions[row]
+        
+        tipo_box = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE,
+            Inches(x_pos), Inches(y_pos_tipo), Inches(box_w), Inches(box_h)
+        )
+        tipo_box.fill.solid()
+        tipo_box.fill.fore_color.rgb = tipo_colors[idx]
+        tipo_box.line.color.rgb = RGBColor(255, 255, 255)
+        tipo_box.line.width = Pt(1)
+        
+        tipo_text = tipo_box.text_frame
+        tipo_text.word_wrap = True
+        tipo_text.vertical_anchor = 1  # Middle
+        
+        p_tipo = tipo_text.paragraphs[0]
+        p_tipo.text = f"{tipo_name}: {count}"
+        p_tipo.font.size = Pt(14)
+        p_tipo.font.bold = True
+        p_tipo.font.color.rgb = RGBColor(255, 255, 255)
+        p_tipo.alignment = PP_ALIGN.CENTER
+    
+    # ===== SEZIONE 4: DISTRIBUZIONE DATABASE =====
+    y_pos = 5.1
+    
+    db_header = slide.shapes.add_textbox(Inches(5.1), Inches(y_pos), Inches(4), Inches(0.4))
     db_header_frame = db_header.text_frame
-    db_header_frame.text = "📍 DISTRIBUZIONE DATABASE"
+    db_header_frame.text = "📍 PER DATABASE"
     db_para = db_header_frame.paragraphs[0]
-    db_para.font.size = Pt(16)
+    db_para.font.size = Pt(14)
     db_para.font.bold = True
     db_para.alignment = PP_ALIGN.CENTER
     
-    # Database boxes
-    y_pos = 5.8
-    x_start = 1.5
-    box_width = 1.6
-    spacing = 0.2
+    # Database boxes (vertical stack)
+    y_pos = 5.5
+    x_start = 5.2
+    box_width = 1.8
+    box_height = 0.35
+    spacing = 0.05
     
     db_list = [
         ('AMS', data['database']['AMS']['count'], data['database']['AMS']['pct']),
@@ -157,11 +222,11 @@ def create_presentation():
     ]
     
     for i, (db_name, count, pct) in enumerate(db_list):
-        x_pos = x_start + i * (box_width + spacing)
+        y_pos_db = y_pos + i * (box_height + spacing)
         
         db_box = slide.shapes.add_shape(
             MSO_SHAPE.RECTANGLE,
-            Inches(x_pos), Inches(y_pos), Inches(box_width), Inches(0.8)
+            Inches(x_start), Inches(y_pos_db), Inches(box_width), Inches(box_height)
         )
         db_box.fill.solid()
         db_box.fill.fore_color.rgb = colors[i]
@@ -169,26 +234,14 @@ def create_presentation():
         
         db_text = db_box.text_frame
         db_text.word_wrap = True
+        db_text.vertical_anchor = 1  # Middle
         
-        p_name = db_text.paragraphs[0]
-        p_name.text = db_name
-        p_name.font.size = Pt(14)
-        p_name.font.bold = True
-        p_name.font.color.rgb = RGBColor(255, 255, 255)
-        p_name.alignment = PP_ALIGN.CENTER
-        
-        p_count = db_text.add_paragraph()
-        p_count.text = f"{count}"
-        p_count.font.size = Pt(18)
-        p_count.font.bold = True
-        p_count.font.color.rgb = RGBColor(255, 255, 255)
-        p_count.alignment = PP_ALIGN.CENTER
-        
-        p_pct = db_text.add_paragraph()
-        p_pct.text = f"({pct}%)"
-        p_pct.font.size = Pt(12)
-        p_pct.font.color.rgb = RGBColor(255, 255, 255)
-        p_pct.alignment = PP_ALIGN.CENTER
+        p_db = db_text.paragraphs[0]
+        p_db.text = f"{db_name}: {count} ({pct}%)"
+        p_db.font.size = Pt(12)
+        p_db.font.bold = True
+        p_db.font.color.rgb = RGBColor(255, 255, 255)
+        p_db.alignment = PP_ALIGN.CENTER
     
     # ===== FOOTER =====
     footer_box = slide.shapes.add_textbox(Inches(0.5), Inches(7), Inches(9), Inches(0.3))
