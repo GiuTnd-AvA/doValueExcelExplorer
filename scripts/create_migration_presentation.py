@@ -3,7 +3,7 @@
 # =========================
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.dml.color import RGBColor
 
@@ -180,7 +180,7 @@ def create_presentation():
         
         tipo_text = tipo_box.text_frame
         tipo_text.word_wrap = True
-        tipo_text.vertical_anchor = 1  # Middle
+        tipo_text.vertical_anchor = MSO_ANCHOR.MIDDLE
         
         p_tipo = tipo_text.paragraphs[0]
         p_tipo.text = f"{tipo_name}: {count}"
@@ -234,7 +234,7 @@ def create_presentation():
         
         db_text = db_box.text_frame
         db_text.word_wrap = True
-        db_text.vertical_anchor = 1  # Middle
+        db_text.vertical_anchor = MSO_ANCHOR.MIDDLE
         
         p_db = db_text.paragraphs[0]
         p_db.text = f"{db_name}: {count} ({pct}%)"
