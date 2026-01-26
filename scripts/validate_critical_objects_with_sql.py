@@ -14,7 +14,7 @@ OUTPUT_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esporta
 
 # SQL Server
 SERVER = 'EPCP3'
-DRIVER = '{ODBC Driver 17 for SQL Server}'
+DRIVER = 'ODBC+Driver+17+for+SQL+Server'  # URL-encoded per SQLAlchemy
 TOP_N = 1500  # Top N oggetti più referenziati da validare
 
 # Database da analizzare (dalla lista nel progetto)
@@ -28,24 +28,39 @@ DATABASES = [
 # =========================
 
 def load_critical_objects(summary_path):
-    """Carica oggetti critici da L1."""
+    """Carica TUTTI gli oggetti critici da L1, L2, L3, L4."""
     print(f"Caricamento oggetti critici da: {summary_path}")
     
-    try:
-        df_l1 = pd.read_excel(summary_path, sheet_name='L1')
-        
-        # Filtra solo critici per migrazione
-        df_critical = df_l1[df_l1['Critico_Migrazione'] == 'SÌ'].copy()
-        
-        print(f"  ✓ Caricati {len(df_critical)} oggetti critici da L1")
-        print(f"    - Totale L1: {len(df_l1)}")
-        print(f"    - Critici: {len(df_critical)}")
-        
-        return df_critical
-        
-    except Exception as e:
-        print(f"  ✗ Errore caricamento: {e}")
+    all_critical = []
+    
+    for level in ['L1', 'L2', 'L3', 'L4']:
+        try:
+            df_level = pd.read_excel(summary_path, sheet_name=level)
+            
+            # Filtra solo critici per migrazione
+            df_critical_level = df_level[df_level['Critico_Migrazione'] == 'SÌ'].copy()
+            df_critical_level['Livello'] = level  # Aggiungi colonna livello
+            
+            all_critical.append(df_critical_level)
+            
+            print(f"  ✓ {level}: {len(df_critical_level)} oggetti critici (su {len(df_level)} totali)")
+            
+        except Exception as e:
+            print(f"  ✗ {level}: {e}")
+    
+    if not all_critical:
+        print(f"  ✗ Nessun oggetto critico trovato")
         return pd.DataFrame()
+    
+    # Combina tutti i livelli
+    df_all_critical = pd.concat(all_critical, ignore_index=True)
+    
+    print(f"\n  ✓ TOTALE oggetti critici: {len(df_all_critical)}")
+    print(f"    Distribuzione per livello:")
+    for level, count in df_all_critical['Livello'].value_counts().sort_index().items():
+        print(f"      - {level}: {count} oggetti")
+    
+    return df_all_critical
 
 def get_engine(server, db_name, driver):
     """Crea engine SQLAlchemy."""
@@ -153,7 +168,7 @@ def generate_validation_report(df_critical, df_top_referenced, comparison):
     # Sheet 1: Summary
     summary_data = {
         'Metrica': [
-            'Oggetti Critici Identificati (L1)',
+            'Oggetti Critici Identificati (L1+L2+L3+L4)',
             'Oggetti Top Referenced SQL',
             'Match (presenti in entrambi)',
             'Critici NON nei top',
@@ -178,6 +193,7 @@ def generate_validation_report(df_critical, df_top_referenced, comparison):
         for idx, row in df_critical.iterrows():
             if normalize_object_name(row) == obj_normalized:
                 match_list.append({
+                    'Livello': row.get('Livello', 'N/A'),
                     'Database': row['Database'],
                     'Schema': row.get('Schema', 'dbo'),
                     'ObjectName': row['ObjectName'],
@@ -195,6 +211,7 @@ def generate_validation_report(df_critical, df_top_referenced, comparison):
         for idx, row in df_critical.iterrows():
             if normalize_object_name(row) == obj_normalized:
                 critical_not_top_list.append({
+                    'Livello': row.get('Livello', 'N/A'),
                     'Database': row['Database'],
                     'Schema': row.get('Schema', 'dbo'),
                     'ObjectName': row['ObjectName'],
