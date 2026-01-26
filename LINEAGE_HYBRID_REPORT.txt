@@ -1,0 +1,2945 @@
+====================================================================================================
+LINEAGE HYBRID REPORT - Oggetti da Migrare
+====================================================================================================
+
+Data generazione: 2026-01-26 15:04:06
+Source: SUMMARY_REPORT_HYBRID.xlsx
+
+CRITERIO CRITICITÀ IBRIDO:
+  ✓ Oggetti con operazioni DML/DDL (INSERT/UPDATE/DELETE/CREATE/ALTER)
+  ✓ OPPURE Oggetti con ReferenceCount >= 50 (dipendenze critiche)
+
+====================================================================================================
+
+1. SUMMARY ESECUTIVO
+====================================================================================================
+
+Oggetti totali analizzati (L1-L4):           532
+Oggetti CRITICI da migrare (IBRIDO):         532 (100.0%)
+
+Breakdown per motivo criticità:
+  • Critici SOLO per DML/DDL:                333
+  • Critici SOLO per Dipendenze (50+ refs):  4
+  • Critici per ENTRAMBI i motivi:           0
+  • TOTALE (verifica):                       337
+
+Distribuzione per livello:
+  L1: 333 critici /  333 totali (100.0%)
+       Solo DML: 333 | Solo Deps: 0 | Entrambi: 0
+  L2: 145 critici /  145 totali (100.0%)
+       Solo DML: 0 | Solo Deps: 0 | Entrambi: 0
+  L3:  45 critici /   45 totali (100.0%)
+       Solo DML: 0 | Solo Deps: 4 | Entrambi: 0
+  L4:   9 critici /    9 totali (100.0%)
+       Solo DML: 0 | Solo Deps: 0 | Entrambi: 0
+
+
+2. DETTAGLIO PER LIVELLO - Oggetti Critici da Migrare
+====================================================================================================
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+LIVELLO L1
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+Oggetti totali:                    333
+Oggetti CRITICI da migrare:        333 (100.0%)
+
+Breakdown per motivo:
+  • SOLO DML/DDL (no dipendenze):  333
+  • SOLO Dipendenze (no DML/DDL):  0
+  • ENTRAMBI (DML/DDL + Deps):     0
+  • Totale con DML/DDL:            333
+  • Totale con Dipendenze:         0
+
+Per tipo oggetto:
+  • SQL_STORED_PROCEDURE               : 313 ( 94.0%)
+  • SQL_TRIGGER                        :  20 (  6.0%)
+
+Per database:
+  • AMS                 : 148 ( 44.4%)
+  • CORESQL7            : 111 ( 33.3%)
+  • S1057               :  35 ( 10.5%)
+  • ANALISI             :  12 (  3.6%)
+  • BASEDATI_BI         :  10 (  3.0%)
+  • GESTITO             :   7 (  2.1%)
+  • S1057B              :   5 (  1.5%)
+  • S1259               :   3 (  0.9%)
+  • EPC_BI              :   2 (  0.6%)
+
+Per criticità tecnica:
+  • MEDIA                              : 126 ( 37.8%)
+  • BASSA                              : 107 ( 32.1%)
+  • ALTA                               : 100 ( 30.0%)
+
+TOP 10 per dipendenze (ReferenceCount):
+   1. [AMS].[dbo].[ASP_WF_BIP_WORKFLOW_AUTOMATISMI_ANTE]      | SQL_STORED_PROCEDURE |  21 refs | DML/DDL
+   2. [AMS].[dbo].[ASP_SIMPLEASSIGN_DEP]                      | SQL_STORED_PROCEDURE |  14 refs | DML/DDL
+   3. [AMS].[dbo].[ASP_UPDATE_STATUSRS]                       | SQL_STORED_PROCEDURE |   4 refs | DML/DDL
+   4. [AMS].[dbo].[ASP_SALVASTATO_BIP]                        | SQL_STORED_PROCEDURE |   3 refs | DML/DDL
+   5. [AMS].[dbo].[SP_JDE_VALORIZZAJDE]                       | SQL_STORED_PROCEDURE |   3 refs | DML/DDL
+   6. [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC]            | SQL_STORED_PROCEDURE |   2 refs | DML/DDL
+   7. [CORESQL7].[dbo].[SP_DELETE_RAPPORTI_DOPPI_SINGOLO]     | SQL_STORED_PROCEDURE |   2 refs | DML/DDL
+   8. [AMS].[dbo].[ASP_WF_BIP_ASSOCIASEGMENTO]                | SQL_STORED_PROCEDURE |   2 refs | DML/DDL
+   9. [AMS].[dbo].[ASP_CSP_AGGIORNA_TENDINE_IFAMS]            | SQL_STORED_PROCEDURE |   2 refs | DML/DDL
+  10. [AMS].[dbo].[USP_GESTIONEFATTUREQUIETANZA_AGGIORNAMENTOIFAMS] | SQL_STORED_PROCEDURE |   2 refs | DML/DDL
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+LIVELLO L2
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+Oggetti totali:                    145
+Oggetti CRITICI da migrare:        145 (100.0%)
+
+Breakdown per motivo:
+  • SOLO DML/DDL (no dipendenze):  0
+  • SOLO Dipendenze (no DML/DDL):  0
+  • ENTRAMBI (DML/DDL + Deps):     0
+  • Totale con DML/DDL:            0
+  • Totale con Dipendenze:         0
+
+Per tipo oggetto:
+  • SQL_STORED_PROCEDURE               : 102 ( 70.3%)
+  • SQL_SCALAR_FUNCTION                :  41 ( 28.3%)
+  • SQL_INLINE_TABLE_VALUED_FUNCTION   :   2 (  1.4%)
+
+Per database:
+  • AMS                 :  93 ( 64.1%)
+  • CORESQL7            :  46 ( 31.7%)
+  • ANALISI             :   2 (  1.4%)
+  • S1057               :   2 (  1.4%)
+  • S1057B              :   1 (  0.7%)
+  • EPC_BI              :   1 (  0.7%)
+
+Per criticità tecnica:
+  • DIPENDENZA_L1                      : 145 (100.0%)
+
+TOP 10 per dipendenze (ReferenceCount):
+   1. [AMS].[dbo].[DBO.FN_AMS_PROCESSNAME]                    | SQL_SCALAR_FUNCTION |   0 refs | Dipendenza L1 (Bottom-Up)
+   2. [AMS].[dbo].[DBO.ASP_MUTUO95_IMPOSTA_ANNULLAMENTO_COPERTURA] | SQL_STORED_PROCEDURE |   0 refs | Dipendenza L1 (Bottom-Up)
+   3. [AMS].[dbo].[DBO.UDF_PID_IS_MANAGED]                    | SQL_SCALAR_FUNCTION |   0 refs | Dipendenza L1 (Bottom-Up)
+   4. [AMS].[dbo].[DBO.FN_REO_CHECKDOC]                       | SQL_SCALAR_FUNCTION |   0 refs | Dipendenza L1 (Bottom-Up)
+   5. [AMS].[dbo].[DBO.FN_PRODSERVER]                         | SQL_SCALAR_FUNCTION |   0 refs | Dipendenza L1 (Bottom-Up)
+   6. [AMS].[dbo].[DBO.FN_PROPERTY_DES_BY_AUCTION]            | SQL_SCALAR_FUNCTION |   0 refs | Dipendenza L1 (Bottom-Up)
+   7. [AMS].[dbo].[DBO.SP_INVIA_ALERT_AM_INDENNIZZO_GENWORTH] | SQL_STORED_PROCEDURE |   0 refs | Dipendenza L1 (Bottom-Up)
+   8. [AMS].[dbo].[DBO.USP_RUNNING_302_ELIMINAZIONEASTA]      | SQL_STORED_PROCEDURE |   0 refs | Dipendenza L1 (Bottom-Up)
+   9. [AMS].[dbo].[DBO.USF_GC_ELENCO_CAUSE_PASSIVE]           | SQL_INLINE_TABLE_VALUED_FUNCTION |   0 refs | Dipendenza L1 (Bottom-Up)
+  10. [AMS].[dbo].[DBO.ASP_ADMIN_RESOLUTIONSTRATEGY_APPROVE]  | SQL_STORED_PROCEDURE |   0 refs | Dipendenza L1 (Bottom-Up)
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+LIVELLO L3
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+Oggetti totali:                    45
+Oggetti CRITICI da migrare:        45 (100.0%)
+
+Breakdown per motivo:
+  • SOLO DML/DDL (no dipendenze):  0
+  • SOLO Dipendenze (no DML/DDL):  4
+  • ENTRAMBI (DML/DDL + Deps):     0
+  • Totale con DML/DDL:            0
+  • Totale con Dipendenze:         4
+
+Per tipo oggetto:
+  • SQL_SCALAR_FUNCTION                :  22 ( 48.9%)
+  • SQL_STORED_PROCEDURE               :  13 ( 28.9%)
+  • SQL_INLINE_TABLE_VALUED_FUNCTION   :   9 ( 20.0%)
+  • SQL_TABLE_VALUED_FUNCTION          :   1 (  2.2%)
+
+Per database:
+  • AMS                 :  45 (100.0%)
+
+Per criticità tecnica:
+  • DIPENDENZA_L1                      :  41 ( 91.1%)
+  • DIPENDENZA_L1 + REFS_CRITICHE      :   4 (  8.9%)
+
+TOP 10 per dipendenze (ReferenceCount):
+   1. [AMS].[dbo].[FN_AM_GERARCHIA]                           | SQL_INLINE_TABLE_VALUED_FUNCTION | 149 refs | Dipendenza L1 + Dipendenze (50+ refs)
+   2. [AMS].[dbo].[FN_UL_GERARCHIA]                           | SQL_INLINE_TABLE_VALUED_FUNCTION | 101 refs | Dipendenza L1 + Dipendenze (50+ refs)
+   3. [AMS].[dbo].[FN_PRODSERVER]                             | SQL_SCALAR_FUNCTION |  71 refs | Dipendenza L1 + Dipendenze (50+ refs)
+   4. [AMS].[dbo].[UDF_MYUID]                                 | SQL_SCALAR_FUNCTION |  64 refs | Dipendenza L1 + Dipendenze (50+ refs)
+   5. [AMS].[dbo].[UDF_BIP_IS_MANAGED]                        | SQL_SCALAR_FUNCTION |  32 refs | Dipendenza L1 (Bottom-Up)
+   6. [AMS].[dbo].[FN_GC_LITIGATIONSTATUS]                    | SQL_INLINE_TABLE_VALUED_FUNCTION |  29 refs | Dipendenza L1 (Bottom-Up)
+   7. [AMS].[dbo].[FN_USER_LEVELMAP]                          | SQL_INLINE_TABLE_VALUED_FUNCTION |  28 refs | Dipendenza L1 (Bottom-Up)
+   8. [AMS].[dbo].[FN_GETLOGINBYUID]                          | SQL_SCALAR_FUNCTION |  22 refs | Dipendenza L1 (Bottom-Up)
+   9. [AMS].[dbo].[ASP_WF_BIP_SALVASTEP_V2]                   | SQL_STORED_PROCEDURE |  10 refs | Dipendenza L1 (Bottom-Up)
+  10. [AMS].[dbo].[UDF_BIP_ASSEGNATO_GEXTRA]                  | SQL_SCALAR_FUNCTION |   9 refs | Dipendenza L1 (Bottom-Up)
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+LIVELLO L4
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+Oggetti totali:                    9
+Oggetti CRITICI da migrare:        9 (100.0%)
+
+Breakdown per motivo:
+  • SOLO DML/DDL (no dipendenze):  0
+  • SOLO Dipendenze (no DML/DDL):  0
+  • ENTRAMBI (DML/DDL + Deps):     0
+  • Totale con DML/DDL:            0
+  • Totale con Dipendenze:         0
+
+Per tipo oggetto:
+  • SQL_INLINE_TABLE_VALUED_FUNCTION   :   5 ( 55.6%)
+  • SQL_SCALAR_FUNCTION                :   3 ( 33.3%)
+  • SQL_TABLE_VALUED_FUNCTION          :   1 ( 11.1%)
+
+Per database:
+  • AMS                 :   9 (100.0%)
+
+Per criticità tecnica:
+  • DIPENDENZA_L1                      :   9 (100.0%)
+
+TOP 10 per dipendenze (ReferenceCount):
+   1. [AMS].[dbo].[UDF_VAPT_RIMUOVITAGHTML]                   | SQL_SCALAR_FUNCTION |  17 refs | Dipendenza L1 (Bottom-Up)
+   2. [AMS].[dbo].[FN_GETUIDLEVEL]                            | SQL_TABLE_VALUED_FUNCTION |  15 refs | Dipendenza L1 (Bottom-Up)
+   3. [AMS].[dbo].[FN_GC_LITIGATIONCASESTATUS]                | SQL_INLINE_TABLE_VALUED_FUNCTION |   9 refs | Dipendenza L1 (Bottom-Up)
+   4. [AMS].[dbo].[FN_COMITATO]                               | SQL_INLINE_TABLE_VALUED_FUNCTION |   9 refs | Dipendenza L1 (Bottom-Up)
+   5. [AMS].[dbo].[FN_DATASENZAORA]                           | SQL_SCALAR_FUNCTION |   4 refs | Dipendenza L1 (Bottom-Up)
+   6. [AMS].[dbo].[FN_GC_LITIGATION_RELEASED]                 | SQL_INLINE_TABLE_VALUED_FUNCTION |   4 refs | Dipendenza L1 (Bottom-Up)
+   7. [AMS].[dbo].[FN_GC_LITIGATION_RELEASE_REQUESTED]        | SQL_INLINE_TABLE_VALUED_FUNCTION |   4 refs | Dipendenza L1 (Bottom-Up)
+   8. [AMS].[dbo].[FN_LINKELENCOFILIALI]                      | SQL_SCALAR_FUNCTION |   3 refs | Dipendenza L1 (Bottom-Up)
+   9. [AMS].[dbo].[FN_GC_MAIN_SUBJECTRISK]                    | SQL_INLINE_TABLE_VALUED_FUNCTION |   1 refs | Dipendenza L1 (Bottom-Up)
+
+
+
+3. LISTA COMPLETA OGGETTI CRITICI DA MIGRARE
+====================================================================================================
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+L1 - 333 oggetti critici
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  • [AMS].[dbo].[ASP_WF_BIP_WORKFLOW_AUTOMATISMI_ANTE]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   21
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[ASP_SIMPLEASSIGN_DEP]                           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   14
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_UPDATE_STATUSRS]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   4
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_SALVASTATO_BIP]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   3
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_JDE_VALORIZZAJDE]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   3
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_APP_GENERA_BP_AUTOMATICO]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_AUTO_APPEND_LOCK_APPROVE_RESOLUTION_STRATEGY_RECORD] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_CSP_AGGIORNA_TENDINE_IFAMS]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_IMPOSTA_CLOSINGSEMPLIFICATO]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_WF_BIP_ASSOCIASEGMENTO]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_INVIA_EMAIL_PER_ASSEGNAZIONE_A_NPL]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[USP_GESTIONEFATTUREQUIETANZA_AGGIORNAMENTOIFAMS] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: MEDIA
+
+  • [ANALISI].[dbo].[SP_07_M_A_DEPARTMENT]                       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: MEDIA
+
+  • [ANALISI].[dbo].[SP_08_M_A_ATTIV_GIUDIZIALE_E_SUPPORTO]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[ASSEGNAZIONECLOSING_CREATEUPDATE]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_DELETE_RAPPORTI_DOPPI_SINGOLO]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   2
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_BIP_ASSIGNMENT_ASSIGN_USER]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[HD_AGGIORNADISTRIBUZIONEIMPORTI]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_CAMBIOSTATO_UPDATE]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_INV_APP_CMD_APPROVAZIONETLDOCUMENTIPROTOCOLLOLOCK] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[ASSEGN_SP_INSCOMPENSOCHIUSURAINCARICO]     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[ASSEGN_SP_RIALLOCAZIONE_PRATICA]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[EPN_CREAUNAFASECONASSOCIATIMESSAGGI]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SIM_IMP_MESSAGGI GESTORI]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_CALCOLACOMPENSI2017]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_DBQ_BONIFICA_DATI_CONF]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_OB_CREADECODIFICHE]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_MODELLO_PREVISIONI]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_RIPORTAFOGLIAZIONE_2025_ASSEGNAZIONE_ORDINARI] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_RIPORTAFOGLIAZIONE_2025_ASSEGNAZIONE_RESIDUAL_TANK] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   1
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[ACCADP_SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOJDE]   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ACCADP_SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOLOCK_V1] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ACCADP_SP_JDE_VALORIZZAJDE]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ARCG_ASP_AGGIORNAARCGTBLFASCICOLO]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_ADMIN_RESOLUTIONSTRATEGY_APPROVE]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_ADMIN_RESOLUTIONSTRATEGY_DENY]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_AGGIORNACONDIZIONEABLEBIP]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_APPEND_AUCTION_RECORD]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_APPEND_AUCTION_RECORD_V10]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_APPEND_COLLATERAL_RECORD]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_APPEND_RESOLUTION_STRATEGY_RECORD]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_APPEND_RESOLUTION_STRATEGY_RECORD_GI]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_APPEND_RS_LEGAL_ACTION_RECORD]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_APPROVAZIONE_OR_RIFIUTO_ASSEGNAZIONE_PE]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_APPROVE_RESOLUTION_STRATEGY]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_BE_UPDATE_OUR_PERCENTAGE_OF_VALUE]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_BE_UPDATE_PROPERTY]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_BIP_ASSIGNMENT_BIP_LIST_V3_REGISTRA]        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[ASP_CLOSING_FAIL_DEAL_RES_ID]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_DELINQUENCY_APPROVE]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_ELIMINA_STATO_BIP]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_LOAN_AGGIORNA_TITOLO_ESECUTIVO]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_MUTUO95_AGGIORNA_SPESEPAGATE]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_MUTUO95_IMPOSTA_ANNULLAMENTO_COPERTURA]     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_PROTOCOLFILELISTBYBIP_FORM]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_RCI_DATIREGISTRO_SALVA]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_REO_NPL_BID_CASE_ACCEPTED]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_REO_NPL_BID_CASE_REJECTED]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_RSBP_CREA_SCHEDA_INFORMATIVA_FITTIZIA]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_RSBP_SALVADATI_PROCEDURALEGALE]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[ASP_RS_START_LEGAL_PROCEDURE_SALVANOTEPROCEDURA] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_SALVA_FORZATURA_CEDUTO]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_SET_GENWORTH_AUTHORIZATION]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_SPL_PRECETTO_INVIO_CANC]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[ASP_SPL_PRECETTO_INVIO_INS]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[ASP_UPDATE_CLOSING_STATUS]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_UPDATE_NPL_STATUS]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_UPDATE_NPL_STATUS_V19]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_UPDATE_NPL_STATUS_V20]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_UPDATE_RESOLUTION_STRATEGY_FLAGVISIBILITAPDF_BM] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[ASP_UPDATE_SPL_STATUS]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[CREABIPREOCO]                                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[DELETE_LIEN_LOAN_MAP]                           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[HD_AGGIORNADISTRIBUZIONEIMPORTI_RICALCOLOIVA]   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[HD_ASP_APP_GENERA_BP_AUTOMATICO]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[HD_DOCUMENTIRINEGOZIATI]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[HD_ELABORA_IFAMS_JDE_AN8_CORR]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[HD_ELABORA_IFAMS_JDE_CORR]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[HLP_ADJUST_ASSIGNMENTS]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_ASP_APPEND_RS_LEGAL_ACTION_RECORD]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[IFAMS2_ASP_LAM_PROPERTY]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[IFAMS2_ASP_LAM_PROPERTY_SAVE]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_ASP_LAM_RESOLUTION_STRATEGY_V18_DETTAGLI_CESSIONE_CREDITOUPDATE] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_ASP_LAM_RESOLUTION_STRATEGY_V18_UPDATE]  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_LAM_BID_INFO_SF]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_UPDATE_FLAG_VALIDAZIONE_BANCA_MANDANTE]  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_UPDATE_LAM_BID_INFO]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_UPDATE_LAM_BID_INFO_SAVE]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_UPDATE_LAM_FORCLOSURE_PD]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_UPDATE_OWNERDATA_AND_PERCENTAGE]         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IFAMS2_USP_LOAN_TITOLO_ESECUTIVO_FOR_SAID_UPDATE] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IMPOSTA_DOCCOMPLETASUBIP]                       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[IMPOSTA_DOCDATAARRIVOSUBIP]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[INT_ADD_NEW_CLIENTS]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[INT_AGGIORNAMENTO_STATUS_SPL]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[INT_APPEND_INCASSI_A_OGGI]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[INT_APPEND_INCASSI_A_OGGI_K4F]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[INT_APPEND_INCASSI_A_OGGI_OPE]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[INT_NUOVI_BIP]                                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[INT_SPL_RESET_PRECETTO]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[INT_SPL_RESET_STATUS]                           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[INT_UPDATELASTDATELOANSTATUS]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[REO_MANAGEDOCINFOTOPID]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SEND_EXP_EXCEL_RICH_PUBBL_1]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPALTERLIEN]                                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SPCANCELLAASTEPOSTASTAVENDUTA]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SPDELETELEGALASSIGNMENT]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SPEPC_LEGFIINC]                                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPEPC_LEGMUIPO]                                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPEPC_LEGMUIPO_DELETE]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPEPC_LEGMUIPO_LOAN_MAP]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPEPC_PROPOSTE_DI_DELIBERACGC]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPINTESABPMASSIVI_CARICABP]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SPINTESABPMASSIVI_CARICAMENTOTOTALEAMS]         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SPINTESABPMASSIVI_CARICAMENTOTOTALEAMS_V2]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SPMASSREASSIGNBIP]                              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPNUOVOLOTTOGEXTRA]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[SPNUOVOLOTTOGEXTRA_NEW]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[SPREASSIGNBIP]                                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPREASSIGNBIPTOCLO]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPREASSIGNBIP_FIX]                              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SPUPDATEPRESAINCARICOBNP]                       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_AGGIORNAMENTO_GIORNALIERO_BENEFICIARIO_E_NUMEROFATTURA] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[SP_AMS_APP_ABM_CREATE_NEW_AUCTION_ROUND]        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_AMS_APP_ABM_PRO_RATE_SPLIT_PID_VALUES]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[SP_AMS_APP_ABM_REDUCE_TOTAL_CLAIM]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[SP_AMS_APP_ABM_UNASSIGN_ABM]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_AMS_APP_CASE_LOCK_FIRMA_CASE]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_CASE_APPROVAL_IMPOSTALIVELLISUBPASSOCIATO]   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_CASE_APPROVAL_UPDATE_BP_AUTOMATICO]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_DELETE_LIEN]                                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[SP_ESEGUI_AUTO_CLOSING]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_ESITOLOTTIGEXTRA]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[SP_FIX_SPL]                                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_FIX_SPL_BATCH]                               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_INVOICES_FORNITORI_DOCUMENTI_FORM]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_INV_APP_CMD_APPROVAZIONEAMDOCUMENTIPROTOCOLLOLOCK] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOJDE]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOLOCK]         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOLOCK_V1]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_INV_APP_CMD_RESETDOCUMENTNOTWORKABLE]        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_INV_APP_CMD_UPDATENOTELEGAL]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_INV_RPU_INSERTNOTE]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_INV_SI_JOB_DOWNLOADCUSTOMERFROMJDE]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_INV_TRANSFERDOCUMENTIMIGRATI]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[SP_JOB_NPL_RESET_ASSENZA_ATTI]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_MOVEALLBIPASSIGNEDFROMUIDTOUID]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_REAMS_DATIASTA_FORM]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SP_SKP_CALCOLA_ABLENESS]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[SVR_ASSIGN_TO_DEBITORI_DEPENNATI_SINGLE_BIP]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[TRG_DELETE_AND_UPDATE_BIDDERS]                  | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[TRG_INSERT_UPDATE_TO_LOANSAID]                  | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[TRG_INS_UPD_PROPERTY_AUCTION]                   | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[TRG_INV_STATUS_UPDATE]                          | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[TR_UPDATE_LOG_DELINQUENCY]                      | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[UPDATE_CLOSING_COMPLETE]                        | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [AMS].[dbo].[UPDATE_ID_RELEASE]                              | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[USP_GCI_RESETSCADENZARIO]                       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[USP_GLAM_START_LEGAL_PROCEDURE_CAMBIASTATO]     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[USP_HD_AUMENTALIVELLODELIBERANTE]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [AMS].[dbo].[USP_RUNNING_302_ELIMINAZIONEASTA]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [AMS].[dbo].[VARIAZIONE_IMPORTI]                             | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [ANALISI].[dbo].[SP_07_M_A_DEPARTMENT_20100213]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_08_M_A_ATTIV_GIUDIZIALE_E_SUPPORTOFM_OLD] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_08_M_A_ATTIV_GIUDIZIALE_E_SUPPORTO_20171011] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_08_M_A_ATTIV_GIUDIZIALE_E_SUPPORTO_RIP]  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_TAB_PROCEDURE]                           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_TAB_PROCEDURE_AL25032010]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_TAB_PROCEDURE_PROVA]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_TAB_RAPPORTI]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_TAB_UTENTI]                              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [ANALISI].[dbo].[SP_TAB_UTENTI_OLDAL14072009]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL]                           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_NOTRAN]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_OLD]                       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_OLD11052020]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_OLDAL04062014]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_OLDAL09102012]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_OLDAL14082012]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_OLDAL23102012]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_OLDAL30052012]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [BASEDATI_BI].[dbo].[SP_LEGALBILL_RIPARTENZA]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[ASSEGN_SP_CREAUNAFASECONASSOCIATIMESSAGGI] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[ASSEGN_SP_PROCEDURA_BENE_APERTURA]         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[BATCH_NODTS_3_CONFERIMENTO]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[BATCH_NODTS_3_CONFERIMENTO_CAPITALIA]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[BATCH_NODTS_3_CONFERIMENTO_PARAM]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[BEN_CREAFASE]                              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[BP_TO_BP_ERIS]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[CALCOLO_PIVOT]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[CAMPIONATURA_USP_APPROVAZIONE_MASSIVA]     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[CARICAMENTO_IMMOBILI_QF]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[CR01PRATI_STORICIZZA_LEGPRATI]             | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[ELABORA_PROCEDURE_LEGALI_RELAIS]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[IMPORTIMMOBILIIPOTECHE]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[INSERTFASE]                                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[INSERTFASEXML]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[INS_FASE_DOC]                              | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[INS_MESSAGGIO_STATO_GIUDIZIO]              | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[ONBRD_SP_CARICAMENTOCOMMENTI]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[ONBRD_SP_CARICAMENTOIPOTECHE]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[ONBRD_SP_CARICAMENTOLOTTIASTE]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[OPER_CONF_LOCAT_NON_RISOLTI]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[OPER_CONF_LOCAT_NON_RISOLTI_PIU_DATE]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[OPER_DELIBERE_NON_RISPETTATE]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[OPER_RILASCIO_3679]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[OPER_UPD_ESITOCERTO_FALLIM]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[PDD_INVIAINREDAZIONE]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[POPOLA_FAMIGLIA_786]                       | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[RIMUOVI_COLL_FAMIGLIA_ON_LEG_NUM_IPOTEC_NUM_PRAT] | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_AGGIORNAMENTO_FAMIGLIE]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_AGGIORNAMENTO_FAMIGLIE_PRESCRIZIONE_CREDITI] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_AGGIORNA_RAPPORTI_UCCMB_BAD0DTS]        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_ASSEGNA_FAMIGLIE_NOCORE]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_ASSEGNA_INCAGLI_A_FAMIGLIA_PER_DECRETO_DA_CANCELLARE] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_AUTORICMAN]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_BONIFICAFASI]                           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_BONIFICA_CONVENZIONE]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_CALCOLACOMPENSIAGGCONV]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_CAP_STEP04_EST]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_CAP_STEP04_INC]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_CATASTO_PREVALENTE]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_COPIADATIPROCEDURA]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_CP_APPROVASPESANOTULA]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_CP_BONIFICALIMBOAPPROVAZIONE]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_CP_DOSTEPAPPROVAZIONE]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_CP_INVIAMESSAGGIXAPPROVATORI]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_CP_NOTIFICAAVVENUTAAPPROVAZIONE]        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_DBQ_BONIFICA_DATI]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_DBQ_BONIFICA_DATI_PROVA]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_DBQ_SANATORIA_2A_LUO_NAS_CARLA_P1]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_DBQ_SANATORIA_2B_PR_NAS_CARLA_P1]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_DBQ_SANATORIA_3_CAP_E_PR_RES_CARLA_P1]  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_DBQ_SANATORIA_CAP_CARLA_P1]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_DBQ_SANATORIA_CAP_CARLA_P2]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_DELETE_RAPPORTI_DOPPI_OLD_MANUALE]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_DQ_ELABORA_4940]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_INVIA_MESSAGGI_METAENERGIA]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_MODIFICA_CONVENZIONE]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_OB_DTS_PARAM]                           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SAP_REINVIA_SVG]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SET_PRIVACY]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SET_PRIVACY_OLD]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SMALL_LOANS]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SO_AZZERAMENTO_DATI_NECESSARI_SVG_FATTURE_INVIO_SAP] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SO_BONIFICA_AMMINISTRAZIONECPA_9_SCRIPT_ANNULLAMENTO_SVG] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SO_COLLEGAMENTO_PRATICHE_FAMIGLIA]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SO_CONFERIMENTOMANUALE_AGGIORNAMENTILEGARRICLEGPRATILEGPROCE] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SO_DATAROOMUSERS_NEW]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_SO_FIORUCCI_TRAVASO]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SO_INSERIMENTOFASI]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SO_INSERIMENTO_PROPOSTE_DI_DELIBERA]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SO_INSERT_MESSAGGI_LEGALI]              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_SO_PLUSDEIPLUS_INSERIMENTOFASI]         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SO_POPOLAMENTO_ARK_DISARCHIVIAZIONE]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SO_PROPOSTEDELIBERA_AGGIORNANOTA]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SO_PROPOSTEDELIBERA_CANCELLAZIONE]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_SO_SOSPENSIONI_UTENZE_IN_EPCDR]         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[SP_SO_TIPIZZAZIONE_DOCUMENTI_CERVED]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_SO_TIPIZZAZIONE_DOCUMENTI_PAM]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_SO_TOGLIERE_ANNULLAMENTO]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SO_UTENZE_INSERTLEGUTENT]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[SP_SPESE_ASSEGNAZIONE]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_SVG_CENSIMENTO_FORNITORE_SAP_IN_EPC]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_UGC_APPLICACOMPENSI]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[SP_UPDATE_CR01ANAGRAFE_INDIRIZZI_CFPI]     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[TRG_LEGFASI_FLAGISULTIMAFASE]              | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[TRG_STATO_LEGPNPRA]                        | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[TRG_STATO_SOSPESI_DELETE]                  | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[TRG_STATO_SOSPESI_INSERT]                  | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[UCCMB_SP_AGGIORNA_LEGANAGR_DA_CERVED]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[UGC_REVOCABILITA_PRATICA]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[UGC_SP_AZZERA_RAPPEST_ANTEMAN]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[UGC_SP_DELETE_NUM_PRAT_DA_NON_USARE]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[UGC_SP_DELETE_NUM_PRAT_SERVSVIL]           | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[UGC_SP_SENTENZA_SFAVOREVOLE]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[UGC_SP_SNAPSHOT_PRATICA]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[UGC_SP_TRAVASO_FLUSSI_RATESCONFINI_CORESQL7] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[UGC_SP_UPDATE_DATI_BANCA]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: BASSA
+
+  • [CORESQL7].[dbo].[UPDATE_FORNITORE_CLASSESPESA]              | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [CORESQL7].[dbo].[UPD_DATAAPERTURA_CHIUSURA]                 | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[UPD_LEGPNPRA_CLASSESPESA]                  | SQL_TRIGGER    
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[UPD_QUERCIA_F_TECNICA]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [CORESQL7].[dbo].[VIPO_ALLINEAMENTO]                         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [EPC_BI].[dbo].[SP_MSA_CREA_DATAMART]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [EPC_BI].[dbo].[SP_MSA_CREA_DATAMART_FM]                     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [GESTITO].[dbo].[REPORT_GESTITO]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [GESTITO].[dbo].[REPORT_GESTITO_BCK_2014]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [GESTITO].[dbo].[REPORT_GESTITO_BCK_2015]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [GESTITO].[dbo].[SPRPTQRT]                                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [GESTITO].[dbo].[SPRPTQRT_CREDEM]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [GESTITO].[dbo].[SPRPTQRT_CREDEM_BCK]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [GESTITO].[dbo].[SPRPTQRT_LUCREZIAIV]                        | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_82_DO_REPORTING_D1_V42]                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_92_DO_REPORTING_G1_E_G2]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_92_DO_REPORTING_G1_E_G2_BCK_20231114]      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_93BIS_DO_REPORTING_LEGALEXPENSENSFINO]     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_IPOTECARIO_NONATTIVATO]     | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_IPOTECARIO_NONATTIVATO_BCK_20251013] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_IPOTECARIO_NONATTIVATO_BCK_20251217] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_PREVISIONIGIUDIZIALI]       | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_PREVISIONIGIUDIZIALI_BCK_20240410] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_PREVISIONIGIUDIZIALI_BCK_20240613] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_PREVISIONIGIUDIZIALI_BCK_20251013] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_FORTRESSWEEKLY_PREVISIONIGIUDIZIALI_BCK_20251217] | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_GPMM_PAYBOOK]                              | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_LDT_REPORTISTICA_ALL]                      | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_LOTTI_FORTRESS_INTEGRAZIONE]               | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_PARAMETRIC_LDT_AGGIORNAMENTO_FLAG]         | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_PARAMETRIC_LDT_AUCTIONS]                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_PARAMETRIC_LDT_BORROWERS]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_BCK_20230123]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_BCK_20240110]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_BCK_20240322]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_BCK_20240410]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_BCK_20240531]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_BCK_20250122]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_BCK_20250716]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_POPOLA_TBL_REPORTASTE_EPC_NOSIRE]          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_REPORTING_RELAIS]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057].[dbo].[SP_REPORT_RE_COLLATERALS_MPS]                 | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_REPORT_RE_COLLATERALS_MPS_BCK_20230302]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_REPORT_RE_COLLATERALS_MPS_BCK_20231114]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057].[dbo].[SP_REPORT_RE_COLLATERALS_MPS_BCK_20241029]    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057B].[dbo].[SP_CASH_IN_COURT]                            | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057B].[dbo].[SP_DELIBERE_PENDING_SETTIMANALE]             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057B].[dbo].[SP_FATTURONE_V3]                             | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1057B].[dbo].[SP_PM_AZIONILEGALI]                          | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1057B].[dbo].[SP_PM_PROCEDURECONCORSUALI]                  | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+  • [S1259].[dbo].[A1R_CS_AUM]                                   | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1259].[dbo].[A1R_CS_CF]                                    | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: MEDIA
+
+  • [S1259].[dbo].[SP_DELIBERE_GIRATE_A_MANDANTE]                | SQL_STORED_PROCEDURE
+    Motivo:           DML/DDL
+    ReferenceCount:   0
+    Criticità Tecnica: ALTA
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+L2 - 145 oggetti critici
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  • [AMS].[dbo].[DBO.ACCADP_SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOJDE] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ACCADP_SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOLOCK_V1] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ACCADP_SP_JDE_VALORIZZAJDE]                 | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ARCG_ASP_AGGIORNAARCGTBLFASCICOLO]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_ADMIN_RESOLUTIONSTRATEGY_APPROVE]       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_ADMIN_RESOLUTIONSTRATEGY_DENY]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_APP_GETLIVELLODELIBERANTECGC]           | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_ASSIGN_DEP]                             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_AUTO_APPEND_LOCK_APPROVE_RESOLUTION_STRATEGY_RECORD] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_AUTO_APPEND_LOCK_APPROVE_RESOLUTION_STRATEGY_RECORD] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_BIP_ASSIGNMENT_ASSIGN_USER]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_BIP_ASSIGNMENT_BIP_ARCHIVIASCHEDAOPENING] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_BIP_ASSIGNMENT_BIP_LIST_V3_REGISTRA]    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_CSP_AGGIORNASTATO_BIP]                  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_CSP_AGGIORNA_TENDINE_IFAMS]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_IMPOSTA_CLOSINGSEMPLIFICATO]            | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_MIF_MESSAGGI_INSERISCI]                 | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_MUTUO95_IMPOSTA_ANNULLAMENTO_COPERTURA] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_PROTAUTO_AGGIORNAPROTOCOLLOELETTRONICO] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_PROTOCOLFILELISTBYBIP_FORM]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_REO_NPL_BID_CASE_ACCEPTED]              | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_REO_NPL_BID_CASE_REJECTED]              | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_SALVASTATO_BIP]                         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_SALVA_AM_TRACKING_LOG]                  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_SENDEMAIL_GENERICA]                     | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_SIMPLEASSIGN_DEP]                       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_SIMPLEASSIGN_DEP]                       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WF_BIP_ASSOCIASEGMENTO]                 | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WF_BIP_ASSOCIASEGMENTO]                 | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WF_BIP_CAMBIOSEGMENTO]                  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WF_BIP_CAMBIOSEGMENTO_V2]               | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WF_BIP_SALVASTEP_V2]                    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WF_BIP_WORKFLOW_AUTOMATISMI_ANTE]       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WHENCASEASSIGNEDTOCLOSER_SENDEMAIL_TOAM] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.ASP_WHENCASEASSIGNEDTOSPLAM_SENDEMAIL_TOAM] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_AMS_PROCESSNAME]                         | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_AUTOBIPASSIGN_AREA]                      | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_BIPGEXTRA_MOTIVO_NEW]                    | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_BIPGEXTRA_NEW]                           | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_BIPGEXTRA_USCITA]                        | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_BIPOBBLIGATI60ANNI]                      | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_BIP_SECURED]                             | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_CALCOLA_ABLENESS]                        | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_ESISTEPROCEDURA_CONSTEP]                 | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_FASCICOLOARRIVATO]                       | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_GETLOGINBYUID]                           | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_GETMIGRATEDBIPS]                         | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_PRESENZADOCUMENTOFDM]                    | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_PRODSERVER]                              | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_PRODSERVER]                              | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_PROPERTY_DES_BY_AUCTION]                 | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_PROTOCOLLO_DA_SOTTOPORRE_A_SCONTO]       | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_RAPPORTIATTESI]                          | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_REO_CHECKDOC]                            | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_WF_BIP_INDIVIDUAWORKFLOW]                | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_WF_GBV]                                  | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_WF_SRC_CLUSTER_IDSTEP]                   | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_WF_SSEC_CLUSTER_IDSTEP]                  | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.FN_WF_ULTIMOSTEP_PRIMADELLAFASEINDICATA]    | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_CAMBIOSTATO_UPDATE]                      | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_CAMBIOSTATO_UPDATE]                      | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_CASE_APPROVAL_IMPOSTALIVELLISUBPASSOCIATO] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_ESEGUI_AUTO_CLOSING]                     | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_ESITOLOTTIGEXTRA]                        | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_FILTER_CLOSING_SPLAM]                    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INVIA_ALERT_AM_INDENNIZZO_GENWORTH]      | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_CMD_APPROVAZIONEAMDOCUMENTIPROTOCOLLOLOCK] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_CMD_APPROVAZIONETLDOCUMENTIPROTOCOLLOLOCK] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOJDE]      | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOLOCK]     | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_CMD_DOCUMENTIPROTOCOLLOLOCK_V1]  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_CMD_RESETDOCUMENTNOTWORKABLE]    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_CMD_UPDATENOTELEGAL]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_APP_EMAILRICHIESTAFATTURA]           | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_RPU_INSERTNOTE]                      | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_INV_TRANSFERDOCUMENTIMIGRATI]            | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_JDE_VALORIZZAJDE]                        | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_JDE_VALORIZZAJDE]                        | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_MOVEALLBIPASSIGNEDFROMUIDTOUID]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_NUOVOCOMMENTO_AGGIUNGETESTO_COMMENTO_RS] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.SP_SKP_CALCOLA_ABLENESS]                    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_BIP_ASSEGNATO_GEXTRA]                   | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_BIP_IS_MANAGED]                         | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_CURRENT_RESOLUTION_STRATEGY_CASE_ID]    | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_EMAIL_CHAIN_GL]                         | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_FROMDATETOJULIAN]                       | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_LAST_RESOLUTION_STRATEGY_CASE_ID_APPROVED] | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_MYUID]                                  | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_PID_IS_MANAGED]                         | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.UDF_ULTIMOCASE_IN_CLOSINGSEMPLIFICATO]      | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.USF_GC_ELENCO_CAUSE_PASSIVE]                | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.USP_GCI_RESETSCADENZARIO]                   | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[DBO.USP_RUNNING_302_ELIMINAZIONEASTA]           | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [ANALISI].[dbo].[DBO.SP_07_M_A_DEPARTMENT]                   | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [ANALISI].[dbo].[DBO.SP_08_M_A_ATTIV_GIUDIZIALE_E_SUPPORTO]  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ASSEGN_SP_CREAUNAFASECONASSOCIATIMESSAGGI] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ASSEGN_SP_INSCOMPENSOCHIUSURAINCARICO] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ASSEGN_SP_PROCEDURA_BENE_APERTURA]     | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ASSEGN_SP_RIALLOCAZIONE_PRATICA]       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.EPN_FN_GET_CUSTPATH]                   | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.FN_ESTRAI_DATANASCITA_CODICEFISCALE]   | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.FN_ESTRAI_SESSO_CODICEFISCALE]         | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.FN_FASECLONATADAREVOCATA]              | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.FN_FASECLONATADAREVOCATA]              | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.FN_GETDESCRCUSTOMER]                   | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.FN_GETSTATOSVG]                        | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.FN_GETSTATOSVG]                        | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ONBRD_SP_CARICAMENTOCOMMENTI]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ONBRD_SP_CARICAMENTOCOMMENTI]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ONBRD_SP_CARICAMENTOIPOTECHE]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ONBRD_SP_CARICAMENTOIPOTECHE]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ONBRD_SP_CARICAMENTOLOTTIASTE]         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.ONBRD_SP_CARICAMENTOLOTTIASTE]         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_AGGIORNA_RAPPORTI_UCCMB_BAD0DTS]    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CALCOLACOMPENSIPOP2021]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CALCOLACOMPENSIREL2020]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CALCOLACOMPENSIUCI2019]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CALCOLACOMPENSIUCL2020]             | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CHECKERROR]                         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_COPIADATIPROCEDURA]                 | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CP_APPROVASPESANOTULA]              | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CP_BONIFICALIMBOAPPROVAZIONE]       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CP_DOSTEPAPPROVAZIONE]              | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CP_INVIAMESSAGGIXAPPROVATORI]       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_CP_NOTIFICAAVVENUTAAPPROVAZIONE]    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_DQ_ELABORA_4940]                    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_INSERT_LOG_T]                       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_INVIA_MESSAGGI_METAENERGIA]         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_OB_CREADECODIFICHE]                 | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_OB_DTS_PARAM]                       | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SAP_REINVIA_SVG]                    | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_AZZERAMENTO_DATI_NECESSARI_SVG_FATTURE_INVIO_SAP] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_CONFERIMENTOMANUALE_AGGIORNAMENTILEGARRICLEGPRATILEGPROCE] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_FIORUCCI_TRAVASO]                | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_INSERT_MESSAGGI_LEGALI]          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_PROPOSTEDELIBERA_AGGIORNANOTA]   | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_PROPOSTEDELIBERA_CANCELLAZIONE]  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_TIPIZZAZIONE_DOCUMENTI_CERVED]   | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_SO_TIPIZZAZIONE_DOCUMENTI_PAM]      | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.SP_UPDATE_CR01ANAGRAFE_INDIRIZZI_CFPI] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [CORESQL7].[dbo].[DBO.UCCMB_SP_AGGIORNA_LEGANAGR_DA_CERVED]  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [EPC_BI].[dbo].[DBO.FN_GETDATEDIFF]                          | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [S1057].[dbo].[DBO.SP_EPC_FASI_PM]                           | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [S1057].[dbo].[DBO.SP_GPMM_PAYBOOK]                          | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [S1057B].[dbo].[DBO.SP_FATTURONE_V3]                         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+L3 - 45 oggetti critici
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  • [AMS].[dbo].[FN_AM_GERARCHIA]                                | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 + Dipendenze (50+ refs)
+    ReferenceCount:   149
+    Criticità Tecnica: DIPENDENZA_L1 + REFS_CRITICHE
+
+  • [AMS].[dbo].[FN_UL_GERARCHIA]                                | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 + Dipendenze (50+ refs)
+    ReferenceCount:   101
+    Criticità Tecnica: DIPENDENZA_L1 + REFS_CRITICHE
+
+  • [AMS].[dbo].[FN_PRODSERVER]                                  | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 + Dipendenze (50+ refs)
+    ReferenceCount:   71
+    Criticità Tecnica: DIPENDENZA_L1 + REFS_CRITICHE
+
+  • [AMS].[dbo].[UDF_MYUID]                                      | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 + Dipendenze (50+ refs)
+    ReferenceCount:   64
+    Criticità Tecnica: DIPENDENZA_L1 + REFS_CRITICHE
+
+  • [AMS].[dbo].[UDF_BIP_IS_MANAGED]                             | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   32
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_LITIGATIONSTATUS]                         | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   29
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_USER_LEVELMAP]                               | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   28
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GETLOGINBYUID]                               | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   22
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_WF_BIP_SALVASTEP_V2]                        | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   10
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[UDF_BIP_ASSEGNATO_GEXTRA]                       | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   9
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_PROTAUTO_AGGIORNAPROTOCOLLOELETTRONICO]     | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   8
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_ELENCOLITIGATION]                         | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   8
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_LAST_LITIGATIONCASE]                      | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   8
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_MYLANGUAGE]                                  | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   8
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[UDF_FROMDATETOJULIAN]                           | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   7
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_SENDEMAIL_GENERICA]                         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   5
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_NEXT_SHEDULEDEVENT]                       | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   5
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_WF_BIP_CAMBIOSEGMENTO]                      | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   3
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_WF_BIP_CAMBIOSEGMENTO_V2]                   | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   3
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_AMS_PROCESSNAME]                             | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   3
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_EPC_SOSPENDI_APPROVAZIONE]                   | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   3
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_SNP_XML_TO_TABLE]                            | SQL_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   3
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_CSP_SALVASTATOCONDIZIONEABLEBIP]            | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_CSP_STATO_WILLING_PERBIP_V3]                 | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GARANZIEIQ]                                  | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_NEXT_LITIGATIONSTEP]                      | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_WF_BIP_PENULTIMOSTEP]                        | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[SP_RS_CHECKFORZATURAAUTOMATICAGL]               | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[UDF_SPL_NEW_NUMERORATE_PDR]                     | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[UDF_UID_IS_SPECIALUSER]                         | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   2
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_BIP_ASSIGNMENT_BIP_ARCHIVIASCHEDAOPENING]   | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_CHECK_BIP_IN_OASIS]                         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_CALCOLA_ABLENESS]                            | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_ESISTEPROCEDURA_CONSTEP]                     | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_PRESENZADOCUMENTOFDM]                        | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_PRESENZAGARANZIE_GRUPPO]                     | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_WF_ASSEGNAZIONELEGALEAPERTA]                 | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_WF_SRC_CLUSTER_IDSTEP]                       | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_WF_SSEC_CLUSTER_IDSTEP]                      | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_WF_ULTIMOSTEP_PRIMADELLAFASEINDICATA]        | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[SP_CSP_OPENING_ARCHIVIASCHEDA]                  | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[SP_NUOVOCOMMENTO_AGGIUNGETESTO_COMMENTO_RS]     | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_APPEND_CLOSING_ASSET_MANAGEMENT_HISTORY_RECORD_V10] | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[ASP_MIF_MESSAGGI_CHECK]                         | SQL_STORED_PROCEDURE
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[UDF_EMAIL_CHAIN_GL]                             | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   0
+    Criticità Tecnica: DIPENDENZA_L1
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+L4 - 9 oggetti critici
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  • [AMS].[dbo].[UDF_VAPT_RIMUOVITAGHTML]                        | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   17
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GETUIDLEVEL]                                 | SQL_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   15
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_COMITATO]                                    | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   9
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_LITIGATIONCASESTATUS]                     | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   9
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_DATASENZAORA]                                | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   4
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_LITIGATION_RELEASED]                      | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   4
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_LITIGATION_RELEASE_REQUESTED]             | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   4
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_LINKELENCOFILIALI]                           | SQL_SCALAR_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   3
+    Criticità Tecnica: DIPENDENZA_L1
+
+  • [AMS].[dbo].[FN_GC_MAIN_SUBJECTRISK]                         | SQL_INLINE_TABLE_VALUED_FUNCTION
+    Motivo:           Dipendenza L1 (Bottom-Up)
+    ReferenceCount:   1
+    Criticità Tecnica: DIPENDENZA_L1
+
+
+
+4. RACCOMANDAZIONI MIGRAZIONE
+====================================================================================================
+
+PRIORITÀ MIGRAZIONE:
+
+1️⃣  MASSIMA - Critici per DML/DDL + Dipendenze
+   • Oggetti che modificano dati E sono molto referenziati
+   • Rischio: Operativo + Architetturale
+   • Azione: Migrare IMMEDIATAMENTE
+
+2️⃣  ALTA - Critici solo per Dipendenze (50+ refs)
+   • Oggetti con 4 dipendenze critiche senza DML/DDL
+   • Rischio: Breaking changes su molti oggetti dipendenti
+   • Azione: Migrare prima degli oggetti che li referenziano
+
+3️⃣  MEDIA - Critici solo per DML/DDL (poche dipendenze)
+   • Oggetti che modificano dati ma poco referenziati
+   • Rischio: Operativo (perdita/corruzione dati)
+   • Azione: Migrare con attenzione a business logic
+
+STRATEGIA CONSIGLIATA:
+
+  Fase 1: Migrare oggetti L1 critici (fondazioni)
+  Fase 2: Migrare oggetti L2 critici (dipendono da L1)
+  Fase 3: Migrare oggetti L3 critici (dipendono da L2)
+  Fase 4: Migrare oggetti L4 critici (top layer)
+
+  All'interno di ogni fase, prioritizzare:
+    1. DML/DDL + Dipendenze (massimo rischio)
+    2. Solo Dipendenze (rischio architetturale)
+    3. Solo DML/DDL (rischio operativo)
+
+
+5. DATABASE COINVOLTI
+====================================================================================================
+
+Database             |      Oggetti Critici |     ReferenceCount Totale
+-------------------- | -------------------- | -------------------------
+AMS                  |                  295 |                       736
+CORESQL7             |                  157 |                        11
+S1057                |                   37 |                         5
+ANALISI              |                   14 |                         4
+BASEDATI_BI          |                   10 |                         0
+GESTITO              |                    7 |                         0
+S1057B               |                    6 |                         0
+EPC_BI               |                    3 |                         0
+S1259                |                    3 |                         0
+
+TOTALE: 532 oggetti critici da migrare
+
+
+====================================================================================================
+FINE REPORT
+====================================================================================================
