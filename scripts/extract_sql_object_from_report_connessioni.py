@@ -42,13 +42,44 @@ def get_engine(server, db_name, engine_cache, driver):
         engine_cache[key] = create_engine(conn_str, pool_pre_ping=True, pool_size=10, max_overflow=20)
     return engine_cache[key]
 
-def get_variants(schema, table):
+def get_variants(schema, table, db_name=None):
+    """Genera tutte le possibili varianti del nome tabella.
+    Include database prefix per gestire cross-database references.
+    """
     variants = set()
+    
+    # Database prefixes comuni da considerare
+    db_prefixes = []
+    if db_name and db_name not in ['', None]:
+        db_prefixes = [
+            db_name.upper(),  # ANALISI, CORESQL7, S1259
+            db_name.lower(),  # analisi, coresql7, s1259
+            db_name,          # Mixed case
+        ]
+    
+    # Varianti base (senza database)
     if schema and schema not in ['', None]:
         variants.add(f"[{schema}].[{table}]")
         variants.add(f"{schema}.{table}")
+        variants.add(f"[{schema}].{table}")
+        variants.add(f"{schema}.[{table}]")
     variants.add(f"[{table}]")
     variants.add(table)
+    
+    # Aggiungi varianti con database prefix
+    for db_prefix in db_prefixes:
+        if schema and schema not in ['', None]:
+            variants.add(f"{db_prefix}.{schema}.{table}")
+            variants.add(f"[{db_prefix}].[{schema}].[{table}]")
+            variants.add(f"{db_prefix}.[{schema}].[{table}]")
+            variants.add(f"[{db_prefix}].{schema}.{table}")
+            variants.add(f"{db_prefix}.{schema}.[{table}]")
+            variants.add(f"{db_prefix}.[{schema}].{table}")
+        variants.add(f"{db_prefix}..{table}")
+        variants.add(f"{db_prefix}..[{table}]")
+        variants.add(f"[{db_prefix}]..[{table}]")
+        variants.add(f"[{db_prefix}]..{table}")
+    
     return variants
     
 def estrai_sql_objects(engine, query, params, table_label, error_msg):
@@ -70,11 +101,11 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                 if sql_def:
                     sql_def_l = sql_def.lower()
                     # Pre-compila le varianti una volta sola
-                    variants_lower = [v.lower() for v in get_variants(params['schema'], params['table'])]
+                    variants_lower = [v.lower() for v in get_variants(params['schema'], params['table'], params.get('db_name'))]
                     
                     # Ottimizzazione: prima verifica se almeno una variante è presente
                     if any(v_l in sql_def_l for v_l in variants_lower):
-                        for v, v_l in zip(get_variants(params['schema'], params['table']), variants_lower):
+                        for v, v_l in zip(get_variants(params['schema'], params['table'], params.get('db_name')), variants_lower):
                             for op in clause_ops:
                                 op_l = op.lower()
                                 # Verifica se l'operazione è presente nel codice
