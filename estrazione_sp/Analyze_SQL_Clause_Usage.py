@@ -260,38 +260,51 @@ class SQLClauseAnalyzer:
 
     def _create_output_excel(self, data: List[Tuple[str, str, str, str, str, str, str, str]]):
         """
-        Crea il file Excel di output.
+        Crea il file Excel di output, splittando su più file se necessario.
         data: lista di tuple (server, database, schema, table, nome_oggetto, tipo_oggetto, script_creazione, sql_clause)
         """
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Analisi SQL Clause"
-        
-        # Intestazioni
-        headers = ["Server", "Database", "Schema", "Table", "Nome Oggetto", 
-                   "Tipo Oggetto", "Script Creazione", "SQL Clause"]
-        
-        for col_idx, header in enumerate(headers, start=1):
-            cell = ws.cell(row=1, column=col_idx, value=header)
-            cell.font = cell.font.copy(bold=True)
-        
-        # Dati
-        for row_idx, row_data in enumerate(data, start=2):
-            for col_idx, value in enumerate(row_data, start=1):
-                ws.cell(row=row_idx, column=col_idx, value=value)
-        
-        # Adatta larghezza colonne
-        ws.column_dimensions['A'].width = 15  # Server
-        ws.column_dimensions['B'].width = 20  # Database
-        ws.column_dimensions['C'].width = 15  # Schema
-        ws.column_dimensions['D'].width = 30  # Table
-        ws.column_dimensions['E'].width = 40  # Nome Oggetto
-        ws.column_dimensions['F'].width = 25  # Tipo Oggetto
-        ws.column_dimensions['G'].width = 100 # Script Creazione
-        ws.column_dimensions['H'].width = 30  # SQL Clause
-        
-        wb.save(self.output_excel)
-        print(f"File di output creato: {self.output_excel}")
+        headers = [
+            "Server",
+            "Database",
+            "Schema",
+            "Table",
+            "Nome Oggetto",
+            "Tipo Oggetto",
+            "Script Creazione",
+            "SQL Clause",
+        ]
+        widths = [15, 20, 15, 30, 40, 25, 100, 30]
+
+        try:
+            from Report.Excel_Writer import write_rows_split_across_files
+        except Exception:
+            write_rows_split_across_files = None  # type: ignore
+
+        if write_rows_split_across_files is not None:
+            written = write_rows_split_across_files(
+                headers=headers,
+                rows=data,
+                base_output_path=self.output_excel,
+                sheet_name="Analisi SQL Clause",
+                column_widths=widths,
+            )
+            print(f"File di output creato: {', '.join(written)}")
+        else:
+            # Fallback a singolo file
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Analisi SQL Clause"
+            for col_idx, header in enumerate(headers, start=1):
+                cell = ws.cell(row=1, column=col_idx, value=header)
+                cell.font = cell.font.copy(bold=True)
+            for row_idx, row_data in enumerate(data, start=2):
+                for col_idx, value in enumerate(row_data, start=1):
+                    ws.cell(row=row_idx, column=col_idx, value=value)
+            from openpyxl.utils import get_column_letter
+            for i, w in enumerate(widths, start=1):
+                ws.column_dimensions[get_column_letter(i)].width = w
+            wb.save(self.output_excel)
+            print(f"File di output creato: {self.output_excel}")
 
     def process(self):
         """Elabora il file Excel e genera l'output con le SQL clause."""

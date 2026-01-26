@@ -180,10 +180,23 @@ class SelectsExecutor:
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
         df = pd.DataFrame(results, columns=["Select", "Errore"])
-        with pd.ExcelWriter(self.output_excel, engine='openpyxl', mode='w') as writer:
-            df.to_excel(writer, index=False, sheet_name='Esiti')
-        print(f"[SELECT] Output scritto in: {self.output_excel}")
-        return self.output_excel
+
+        # Scrivi con gestione split su più file se supera il limite di Excel
+        try:
+            from Report.Excel_Writer import write_dataframe_split_across_files
+        except Exception:
+            write_dataframe_split_across_files = None  # type: ignore
+
+        if write_dataframe_split_across_files is not None:
+            written = write_dataframe_split_across_files(df, self.output_excel, sheet_name='Esiti')
+            print(f"[SELECT] Output scritto in: {', '.join(written)}")
+            return written[0] if written else self.output_excel
+        else:
+            # Fallback: single file write (potrebbe fallire se supera il limite)
+            with pd.ExcelWriter(self.output_excel, engine='openpyxl', mode='w') as writer:
+                df.to_excel(writer, index=False, sheet_name='Esiti')
+            print(f"[SELECT] Output scritto in: {self.output_excel}")
+            return self.output_excel
 
 
 if __name__ == "__main__":

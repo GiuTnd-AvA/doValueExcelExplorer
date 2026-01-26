@@ -1,7 +1,9 @@
-import pandas as pd
 import os
-from openpyxl import load_workbook
 import re
+from typing import Iterable, List, Optional, Sequence, Tuple
+
+import pandas as pd
+from openpyxl import Workbook, load_workbook
 
 class ExcelWriter:
     
@@ -70,3 +72,123 @@ class ExcelWriter:
                 df.to_excel(writer, index=False, sheet_name=clean_sheet_name)
             # Mark as initialized so subsequent writes append to the same file
             self._initialized = True
+
+
+# -----------------------------------------------------------------------------
+# Utility helpers for writing large outputs split across multiple Excel files.
+# -----------------------------------------------------------------------------
+EXCEL_MAX_ROWS: int = 1_048_576  # Excel per-sheet limit, including header row
+_DATA_ROWS_PER_SHEET: int = EXCEL_MAX_ROWS - 1  # accounting for header row
+
+
+def _derive_part_path(base_path: str, part_index: int) -> str:
+    """Return a file path with a _partN suffix before extension.
+
+    For part_index == 1, returns base_path to keep the first file name intact.
+    """
+    root, ext = os.path.splitext(base_path)
+    if not ext:
+        ext = ".xlsx"
+    if part_index == 1:
+        return root + ext
+    return f"{root}_part{part_index}{ext}"
+
+
+def write_dataframe_split_across_files(
+    df: pd.DataFrame,
+    base_output_path: str,
+    sheet_name: str = "Sheet1",
+) -> List[str]:
+    """Write a DataFrame to one or more Excel files, splitting by row limit.
+
+    Returns the list of written file paths.
+    """
+    if df is None:
+        return []
+
+    total_rows = len(df)
+    written: List[str] = []
+    if total_rows <= _DATA_ROWS_PER_SHEET:
+        out_path = _derive_part_path(base_output_path, 1)
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        with pd.ExcelWriter(out_path, engine="openpyxl", mode="w") as writer:
+            df.to_excel(writer, index=False, sheet_name=sheet_name)
+        written.append(out_path)
+        return written
+
+    part = 1
+    for start in range(0, total_rows, _DATA_ROWS_PER_SHEET):
+        end = min(start + _DATA_ROWS_PER_SHEET, total_rows)
+        chunk = df.iloc[start:end]
+        out_path = _derive_part_path(base_output_path, part)
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        with pd.ExcelWriter(out_path, engine="openpyxl", mode="w") as writer:
+            chunk.to_excel(writer, index=False, sheet_name=sheet_name)
+        written.append(out_path)
+        part += 1
+    return written
+
+
+def write_rows_split_across_files(
+    headers: Sequence[str],
+    rows: Iterable[Sequence],
+    base_output_path: str,
+    sheet_name: str = "Sheet1",
+    column_widths: Optional[Sequence[int]] = None,
+) -> List[str]:
+    """Write rows (list of sequences) to one or more Excel files with openpyxl.
+
+    - headers: sequence of header strings
+    - rows: iterable of row sequences matching headers length
+    - base_output_path: path template; _partN suffix will be added as needed
+    - sheet_name: name of the worksheet
+    - column_widths: optional widths to set per column (1-based)
+
+    Returns the list of written file paths.
+    """
+    headers = list(headers)
+    # Materialize rows if it's a generator to compute length safely
+    rows_list: List[Sequence] = list(rows)
+    total_rows = len(rows_list)
+
+    def _write_chunk(chunk_rows: List[Sequence], out_path: str) -> None:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = sheet_name[:31] or "Sheet1"
+
+        # Write header (bold)
+        ws.append(list(headers))
+        for cell in ws[1]:
+            cell.font = cell.font.copy(bold=True)
+
+        # Write data rows
+        for r in chunk_rows:
+            ws.append(list(r))
+
+        # Column widths if provided
+        if column_widths:
+            from openpyxl.utils import get_column_letter
+
+            for i, w in enumerate(column_widths, start=1):
+                ws.column_dimensions[get_column_letter(i)].width = w
+
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        wb.save(out_path)
+
+    written: List[str] = []
+    if total_rows <= _DATA_ROWS_PER_SHEET:
+        out_path = _derive_part_path(base_output_path, 1)
+        _write_chunk(rows_list, out_path)
+        written.append(out_path)
+        return written
+
+    part = 1
+    start = 0
+    while start < total_rows:
+        end = min(start + _DATA_ROWS_PER_SHEET, total_rows)
+        out_path = _derive_part_path(base_output_path, part)
+        _write_chunk(rows_list[start:end], out_path)
+        written.append(out_path)
+        start = end
+        part += 1
+    return written

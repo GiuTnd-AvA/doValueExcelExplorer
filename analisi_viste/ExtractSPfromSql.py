@@ -266,43 +266,48 @@ def write_csv(rows: List[Dict[str, str]], output_path: str) -> None:
 
 
 def write_xlsx(rows: List[Dict[str, str]], output_path: str) -> None:
-    """Write results to Excel file"""
+    """Write results to Excel file; split across files if needed."""
     if openpyxl is None:
         raise RuntimeError('openpyxl is not installed')
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'StoredProcedures'
 
-    # Headers
-    ws.cell(row=1, column=1, value='Path')
-    ws.cell(row=1, column=2, value='File')
-    ws.cell(row=1, column=3, value='Clause')
-    ws.cell(row=1, column=4, value='StoredProcedure')
+    headers = ['Path', 'File', 'Clause', 'StoredProcedure']
+    tuple_rows: List[Tuple[str, str, str, str]] = [
+        (r['Path'], r['File'], r['Clause'], r['StoredProcedure']) for r in rows
+    ]
 
-    for idx, r in enumerate(rows, start=2):
-        ws.cell(row=idx, column=1, value=r['Path'])
-        ws.cell(row=idx, column=2, value=r['File'])
-        ws.cell(row=idx, column=3, value=r['Clause'])
-        ws.cell(row=idx, column=4, value=r['StoredProcedure'])
-
-    # Autofit columns
-    for col in range(1, 5):
-        max_len = 0
-        for row in range(1, len(rows)+2):
-            val = ws.cell(row=row, column=col).value
-            if val is None:
-                continue
-            max_len = max(max_len, len(str(val)))
-        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = min(max_len + 2, 80)
+    # Compute widths
+    def _safe_len(s: object) -> int:
+        return len(str(s)) if s is not None else 0
+    col_max = [len(h) for h in headers]
+    for r in tuple_rows:
+        col_max = [max(col_max[i], _safe_len(r[i])) for i in range(4)]
+    widths = [min(m + 2, 80) for m in col_max]
 
     try:
-        wb.save(output_path)
-    except PermissionError:
-        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        base, ext = os.path.splitext(output_path)
-        alt_path = f"{base}_{ts}{ext}"
-        print(f"File Excel destinazione bloccato: salvo come {alt_path}")
-        wb.save(alt_path)
+        from Report.Excel_Writer import write_rows_split_across_files
+    except Exception:
+        write_rows_split_across_files = None  # type: ignore
+
+    if write_rows_split_across_files is not None:
+        write_rows_split_across_files(headers, tuple_rows, output_path, sheet_name='StoredProcedures', column_widths=widths)
+    else:
+        # Fallback single-file
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'StoredProcedures'
+        ws.append(headers)
+        for r in tuple_rows:
+            ws.append(list(r))
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+        try:
+            wb.save(output_path)
+        except PermissionError:
+            ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            base, ext = os.path.splitext(output_path)
+            alt_path = f"{base}_{ts}{ext}"
+            print(f"File Excel destinazione bloccato: salvo come {alt_path}")
+            wb.save(alt_path)
 
 
 def main():

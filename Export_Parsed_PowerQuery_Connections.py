@@ -36,24 +36,34 @@ def read_sources_from_excel(input_path: str) -> List[Tuple[str, str, str]]:
 
 
 def write_parsed_excel(entries: List[Tuple[str, str, str, str, str, str, str, str]], output_path: str) -> None:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "ParsedConnections"
-
-    # Include file path, original Source, and aggregated Join tables
+    # Prepare headers and rows
     headers = ["Path", "File", "Server", "Database", "Schema", "Table", "Join", "Source"]
-    ws.append(headers)
+    rows = [
+        (path, file, server, database, schema, table, join_str, source)
+        for (path, file, server, database, schema, table, join_str, source) in entries
+    ]
 
-    for path, file, server, database, schema, table, join_str, source in entries:
-        ws.append([path, file, server, database, schema, table, join_str, source])
+    try:
+        from Report.Excel_Writer import write_rows_split_across_files
+    except Exception:
+        write_rows_split_across_files = None  # type: ignore
 
-    # Simple sizing
     widths = [60, 28, 20, 20, 16, 40, 60, 100]
-    for i, w in enumerate(widths, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = w
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    wb.save(output_path)
+    if write_rows_split_across_files is not None:
+        write_rows_split_across_files(headers, rows, output_path, sheet_name="ParsedConnections", column_widths=widths)
+    else:
+        # Fallback to single-file behavior
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "ParsedConnections"
+        ws.append(headers)
+        for r in rows:
+            ws.append(list(r))
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        wb.save(output_path)
 
 
 def main():

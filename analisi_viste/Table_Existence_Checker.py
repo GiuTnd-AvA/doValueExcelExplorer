@@ -298,10 +298,20 @@ class TableExistenceChecker:
         # Normalizza la colonna Error per evitare NaN
         if "Error" in df_out.columns:
             df_out["Error"] = df_out["Error"].fillna("")
-        with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as writer:
-            df_out.to_excel(writer, index=False, sheet_name="Tabelle")
+        try:
+            from Report.Excel_Writer import write_dataframe_split_across_files
+        except Exception:
+            write_dataframe_split_across_files = None  # type: ignore
+
+        if write_dataframe_split_across_files is not None:
+            written = write_dataframe_split_across_files(df_out, self.output_excel, sheet_name="Tabelle")
+            out_display = ", ".join(written)
+        else:
+            with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as writer:
+                df_out.to_excel(writer, index=False, sheet_name="Tabelle")
+            out_display = self.output_excel
         print(f"[CHECK] Totale corrispondenze: {total_matches}")
-        print(f"[CHECK] Output scritto in: {self.output_excel} (righe: {len(results)})")
+        print(f"[CHECK] Output scritto in: {out_display} (righe: {len(results)})")
         return self.output_excel
 
 

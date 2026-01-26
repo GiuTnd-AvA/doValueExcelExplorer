@@ -379,8 +379,17 @@ END
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
         df = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table", "ObjectType", "DDL"])
-        with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as w:
-            df.to_excel(w, index=False, sheet_name="DDL")
+
+        try:
+            from Report.Excel_Writer import write_dataframe_split_across_files
+        except Exception:
+            write_dataframe_split_across_files = None  # type: ignore
+
+        if write_dataframe_split_across_files is not None:
+            write_dataframe_split_across_files(df, self.output_excel, sheet_name="DDL")
+        else:
+            with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as w:
+                df.to_excel(w, index=False, sheet_name="DDL")
         return self.output_excel
 
 

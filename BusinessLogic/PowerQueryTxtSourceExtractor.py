@@ -103,32 +103,37 @@ class PowerQueryTxtSourceExtractor:
         if Workbook is None:
             raise RuntimeError("openpyxl not installed; cannot write Excel report.")
 
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "PowerQuery Sources"
-        ws.cell(row=1, column=1, value="Path")
-        ws.cell(row=1, column=2, value="File")
-        ws.cell(row=1, column=3, value="Source")
-
-        wrap = Alignment(wrap_text=True, vertical="top")
+        # Prepare rows with safe truncation for Excel cell limit
         max_cell_len = 32767
+        headers = ["Path", "File", "Source"]
+        safe_rows = []
+        for full_path, fname, source in self.rows:
+            val = source if len(source) <= max_cell_len else (source[: max_cell_len - 15] + "... [TRUNCATED]")
+            safe_rows.append((full_path, fname, val))
 
-        for idx, (full_path, fname, source) in enumerate(self.rows, start=2):
-            val = source if len(source) <= max_cell_len else (source[:max_cell_len - 15] + "... [TRUNCATED]")
-            ws.cell(row=idx, column=1, value=full_path)
-            ws.cell(row=idx, column=2, value=fname)
-            c3 = ws.cell(row=idx, column=3, value=val)
-            c3.alignment = wrap
+        widths = [80, 40, 120]
+        try:
+            from Report.Excel_Writer import write_rows_split_across_files
+        except Exception:
+            write_rows_split_across_files = None  # type: ignore
 
-        # Set widths
-        ws.column_dimensions['A'].width = 80  # Path
-        ws.column_dimensions['B'].width = 40  # File
-        ws.column_dimensions['C'].width = 120 # Source
-
-        # Ensure directory exists
-        out_dir = os.path.dirname(output_path)
-        if out_dir and not os.path.exists(out_dir):
-            os.makedirs(out_dir, exist_ok=True)
-
-        wb.save(output_path)
-        return os.path.abspath(output_path)
+        if write_rows_split_across_files is not None:
+            write_rows_split_across_files(headers, safe_rows, output_path, sheet_name="PowerQuery Sources", column_widths=widths)
+            return os.path.abspath(output_path)
+        else:
+            # Fallback single-file
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "PowerQuery Sources"
+            ws.append(headers)
+            for r in safe_rows:
+                ws.append(list(r))
+            from openpyxl.utils import get_column_letter
+            for i, w in enumerate(widths, start=1):
+                ws.column_dimensions[get_column_letter(i)].width = w
+            # Ensure directory exists
+            out_dir = os.path.dirname(output_path)
+            if out_dir and not os.path.exists(out_dir):
+                os.makedirs(out_dir, exist_ok=True)
+            wb.save(output_path)
+            return os.path.abspath(output_path)

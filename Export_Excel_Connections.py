@@ -77,39 +77,43 @@ def find_connections_in_xlsx(root_dir: str, verbose: bool = True) -> List[Tuple[
 
 
 def write_report(rows: List[Tuple[str, str]], output_path: str) -> str:
-    """Write results to an Excel file with two columns: File, Connections XML.
-
-    Caps cell content to Excel's limit (32767 chars) to avoid write errors.
-    Returns the absolute output path.
-    """
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Connections"
-
-    ws.cell(row=1, column=1, value="File")
-    ws.cell(row=1, column=2, value="Connections XML")
-
-    wrap = Alignment(wrap_text=True, vertical="top")
+    """Write results to Excel; split across files if row limit is exceeded."""
+    # Enforce Excel cell text length limit
     max_cell_len = 32767
+    safe_rows: List[Tuple[str, str]] = []
+    for fname, xml_text in rows:
+        cell_text = xml_text if len(xml_text) <= max_cell_len else (xml_text[: max_cell_len - 15] + "... [TRUNCATED]")
+        safe_rows.append((fname, cell_text))
 
-    for idx, (fname, xml_text) in enumerate(rows, start=2):
-        # Enforce Excel cell text length limit
-        cell_text = xml_text if len(xml_text) <= max_cell_len else (xml_text[:max_cell_len - 15] + "... [TRUNCATED]")
-        ws.cell(row=idx, column=1, value=fname)
-        c2 = ws.cell(row=idx, column=2, value=cell_text)
-        c2.alignment = wrap
+    headers = ["File", "Connections XML"]
+    widths = [40, 120]
+    try:
+        from Report.Excel_Writer import write_rows_split_across_files
+    except Exception:
+        write_rows_split_across_files = None  # type: ignore
 
-    # Basic column width tuning
-    ws.column_dimensions['A'].width = 40
-    ws.column_dimensions['B'].width = 120
-
-    # Ensure parent directory exists
-    out_dir = os.path.dirname(output_path)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-
-    wb.save(output_path)
-    return os.path.abspath(output_path)
+    if write_rows_split_across_files is not None:
+        write_rows_split_across_files(headers, safe_rows, output_path, sheet_name="Connections", column_widths=widths)
+        return os.path.abspath(output_path)
+    else:
+        # Fallback to single-file write
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Connections"
+        ws.cell(row=1, column=1, value="File")
+        ws.cell(row=1, column=2, value="Connections XML")
+        wrap = Alignment(wrap_text=True, vertical="top")
+        for idx, (fname, cell_text) in enumerate(safe_rows, start=2):
+            ws.cell(row=idx, column=1, value=fname)
+            c2 = ws.cell(row=idx, column=2, value=cell_text)
+            c2.alignment = wrap
+        ws.column_dimensions['A'].width = 40
+        ws.column_dimensions['B'].width = 120
+        out_dir = os.path.dirname(output_path)
+        if out_dir and not os.path.exists(out_dir):
+            os.makedirs(out_dir, exist_ok=True)
+        wb.save(output_path)
+        return os.path.abspath(output_path)
 
 
 def main():

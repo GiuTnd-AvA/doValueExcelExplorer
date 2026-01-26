@@ -203,38 +203,40 @@ class SQLObjectExtractor:
         return results
 
     def _create_output_excel(self, data: List[Tuple[str, str, str, str]], file_num: int):
-        """Crea un file Excel di output con i dati specificati."""
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Oggetti Associati"
-        
-        # Intestazioni
-        ws['A1'] = "Connessione Origine"
-        ws['B1'] = "Nome Oggetto"
-        ws['C1'] = "Tipo Oggetto"
-        ws['D1'] = "Script Creazione"
-        
-        # Formattazione intestazioni
-        for cell in ['A1', 'B1', 'C1', 'D1']:
-            ws[cell].font = ws[cell].font.copy(bold=True)
-        
-        # Dati
-        for idx, (origin, obj_name, obj_type, obj_script) in enumerate(data, start=2):
-            ws[f'A{idx}'] = origin
-            ws[f'B{idx}'] = obj_name
-            ws[f'C{idx}'] = obj_type
-            ws[f'D{idx}'] = obj_script
-        
-        # Adatta larghezza colonne
-        ws.column_dimensions['A'].width = 50
-        ws.column_dimensions['B'].width = 40
-        ws.column_dimensions['C'].width = 30
-        ws.column_dimensions['D'].width = 100
-        
-        # Salva file
-        output_path = f"{self.output_base}_{file_num}.xlsx"
-        wb.save(output_path)
-        print(f"Creato file: {output_path}")
+        """Crea un file Excel di output con i dati specificati, splittando se necessario."""
+        base_output_path = f"{self.output_base}_{file_num}.xlsx"
+        headers = ["Connessione Origine", "Nome Oggetto", "Tipo Oggetto", "Script Creazione"]
+        rows = [(origin, obj_name, obj_type, obj_script) for (origin, obj_name, obj_type, obj_script) in data]
+        widths = [50, 40, 30, 100]
+
+        try:
+            from Report.Excel_Writer import write_rows_split_across_files
+        except Exception:
+            write_rows_split_across_files = None  # type: ignore
+
+        if write_rows_split_across_files is not None:
+            written = write_rows_split_across_files(
+                headers=headers,
+                rows=rows,
+                base_output_path=base_output_path,
+                sheet_name="Oggetti Associati",
+                column_widths=widths,
+            )
+            for p in written:
+                print(f"Creato file: {p}")
+        else:
+            # Fallback: singolo file (potrebbe fallire se eccede il limite)
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Oggetti Associati"
+            ws.append(headers)
+            for r in rows:
+                ws.append(list(r))
+            from openpyxl.utils import get_column_letter
+            for i, w in enumerate(widths, start=1):
+                ws.column_dimensions[get_column_letter(i)].width = w
+            wb.save(base_output_path)
+            print(f"Creato file: {base_output_path}")
 
     def process(self):
         """Elabora tutte le tabelle e crea i file Excel di output."""
