@@ -4,6 +4,7 @@
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.shapes import MSO_SHAPE
 from pptx.dml.color import RGBColor
 
 # =========================
@@ -80,7 +81,7 @@ def create_presentation():
     
     # Box Input
     input_box = slide.shapes.add_shape(
-        1,  # Rectangle
+        MSO_SHAPE.RECTANGLE,
         Inches(0.8), Inches(y_pos), Inches(8.4), Inches(1)
     )
     input_box.fill.solid()
@@ -100,7 +101,7 @@ def create_presentation():
     
     # Box Critici
     critici_box = slide.shapes.add_shape(
-        1,  # Rectangle
+        MSO_SHAPE.RECTANGLE,
         Inches(0.8), Inches(y_pos), Inches(8.4), Inches(1.2)
     )
     critici_box.fill.solid()
@@ -159,7 +160,7 @@ def create_presentation():
         x_pos = x_start + i * (box_width + spacing)
         
         db_box = slide.shapes.add_shape(
-            1,  # Rectangle
+            MSO_SHAPE.RECTANGLE,
             Inches(x_pos), Inches(y_pos), Inches(box_width), Inches(0.8)
         )
         db_box.fill.solid()
