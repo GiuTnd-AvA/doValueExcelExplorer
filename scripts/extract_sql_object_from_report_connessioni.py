@@ -77,10 +77,19 @@ def estrai_sql_objects(engine, query, params, table_label, error_msg):
                         for v, v_l in zip(get_variants(params['schema'], params['table']), variants_lower):
                             for op in clause_ops:
                                 op_l = op.lower()
-                                # Regex semplificata: cerca solo pattern base
+                                # Verifica se l'operazione è presente nel codice
                                 if op_l in sql_def_l and v_l in sql_def_l:
-                                    # Verifica più precisa solo se entrambi presenti
-                                    pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}(?:\W|$)"
+                                    # Pattern più flessibile: gestisce spazi multipli, tab, newline
+                                    # Per tutte le clausole usiamo pattern flessibile per catturare anche con spazi/caratteri intermedi
+                                    if op_l in ['join', 'from']:
+                                        # Per JOIN/FROM: cerca la tabella anche se non immediatamente dopo
+                                        # Pattern: (FROM|JOIN) ... tabella (con max 500 caratteri di distanza)
+                                        pattern = rf"{re.escape(op_l)}\b[^;]{{0,500}}?\b{re.escape(v_l)}\b"
+                                    else:
+                                        # Per INSERT INTO, UPDATE, DELETE FROM, etc.: pattern più tollerante agli spazi
+                                        # Gestisce: INSERT INTO  tabella, INSERT INTO\n\ttabella, etc.
+                                        pattern = rf"{re.escape(op_l)}\s+{re.escape(v_l)}\b"
+                                    
                                     if re.search(pattern, sql_def_l):
                                         found_clauses.add(f"{op} {v}")
                                         found_clause_types.add(op)
