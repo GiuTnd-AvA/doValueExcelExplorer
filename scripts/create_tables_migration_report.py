@@ -206,11 +206,30 @@ def extract_tables_from_level(df_level, df_dependencies, level_name):
                     if table_dep.startswith('dbo.'):
                         table_dep = table_dep[4:]
                     
-                    # FILTRO: Skippa nomi invalidi
-                    if table_dep.lower() in ['dbo', 'objects', 'sysobjects', 'sysindexes', 'syscolumns']:
-                        continue  # Schema o system tables
-                    if len(table_dep) < 2:
-                        continue  # Nome troppo corto
+                    # FILTRO AGGRESSIVO: Skippa nomi invalidi
+                    table_lower = table_dep.lower()
+                    
+                    # 1. Blacklist esplicita (schema, system, keywords SQL comuni)
+                    blacklist = ['dbo', 'objects', 'sysobjects', 'sysindexes', 'syscolumns', 
+                                 'current', 'new', 'old', 'deleted', 'inserted', 'output',
+                                 'nche', 'vm', 'rep', 'tab', 'temp', 'tmp']
+                    if table_lower in blacklist:
+                        continue
+                    
+                    # 2. Database names (non sono tabelle)
+                    db_names = ['epcp3', 'ams', 'coresql7', 's1057', 's1057b', 's1259', 
+                                'gestito', 'analisi', 'basedati_bi', 'epc_bi', 'dwh', 'staging', 'stg', 'util']
+                    if table_lower in db_names:
+                        continue
+                    
+                    # 3. Lunghezza minima ragionevole
+                    if len(table_dep) < 3:
+                        continue
+                    
+                    # 4. Regex: deve iniziare con lettera e contenere solo alfanumerici + underscore
+                    import re
+                    if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]{2,127}$', table_dep):
+                        continue
                     
                     # Evita duplicati
                     if not any(t['Database'] == db_name and t['Table'] == table_dep for t in tables_info):
