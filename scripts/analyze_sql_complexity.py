@@ -285,11 +285,32 @@ def analyze_sql_object(row):
     tables_lowercase = {t.lower() for t in tables}
     objects_filtered = set()
     
+    # Pattern tipici per identificare tabelle (naming conventions)
+    table_patterns = [
+        r'^tab_',           # Prefisso tab_
+        r'_tab$',           # Suffisso _tab
+        r'_t$',             # Suffisso _t (tabella)
+        r'^tbl_',           # Prefisso tbl_
+        r'_table$',         # Suffisso _table
+        r'^t_',             # Prefisso t_
+    ]
+    
     for obj in objects:
         # Estrai solo il nome dell'oggetto (rimuovi schema e parentesi)
         obj_name = obj.split('.')[-1].strip('[]').lower()
-        # Aggiungi solo se NON è una tabella
-        if obj_name not in tables_lowercase:
+        
+        # Filtro 1: Confronta con tabelle estratte
+        if obj_name in tables_lowercase:
+            continue
+        
+        # Filtro 2: Escludi se il nome matcha pattern tipici delle tabelle
+        is_likely_table = False
+        for pattern in table_patterns:
+            if re.search(pattern, obj_name, re.IGNORECASE):
+                is_likely_table = True
+                break
+        
+        if not is_likely_table:
             objects_filtered.add(obj)
     
     total_dependencies = len(tables) + len(objects_filtered)
