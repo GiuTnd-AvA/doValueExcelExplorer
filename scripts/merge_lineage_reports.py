@@ -45,14 +45,19 @@ def parse_lineage_report(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Pattern per identificare sezioni livello
-        level_pattern = re.compile(r'═+\s*LIVELLO\s+(\d+)\s*═+')
+        # Pattern per identificare sezioni livello (vari formati)
+        level_patterns = [
+            re.compile(r'LIVELLO\s+L(\d+)', re.IGNORECASE),
+            re.compile(r'─+\s*LIVELLO\s+L(\d+)', re.IGNORECASE),
+            re.compile(r'LIVELLO\s+(\d+)', re.IGNORECASE),
+        ]
         
-        # Pattern per oggetti (formato: [Database].[Schema].[ObjectName] - Type)
-        # Supporta anche formati con bullet point o dash
+        # Pattern per oggetti nel formato:
+        # [Database].[Schema].[ObjectName] | ObjectType | refs | ...
+        # Oppure:
+        #   1. [Database].[Schema].[ObjectName] | ObjectType | ...
         object_pattern = re.compile(
-            r'[•\-\*]\s*\[([^\]]+)\]\.\[([^\]]+)\]\.\[([^\]]+)\]'
-            r'|[•\-\*]\s*([A-Z0-9_]+)\.([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)',
+            r'(?:\d+\.\s+)?\[([^\]]+)\]\.\[([^\]]+)\]\.\[([^\]]+)\]\s*\|\s*([^\|]+?)(?:\s*\|\s*(\d+)\s*refs?)?',
             re.IGNORECASE
         )
         
@@ -60,37 +65,25 @@ def parse_lineage_report(file_path):
         
         for line in content.split('\n'):
             # Identifica cambio livello
-            level_match = level_pattern.search(line)
-            if level_match:
-                level_num = level_match.group(1)
-                current_level = f'L{level_num}'
-                continue
+            for pattern in level_patterns:
+                level_match = pattern.search(line)
+                if level_match:
+                    level_num = level_match.group(1)
+                    current_level = f'L{level_num}'
+                    break
             
             # Estrae oggetti
             if current_level:
                 obj_match = object_pattern.search(line)
                 if obj_match:
-                    if obj_match.group(1):  # Formato [DB].[Schema].[Obj]
-                        db = obj_match.group(1)
-                        schema = obj_match.group(2)
-                        obj = obj_match.group(3)
-                    else:  # Formato DB.Schema.Obj
-                        db = obj_match.group(4)
-                        schema = obj_match.group(5)
-                        obj = obj_match.group(6)
-                    
-                    # Estrae tipo oggetto se presente
-                    obj_type = None
-                    type_match = re.search(r'-\s*(SQL_STORED_PROCEDURE|FUNCTION|VIEW|TRIGGER|USER_TABLE)', line)
-                    if type_match:
-                        obj_type = type_match.group(1)
+                    db = obj_match.group(1).strip()
+                    schema = obj_match.group(2).strip()
+                    obj = obj_match.group(3).strip()
+                    obj_type = obj_match.group(4).strip() if obj_match.group(4) else None
+                    ref_count = int(obj_match.group(5)) if obj_match.group(5) else None
                     
                     # Estrae criticità
-                    critical = 'SÌ' if 'CRITICO' in line.upper() else 'NO'
-                    
-                    # Estrae reference count se presente
-                    ref_match = re.search(r'\((\d+)\s*refs?\)', line, re.IGNORECASE)
-                    ref_count = int(ref_match.group(1)) if ref_match else None
+                    critical = 'SÌ' if 'DML/DDL' in line or 'CRITICO' in line.upper() else 'NO'
                     
                     objects_by_level[current_level].append({
                         'Database': db,
@@ -113,6 +106,8 @@ def parse_lineage_report(file_path):
         
     except Exception as e:
         print(f"✗ Errore nel parsing: {e}")
+        import traceback
+        traceback.print_exc()
         return objects_by_level
 
 def merge_objects(objects1, objects2):
