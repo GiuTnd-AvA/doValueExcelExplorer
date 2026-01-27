@@ -1,12 +1,8 @@
 # -----------------------------------------------------------------------------
 # Scopo: legge un file Excel con colonne:
-# server, database, schema, Table, Nome Oggetto, Tipo Oggetto, Script Creazione
-# Per i record che rappresentano stored procedure (Tipo Oggetto), appende la DDL
-# in un file di testo unico aggiungendo un commento iniziale nel formato:
-# -- <n> server\database\schema\<nome_oggetto>.sql
-# e subito sotto la definizione della stored procedure (Script Creazione / DDL).
-# Produce output .txt e una copia .sql opzionale, identico per formato
-# a quanto fa Append_Views_From_Excel per le viste.
+# Nome Oggetto, Tipo Oggetto, Script Creazione
+# Appende tutte le DDL in un unico file .sql, senza filtri sul tipo
+# di oggetto. Ogni voce è preceduta da un commento con indice e nome oggetto.
 # -----------------------------------------------------------------------------
 
 import os
@@ -26,29 +22,20 @@ DEFAULT_OUTPUT_PATH: Optional[str] = None  # se None, crea output vicino all'Exc
 
 
 class SPDDLAppender:
-    """Legge un Excel e appende le DDL delle sole stored procedure in un file unico.
+    """Legge un Excel e appende le DDL in un unico file .sql (nessun filtro).
 
     Richiede intestazioni (case-insensitive, spazi tollerati):
-    - server
-    - database (alias: db)
-    - schema
-    - table
-    - nome oggetto (alias: object name)
-    - tipo oggetto (alias: object type)
-    - script creazione (alias: DDL)
+    - nome oggetto (alias: object name, nome, oggetto, nomeoggetto, objectname)
+    - tipo oggetto (alias: object type, tipooggetto, objecttype)
+    - script creazione (alias: ddl, scriptcreazione)
     """
 
     REQUIRED_HEADERS = [
-        "server",
-        "database",
-        "schema",
-        "table",
         "nome oggetto",
         "tipo oggetto",
         "script creazione",
     ]
     HEADER_ALIASES = {
-        "database": ["db"],
         "tipo oggetto": ["object type", "tipooggetto", "objecttype"],
         "script creazione": ["ddl", "scriptcreazione"],
         "nome oggetto": ["nome", "object name", "oggetto", "nomeoggetto", "objectname"],
@@ -59,7 +46,6 @@ class SPDDLAppender:
         excel_path: str,
         output_txt: Optional[str] = None,
         sheet_name: Optional[str] = DEFAULT_SHEET_NAME,
-        create_sql_copy: bool = True,
     ):
         if load_workbook is None:
             raise RuntimeError("openpyxl non installato. Installa 'pip install openpyxl'.")
@@ -73,59 +59,53 @@ class SPDDLAppender:
             self.output_txt = output_txt
         else:
             base_dir = os.path.dirname(excel_path) or os.getcwd()
-            self.output_txt = os.path.join(base_dir, "SP_Append.txt")
-        self.create_sql_copy = create_sql_copy
+            self.output_txt = os.path.join(base_dir, "Objects_Append.sql")
 
     @staticmethod
     def _norm_header(h: Optional[str]) -> str:
         return (str(h).strip().lower() if h is not None else "")
 
     @staticmethod
-    def _is_stored_procedure(tipo: str) -> bool:
-        t = (tipo or "").strip().lower()
-        return (
-            t == "stored procedure"
-            or t == "storedprocedure"
-            or t == "procedure"
-            or t == "procedura"
-            or t == "sp"
-            or ("proc" in t)
-        )
+    def _extract_name_from_ddl(ddl: str) -> Optional[str]:
+        """Prova ad estrarre un nome oggetto da una DDL generica.
 
-    @staticmethod
-    def _extract_proc_from_ddl(ddl: str) -> Dict[str, Optional[str]]:
+        Supporta pattern CREATE [OR ALTER] <tipo> [schema.]nome con o senza []
+        per tipi comuni: view|procedure|function|table|trigger|synonym.
+        """
         if not ddl:
-            return {"schema": None, "name": None}
+            return None
         text = str(ddl)
+        # Con brackets: [schema].[name] oppure [name]
         m = re.search(
-            r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+\[([^\]]+)\]\s*\.\s*\[([^\]]+)\]",
+            r"\bcreate\s+(?:or\s+alter\s+)?(?:view|procedure|function|table|trigger|synonym)\s+\[([^\]]+)\]\s*\.\s*\[([^\]]+)\]",
             text,
             flags=re.IGNORECASE | re.DOTALL,
         )
         if m:
-            return {"schema": m.group(1), "name": m.group(2)}
+            return m.group(2)
         m = re.search(
-            r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+\[([^\]]+)\]",
+            r"\bcreate\s+(?:or\s+alter\s+)?(?:view|procedure|function|table|trigger|synonym)\s+\[([^\]]+)\]",
             text,
             flags=re.IGNORECASE | re.DOTALL,
         )
         if m:
-            return {"schema": None, "name": m.group(1)}
+            return m.group(1)
+        # Senza brackets: schema.name oppure name
         m = re.search(
-            r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+([a-zA-Z0-9_]+)\s*\.\s*([a-zA-Z0-9_]+)\b",
+            r"\bcreate\s+(?:or\s+alter\s+)?(?:view|procedure|function|table|trigger|synonym)\s+([a-zA-Z0-9_]+)\s*\.\s*([a-zA-Z0-9_]+)\b",
             text,
             flags=re.IGNORECASE,
         )
         if m:
-            return {"schema": m.group(1), "name": m.group(2)}
+            return m.group(2)
         m = re.search(
-            r"\bcreate\s+(?:or\s+alter\s+)?procedure\s+([a-zA-Z0-9_]+)\b",
+            r"\bcreate\s+(?:or\s+alter\s+)?(?:view|procedure|function|table|trigger|synonym)\s+([a-zA-Z0-9_]+)\b",
             text,
             flags=re.IGNORECASE,
         )
         if m:
-            return {"schema": None, "name": m.group(1)}
-        return {"schema": None, "name": None}
+            return m.group(1)
+        return None
 
     def _read_rows(self) -> List[Dict[str, str]]:
         wb = load_workbook(self.excel_path, read_only=True, data_only=True)
@@ -174,33 +154,22 @@ class SPDDLAppender:
                     i = idx_map[col]
                     return str(r[i]).strip() if i < len(r) and r[i] is not None else ""
 
-                tipo = get("tipo oggetto")
-                if not self._is_stored_procedure(tipo):
-                    continue
-
-                server = get("server")
-                db = get("database")
-                schema = get("schema")
-                table = get("table")
                 nome_oggetto = get("nome oggetto")
+                tipo = get("tipo oggetto")
                 ddl = get("script creazione")
 
                 if (not nome_oggetto) and ddl:
-                    parsed = self._extract_proc_from_ddl(ddl)
-                    if parsed["name"]:
-                        nome_oggetto = parsed["name"]
-                    if (not schema) and parsed["schema"]:
-                        schema = parsed["schema"]
+                    extracted = self._extract_name_from_ddl(ddl)
+                    if extracted:
+                        nome_oggetto = extracted
 
                 if not nome_oggetto:
-                    nome_oggetto = "UNKNOWN_PROC"
+                    nome_oggetto = "UNKNOWN_OBJECT"
 
                 out.append(
                     {
-                        "server": server,
-                        "db": db,
-                        "schema": schema,
                         "object_name": nome_oggetto,
+                        "object_type": tipo,
                         "ddl": ddl,
                     }
                 )
@@ -211,32 +180,29 @@ class SPDDLAppender:
     def run(self) -> str:
         rows = self._read_rows()
         if not rows:
-            raise RuntimeError("Nessuna stored procedure trovata nell'Excel.")
+            raise RuntimeError("Nessun oggetto trovato nell'Excel.")
 
-        out_dir = os.path.dirname(self.output_txt)
+        # Forza estensione .sql se non presente
+        out_path = self.output_txt
+        root, ext = os.path.splitext(out_path)
+        if ext.lower() != ".sql":
+            out_path = root + ".sql"
+
+        out_dir = os.path.dirname(out_path)
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
 
-        with open(self.output_txt, "w", encoding="utf-8", errors="ignore") as f:
+        with open(out_path, "w", encoding="utf-8", errors="ignore") as f:
             for idx, r in enumerate(rows, start=1):
-                header_path = os.path.join(
-                    r["server"], r["db"], r["schema"], f"{r['object_name']}.sql"
-                )
-                header_path_win = header_path.replace("/", "\\")
-                f.write(f"-- {idx} {header_path_win}\n")
+                header = f"-- {idx} {r['object_name']}"
+                if r.get("object_type"):
+                    header += f" ({r['object_type']})"
+                f.write(header + "\n")
                 if r["ddl"]:
                     f.write(str(r["ddl"]))
-                f.write("\n")
+                f.write("\n\n")
 
-        if self.create_sql_copy:
-            sql_copy = os.path.splitext(self.output_txt)[0] + ".sql"
-            try:
-                with open(self.output_txt, "rb") as src, open(sql_copy, "wb") as dst:
-                    dst.write(src.read())
-            except Exception:
-                pass
-
-        return self.output_txt
+        return out_path
 
 
 if __name__ == "__main__":
@@ -244,17 +210,15 @@ if __name__ == "__main__":
 
     ap = argparse.ArgumentParser(
         description=(
-            "Append DDL delle stored procedure da Excel in output .txt/.sql "
-            "(input colonne: server, database, schema, Table, Nome Oggetto, Tipo Oggetto, Script Creazione)"
+            "Append DDL da Excel in un unico file .sql (nessun filtro). "
+            "Intestazioni richieste: Nome Oggetto, Tipo Oggetto, Script Creazione."
         )
     )
     ap.add_argument("excel", nargs="?", help="Percorso al file Excel di input")
-    ap.add_argument("-o", "--output", help="Percorso file di output .txt")
+    ap.add_argument("-o", "--output", help="Percorso file di output .sql")
     ap.add_argument("-s", "--sheet", help="Nome foglio Excel da usare (default: primo)")
-    ap.add_argument("--no-sql-copy", action="store_true", help="Non creare la copia .sql")
     args = ap.parse_args()
 
-    create_sql_copy = not args.no_sql_copy
     excel_path = args.excel or DEFAULT_EXCEL_PATH
     if not excel_path:
         raise SystemExit(
@@ -265,9 +229,6 @@ if __name__ == "__main__":
         excel_path,
         args.output or DEFAULT_OUTPUT_PATH,
         args.sheet or DEFAULT_SHEET_NAME,
-        create_sql_copy=create_sql_copy,
     )
     out = app.run()
     print(f"Output creato: {out}")
-    if create_sql_copy:
-        print(f"Copia .sql: {os.path.splitext(out)[0] + '.sql'}")
