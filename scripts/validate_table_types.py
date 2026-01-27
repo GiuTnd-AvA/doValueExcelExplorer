@@ -91,6 +91,7 @@ def validate_tables(input_path, output_path):
     try:
         df = pd.read_excel(input_path, sheet_name=20)  # 21esimo sheet (indice 0-based)
         print(f"✓ Lette {len(df)} righe dal sheet 21 del file Excel")
+        print(f"  Colonne presenti: {list(df.columns)}")
     except Exception as e:
         print(f"✗ Errore lettura Excel: {e}")
         return
@@ -100,6 +101,7 @@ def validate_tables(input_path, output_path):
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         print(f"✗ Colonne mancanti: {missing_cols}")
+        print(f"  Colonne disponibili: {list(df.columns)}")
         return
     
     # Prepara liste per nuove colonne
