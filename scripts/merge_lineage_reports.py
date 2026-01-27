@@ -15,6 +15,7 @@ REPORT_2_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Espor
 
 # Output
 OUTPUT_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\LINEAGE_HYBRID_REPORT_MERGED.txt'
+OUTPUT_EXCEL_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\LINEAGE_HYBRID_REPORT_MERGED.xlsx'
 
 # =========================
 # FUNZIONI
@@ -281,6 +282,75 @@ def generate_merged_report(merged_objects, stats, output_path):
         print(f"✗ Errore nella generazione: {e}")
         return False
 
+def generate_excel_report(merged_objects, stats, output_path):
+    """Genera il report unificato in formato Excel."""
+    print(f"\n📊 Generazione Excel...")
+    
+    try:
+        # Prepara DataFrame con tutti gli oggetti
+        all_objects = []
+        for level in ['L1', 'L2', 'L3', 'L4']:
+            for obj in merged_objects[level]:
+                all_objects.append({
+                    'Livello': obj['Livello'],
+                    'Database': obj['Database'],
+                    'Schema': obj['Schema'],
+                    'ObjectName': obj['ObjectName'],
+                    'ObjectType': obj['ObjectType'],
+                    'Critico_Migrazione': obj['Critico_Migrazione'],
+                    'ReferenceCount': obj['ReferenceCount']
+                })
+        
+        df = pd.DataFrame(all_objects)
+        
+        # Crea Excel con più sheets
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            # Sheet 1: Tutti gli oggetti
+            df.to_excel(writer, sheet_name='All Objects', index=False)
+            
+            # Sheet 2-5: Un sheet per livello
+            for level in ['L1', 'L2', 'L3', 'L4']:
+                df_level = df[df['Livello'] == level].copy()
+                if len(df_level) > 0:
+                    df_level.to_excel(writer, sheet_name=level, index=False)
+            
+            # Sheet 6: Summary statistics
+            summary_data = []
+            summary_data.append(['Metric', 'Value'])
+            summary_data.append(['Total Objects', stats['unique']])
+            summary_data.append(['Duplicates Removed', stats['duplicates']])
+            summary_data.append(['Report 1 Objects', stats['total_1']])
+            summary_data.append(['Report 2 Objects', stats['total_2']])
+            summary_data.append(['', ''])
+            
+            for level in ['L1', 'L2', 'L3', 'L4']:
+                count = len(merged_objects[level])
+                critici = sum(1 for obj in merged_objects[level] if obj['Critico_Migrazione'] == 'SÌ')
+                summary_data.append([f'{level} Total', count])
+                summary_data.append([f'{level} Critical', critici])
+            
+            df_summary = pd.DataFrame(summary_data[1:], columns=summary_data[0])
+            df_summary.to_excel(writer, sheet_name='Summary', index=False)
+            
+            # Sheet 7: Per Database
+            db_summary = df.groupby('Database').size().reset_index(name='Count')
+            db_summary = db_summary.sort_values('Count', ascending=False)
+            db_summary.to_excel(writer, sheet_name='By Database', index=False)
+            
+            # Sheet 8: Per Tipo
+            type_summary = df.groupby('ObjectType').size().reset_index(name='Count')
+            type_summary = type_summary.sort_values('Count', ascending=False)
+            type_summary.to_excel(writer, sheet_name='By Type', index=False)
+        
+        print(f"✅ Excel generato: {output_path}")
+        return True
+        
+    except Exception as e:
+        print(f"✗ Errore nella generazione Excel: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 # =========================
 # MAIN
 # =========================
@@ -291,7 +361,8 @@ def main():
     print("="*80)
     print(f"\nReport 1: {REPORT_1_PATH}")
     print(f"Report 2: {REPORT_2_PATH}")
-    print(f"Output:   {OUTPUT_PATH}")
+    print(f"Output TXT:   {OUTPUT_PATH}")
+    print(f"Output EXCEL: {OUTPUT_EXCEL_PATH}")
     
     # 1. Parse entrambi i report
     objects1 = parse_lineage_report(REPORT_1_PATH)
@@ -300,20 +371,28 @@ def main():
     # 2. Merge eliminando duplicati
     merged, stats = merge_objects(objects1, objects2)
     
-    # 3. Genera report unificato
-    success = generate_merged_report(merged, stats, OUTPUT_PATH)
+    # 3. Genera report unificato TXT
+    success_txt = generate_merged_report(merged, stats, OUTPUT_PATH)
     
-    if success:
+    # 4. Genera report Excel
+    success_excel = generate_excel_report(merged, stats, OUTPUT_EXCEL_PATH)
+    
+    if success_txt and success_excel:
         print("\n" + "="*80)
         print("✅ MERGE COMPLETATO CON SUCCESSO")
         print("="*80)
         print(f"\nOggetti totali: {stats['unique']}")
         print(f"Duplicati rimossi: {stats['duplicates']}")
-        print(f"\nReport disponibile in:")
-        print(f"  {OUTPUT_PATH}")
+        print(f"\nReport disponibili in:")
+        print(f"  TXT:   {OUTPUT_PATH}")
+        print(f"  EXCEL: {OUTPUT_EXCEL_PATH}")
         print("")
     else:
-        print("\n✗ Merge fallito")
+        print("\n✗ Merge parzialmente fallito")
+        if success_txt:
+            print("✓ File TXT generato")
+        if success_excel:
+            print("✓ File Excel generato")
 
 if __name__ == "__main__":
     main()
