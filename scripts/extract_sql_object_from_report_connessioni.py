@@ -27,11 +27,12 @@ MAX_WORKERS = 4  # Thread paralleli per query SQL
 
 def get_conn_params(row):
     """Estrae i parametri di connessione da una riga del DataFrame."""
+    # Gestisce colonne sia in uppercase che in mixed case
     return {
-        "server": row.get('Server'),
-        "db_name": row.get('Database'),
-        "schema": row.get('Schema'),
-        "table": row.get('Table'),
+        "server": row.get('SERVER') or row.get('Server'),
+        "db_name": row.get('DATABASE') or row.get('Database'),
+        "schema": row.get('SCHEMA') or row.get('Schema'),
+        "table": row.get('TABLE') or row.get('Table'),
     }
 
 def get_engine(server, db_name, engine_cache, driver):
