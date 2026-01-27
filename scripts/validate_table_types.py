@@ -90,6 +90,8 @@ def validate_tables(input_path, output_path):
     # Leggi Excel (sheet 21 = indice 20)
     try:
         df = pd.read_excel(input_path, sheet_name=20)  # 21esimo sheet (indice 0-based)
+        # Rimuovi spazi dai nomi delle colonne
+        df.columns = df.columns.str.strip()
         print(f"✓ Lette {len(df)} righe dal sheet 21 del file Excel")
         print(f"  Colonne presenti: {list(df.columns)}")
     except Exception as e:
