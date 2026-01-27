@@ -50,6 +50,8 @@ def parse_lineage_report(file_path):
         level_patterns = [
             re.compile(r'LIVELLO\s+L(\d+)', re.IGNORECASE),
             re.compile(r'─+\s*LIVELLO\s+L(\d+)', re.IGNORECASE),
+            re.compile(r'^L(\d+)\s*-\s*\d+\s*oggetti', re.MULTILINE | re.IGNORECASE),  # Match "L4 - 794 oggetti critici"
+            re.compile(r'─+\s*L(\d+)\s*─+', re.IGNORECASE),  # Match "────L1────"
         ]
         
         # Pattern per oggetti bullet (inizio blocco oggetto)
@@ -122,8 +124,8 @@ def parse_lineage_report(file_path):
                         
                         j += 1
                     
-                    # Determina se critico
-                    critical = 'SÌ' if motivo and ('DML/DDL' in motivo.upper() or 'DIPENDENZE' in motivo.upper()) else 'NO'
+                    # Determina se critico - oggetti da lineage report sono SEMPRE critici
+                    critical = 'SÌ'  # Default: tutti gli oggetti nei report sono critici
                     
                     objects_by_level[current_level].append({
                         'Database': db,
@@ -406,7 +408,7 @@ def generate_merged_report(merged_objects, stats, output_path):
                 sorted_objs = sorted(level_objs, key=lambda x: (x['Database'], x['Schema'], x['ObjectName']))
                 
                 for obj in sorted_objs:
-                    f.write(f"  • [{obj['Database']}].[{obj['Schema']}].[{obj['ObjectName']:<60}] | {obj.get('ObjectType', 'UNKNOWN')}\n")
+                    f.write(f"  • [{obj['Database']}].[{obj['Schema']}].[{obj['ObjectName']}] | {obj.get('ObjectType', 'UNKNOWN')}\n")
                     
                     if obj.get('Motivo'):
                         f.write(f"    Motivo:           {obj['Motivo']}\n")
