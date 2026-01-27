@@ -53,9 +53,11 @@ def parse_lineage_report(file_path):
         ]
         
         # Pattern per oggetti bullet (inizio blocco oggetto)
+        # Formato: "  • [Database].[Schema].[ObjectName]           | ObjectType"
+        # Con spazi variabili tra componenti
         object_bullet_pattern = re.compile(
-            r'^[•\*]\s+\[([^\]]+)\]\.\[([^\]]+)\]\.\[([^\]]+)\]\s*\|\s*([^\|]+)',
-            re.IGNORECASE
+            r'^\s*[•\*\-]\s+\[([^\]]+)\]\.\[([^\]]+)\]\.\[([^\]]+)\]\s*\|\s*([^\n]+)',
+            re.MULTILINE
         )
         
         current_level = None
@@ -262,12 +264,18 @@ def generate_merged_report(merged_objects, stats, output_path):
                           if obj.get('Motivo') and 'DML/DDL' in obj['Motivo'].upper() 
                           and ('DIPENDENZE' in obj['Motivo'].upper() or '+' in obj['Motivo']))
             
-            # 1. SUMMARY ESECUTIVO
+            # Summary esecutivo (con controllo divisione per zero)
             f.write("1. SUMMARY ESECUTIVO\n")
             f.write("="*100 + "\n\n")
             f.write(f"Oggetti totali analizzati (L1-L4):           {stats['unique']}\n")
             critici_count = sum(1 for obj in all_objects if obj.get('Critico_Migrazione') == 'SÌ')
-            f.write(f"Oggetti CRITICI da migrare (IBRIDO):         {critici_count} ({critici_count/stats['unique']*100:.1f}%)\n\n")
+            
+            if stats['unique'] > 0:
+                pct_crit = critici_count/stats['unique']*100
+            else:
+                pct_crit = 0.0
+            
+            f.write(f"Oggetti CRITICI da migrare (IBRIDO):         {critici_count} ({pct_crit:.1f}%)\n\n")
             
             f.write("Breakdown per motivo criticità:\n")
             f.write(f"  • Critici SOLO per DML/DDL:                {solo_dml}\n")
@@ -627,16 +635,20 @@ def generate_excel_report(merged_objects, stats, output_path):
         for level in ['L1', 'L2', 'L3', 'L4']:
             for obj in merged_objects[level]:
                 all_objects.append({
-                    'Livello': obj['Livello'],
-                    'Database': obj['Database'],
-                    'Schema': obj['Schema'],
-                    'ObjectName': obj['ObjectName'],
-                    'ObjectType': obj.get('ObjectType'),
-                    'Critico_Migrazione': obj.get('Critico_Migrazione'),
-                    'Motivo': obj.get('Motivo'),
-                    'ReferenceCount': obj.get('ReferenceCount'),
-                    'Criticità_Tecnica': obj.get('Criticità_Tecnica')
+                    'Livello': obj.get('Livello', level),  # Usa get con fallback
+                    'Database': obj.get('Database', ''),
+                    'Schema': obj.get('Schema', ''),
+                    'ObjectName': obj.get('ObjectName', ''),
+                    'ObjectType': obj.get('ObjectType', ''),
+                    'Critico_Migrazione': obj.get('Critico_Migrazione', ''),
+                    'Motivo': obj.get('Motivo', ''),
+                    'ReferenceCount': obj.get('ReferenceCount', 0),
+                    'Criticità_Tecnica': obj.get('Criticità_Tecnica', '')
                 })
+        
+        if len(all_objects) == 0:
+            print("⚠️ Nessun oggetto da esportare in Excel")
+            return False
         
         df = pd.DataFrame(all_objects)
         
