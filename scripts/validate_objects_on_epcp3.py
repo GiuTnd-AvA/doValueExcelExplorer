@@ -696,6 +696,16 @@ def main():
         df_dependencies = pd.read_excel(INPUT_DEPENDENCIES_EXCEL)
         print(f"✓ FILE 2: Lette {len(df_dependencies)} righe")
         
+        # RINOMINA colonne per uniformare con MERGED
+        column_mapping = {
+            'SERVER': 'Server_Origin',  # Mantieni ma rinomina per non confondere
+            'DATABASE': 'Database',
+            'SCHEMA': 'Schema',
+            'OGGETTO': 'ObjectName'
+        }
+        df_dependencies = df_dependencies.rename(columns=column_mapping)
+        print(f"  Colonne rinominate: {list(column_mapping.keys())} → {list(column_mapping.values())}")
+        
         # Aggiungi colonna Origine
         df_dependencies['Origine'] = 'DISCOVERED_DEPENDENCY'
         print(f"  Colonne FILE 2: {list(df_dependencies.columns)[:8]}...")  # Prime 8 colonne
