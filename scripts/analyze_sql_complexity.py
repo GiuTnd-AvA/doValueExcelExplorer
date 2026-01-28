@@ -25,9 +25,10 @@ def count_lines(sql_def):
 
 def analyze_patterns(sql_def):
     """Identifica pattern T-SQL nella definizione."""
-    if not sql_def:
+    if not sql_def or pd.isna(sql_def):
         return set()
     
+    sql_def = str(sql_def)
     sql_lower = sql_def.lower()
     patterns = set()
     
@@ -79,9 +80,10 @@ def analyze_patterns(sql_def):
 
 def count_dml_operations(sql_def, clause_type):
     """Conta operazioni DML critiche."""
-    if not sql_def:
+    if not sql_def or pd.isna(sql_def):
         return 0
     
+    sql_def = str(sql_def)
     sql_lower = sql_def.lower()
     count = 0
     
@@ -101,15 +103,17 @@ def count_dml_operations(sql_def, clause_type):
 
 def count_joins(sql_def):
     """Conta il numero di JOIN."""
-    if not sql_def:
+    if not sql_def or pd.isna(sql_def):
         return 0
+    sql_def = str(sql_def)
     return len(re.findall(r'\b(inner\s+join|left\s+join|right\s+join|full\s+join|cross\s+join|join)\b', sql_def.lower()))
 
 def extract_tables_from_sql(sql_def):
     """Estrae tabelle referenziate da FROM/JOIN."""
-    if not sql_def:
+    if not sql_def or pd.isna(sql_def):
         return set()
     
+    sql_def = str(sql_def)
     tables = set()
     
     # Pattern per FROM/JOIN
@@ -125,9 +129,10 @@ def extract_tables_from_sql(sql_def):
 
 def extract_objects_from_sql(sql_def):
     """Estrae SP/Functions/Trigger chiamati."""
-    if not sql_def:
+    if not sql_def or pd.isna(sql_def):
         return set()
     
+    sql_def = str(sql_def)
     objects = set()
     
     # EXEC sp_name o EXECUTE sp_name
@@ -149,8 +154,10 @@ def extract_objects_from_sql(sql_def):
 
 def calculate_complexity_score(sql_def, patterns, dml_count, join_count, total_dependencies):
     """Calcola uno score di complessità 0-100."""
-    if not sql_def:
+    if not sql_def or pd.isna(sql_def):
         return 0
+    
+    sql_def = str(sql_def)
     
     score = 0
     
@@ -186,13 +193,15 @@ def classify_criticality(score, dml_count, patterns):
 
 def generate_description(sql_def, patterns, dml_count, join_count, total_tables, total_objects, clause_type):
     """Genera una descrizione testuale del comportamento."""
-    if not sql_def:
+    if not sql_def or pd.isna(sql_def):
         return "Definizione SQL non disponibile"
     
+    sql_def = str(sql_def)
     parts = []
     
     # Tipo di operazione principale
-    if clause_type and isinstance(clause_type, str):
+    if clause_type and not pd.isna(clause_type):
+        clause_type = str(clause_type)
         clause_types = set(clause_type.split('; '))
         if any(op in clause_types for op in ['INSERT INTO', 'UPDATE', 'DELETE FROM', 'MERGE INTO']):
             parts.append("Modifica dati")
@@ -253,9 +262,10 @@ def generate_description(sql_def, patterns, dml_count, join_count, total_tables,
 
 def is_critical_for_migration(clause_type):
     """Determina se l'oggetto è critico per la migrazione basandosi su CLAUSE_TYPE."""
-    if not clause_type or not isinstance(clause_type, str):
+    if not clause_type or pd.isna(clause_type):
         return 'NO'
     
+    clause_type = str(clause_type)
     clause_type_upper = clause_type.upper()
     critical_operations = ['INSERT INTO', 'UPDATE', 'DELETE FROM', 'MERGE INTO', 'CREATE TABLE', 'ALTER TABLE']
     
@@ -269,6 +279,17 @@ def analyze_sql_object(row):
     """Analizza un singolo oggetto SQL."""
     sql_def = row.get('SQLDefinition', '')
     clause_type = row.get('CLAUSE_TYPE', '')
+    
+    # Converti a stringa se sono float/NaN
+    if pd.isna(sql_def):
+        sql_def = ''
+    else:
+        sql_def = str(sql_def)
+    
+    if pd.isna(clause_type):
+        clause_type = ''
+    else:
+        clause_type = str(clause_type)
     
     # Analisi pattern
     patterns = analyze_patterns(sql_def)
