@@ -466,6 +466,20 @@ def validate_and_analyze_objects(df):
     df['Has_Cross_Server'] = has_cross_server_list
     df['Blocco_Fase0'] = blocco_fase0_list
     
+    # Rimuovi colonne completamente vuote (create durante merge)
+    print(f"\n🧹 Pulizia colonne vuote...")
+    cols_before = len(df.columns)
+    df = df.dropna(axis=1, how='all')
+    cols_after = len(df.columns)
+    if cols_before > cols_after:
+        print(f"  ✓ Rimosse {cols_before - cols_after} colonne vuote")
+    
+    print(f"\n✓ Validazione completata!")
+    print(f"  FOUND su EPCP3:     {stats['FOUND_EPCP3']}")
+    print(f"  NOT FOUND su EPCP3: {stats['NOT_FOUND_EPCP3']}")
+    print(f"  OK per FASE 0:      {stats['OK_FASE0']}")
+    print(f"  BLOCCO FASE 0:      {stats['BLOCCO_FASE0']}")
+    
     return df, stats
 
 def generate_excel_output(df, stats, output_path):
@@ -677,13 +691,25 @@ def main():
     print(f"\n🔄 Rimozione duplicati tra file...")
     original_count = len(df)
     
+    # DEBUG: Verifica colonne ObjectName
+    print(f"\n🔍 Debug merge:")
+    print(f"  • MERGED colonne: {list(df_merged.columns[:10])}")
+    print(f"  • DEPENDENCIES colonne: {list(df_dependencies.columns[:10])}")
+    
+    if 'ObjectName' not in df_merged.columns:
+        print(f"  ⚠️ 'ObjectName' NON trovato in MERGED!")
+    if 'ObjectName' not in df_dependencies.columns:
+        print(f"  ⚠️ 'ObjectName' NON trovato in DEPENDENCIES!")
+    
     # Crea set degli ObjectName presenti nel MERGED (case-insensitive)
     merged_objects = set(df_merged['ObjectName'].str.lower())
+    print(f"  • Oggetti unici in MERGED: {len(merged_objects)}")
     
     # Filtra df_dependencies: tieni solo oggetti NON presenti nel MERGED
     df_dependencies_unique = df_dependencies[
         ~df_dependencies['ObjectName'].str.lower().isin(merged_objects)
     ]
+    print(f"  • Oggetti NUOVI da DEPENDENCIES: {len(df_dependencies_unique)}")
     
     # Riconcatena: TUTTI i MERGED + solo DISCOVERED unici
     df = pd.concat([df_merged, df_dependencies_unique], ignore_index=True)
@@ -693,6 +719,25 @@ def main():
     print(f"  Oggetti totali da validare: {len(df)}")
     print(f"  • Da MERGED (TUTTI):      {len(df_merged)}")
     print(f"  • Da DEPENDENCIES (nuovi): {len(df_dependencies_unique)}")
+    
+    # DEBUG: Verifica distribuzione per Livello
+    if 'Livello' in df.columns:
+        print(f"\n🔍 Debug Livelli nel dataset finale:")
+        for level in ['L1', 'L2', 'L3', 'L4']:
+            count = len(df[df['Livello'] == level])
+            count_merged = len(df_merged[df_merged['Livello'] == level]) if 'Livello' in df_merged.columns else 0
+            print(f"  • {level}: {count} oggetti (di cui {count_merged} da MERGED)")
+    else:
+        print(f"\n⚠️  ATTENZIONE: Colonna 'Livello' non trovata nel dataset!")
+    
+    # DEBUG: Verifica distribuzione per Livello
+    if 'Livello' in df.columns:
+        print(f"\n🔍 Debug Livelli:")
+        for level in ['L1', 'L2', 'L3', 'L4']:
+            count = len(df[df['Livello'] == level])
+            print(f"  • {level}: {count} oggetti")
+    else:
+        print(f"\n⚠️  ATTENZIONE: Colonna 'Livello' non trovata nel dataset!")
     
     # Verifica colonne essenziali
     required_cols = ['Database', 'Schema', 'ObjectName', 'Origine']
