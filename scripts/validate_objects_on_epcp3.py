@@ -499,6 +499,25 @@ def generate_excel_output(df, stats, output_path):
     """Genera Excel con multiple sheet di analisi per fase 0."""
     print(f"\n📊 Generazione Excel con analisi fase 0...")
     
+    # DEBUG: Verifica distribuzione oggetti
+    print(f"\n🔍 DEBUG Excel Generation:")
+    print(f"  • Totale oggetti da esportare: {len(df)}")
+    print(f"  • EPCP3_Found = True: {len(df[df['EPCP3_Found'] == True])}")
+    
+    if 'Livello' in df.columns:
+        print(f"  • Distribuzione Livelli:")
+        print(f"    - L1: {len(df[df['Livello'] == 'L1'])}")
+        print(f"    - L2: {len(df[df['Livello'] == 'L2'])}")
+        print(f"    - L3: {len(df[df['Livello'] == 'L3'])}")
+        print(f"    - L4: {len(df[df['Livello'] == 'L4'])}")
+        print(f"    - NaN/Empty: {len(df[(df['Livello'].isna()) | (df['Livello'] == '')])}")
+        print(f"  • Valori unici Livello: {df['Livello'].unique()[:10]}")
+    
+    if 'Origine' in df.columns:
+        print(f"  • Distribuzione Origine:")
+        print(f"    - MERGED_CRITICAL: {len(df[df['Origine'] == 'MERGED_CRITICAL'])}")
+        print(f"    - DISCOVERED_DEPENDENCY: {len(df[df['Origine'] == 'DISCOVERED_DEPENDENCY'])}")
+    
     try:
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             # Sheet 1: Tutti gli oggetti con validazione EPCP3
