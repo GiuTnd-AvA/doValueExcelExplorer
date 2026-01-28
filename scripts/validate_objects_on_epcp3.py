@@ -1,7 +1,8 @@
 """
-Script per validare oggetti critici MERGED su EPCP3 e analizzare dipendenze cross-server per fase 0.
-Input: LINEAGE_HYBRID_REPORT_MERGED.xlsx (2675 oggetti critici già analizzati)
-Output: Excel con validazione EPCP3 + analisi dipendenze cross-database/cross-server
+Script per validare oggetti su EPCP3 e analizzare dipendenze cross-server per fase 0.
+Input 1: LINEAGE_HYBRID_REPORT_MERGED.xlsx (2675 oggetti critici già analizzati)
+Input 2: oggetti_da_validare.xlsx (5896 oggetti estratti da SQLDefinition dei 2675)
+Output: Excel con validazione EPCP3 + analisi dipendenze cross-database/cross-server per TUTTI gli oggetti (8571 totali)
 """
 
 import pandas as pd
@@ -16,8 +17,14 @@ from datetime import datetime
 # CONFIG
 # =========================
 BASE_PATH = Path(r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\Report finali consolidati (Conn v. + viste)")
-INPUT_EXCEL = BASE_PATH / "LINEAGE_HYBRID_REPORT_MERGED.xlsx"
-OUTPUT_EXCEL = BASE_PATH / "LINEAGE_MERGED_VALIDATO_EPCP3_FASE0.xlsx"
+
+# File 1: 2675 oggetti critici già analizzati (con Livello, Motivo, ReferenceCount, etc.)
+INPUT_MERGED_EXCEL = BASE_PATH / "LINEAGE_HYBRID_REPORT_MERGED.xlsx"
+
+# File 2: 5896 oggetti estratti da SQLDefinition dei 2675
+INPUT_DEPENDENCIES_EXCEL = BASE_PATH / "5896 Objects da validare in EPCP3" / "oggetti_da_validare.xlsx"
+
+OUTPUT_EXCEL = BASE_PATH / "ALL_OBJECTS_VALIDATO_EPCP3_FASE0.xlsx"
 
 SQL_SERVER = 'EPCP3'
 
@@ -317,11 +324,12 @@ def parse_object_key(object_key):
 
 def validate_and_analyze_objects(df):
     """
-    Valida ogni oggetto critico su EPCP3 e arricchisce con analisi dipendenze cross-server.
-    Mantiene tutti i metadati esistenti (Livello, Motivo, ReferenceCount, ecc.)
+    Valida ogni oggetto su EPCP3 e arricchisce con analisi dipendenze cross-server.
+    Mantiene tutti i metadati esistenti (Livello, Motivo, ReferenceCount per oggetti MERGED).
+    La colonna 'Origine' distingue tra MERGED_CRITICAL e DISCOVERED_DEPENDENCY.
     """
     print("\n" + "="*80)
-    print("VALIDAZIONE OGGETTI CRITICI MERGED SU EPCP3")
+    print("VALIDAZIONE TUTTI GLI OGGETTI SU EPCP3")
     print("="*80)
     
     # Prepara liste per risultati
@@ -341,7 +349,12 @@ def validate_and_analyze_objects(df):
     stats = defaultdict(int)
     
     total = len(df)
-    print(f"\nOggetti critici da validare: {total}")
+    critical_count = len(df[df['Origine'] == 'MERGED_CRITICAL'])
+    dependency_count = len(df[df['Origine'] == 'DISCOVERED_DEPENDENCY'])
+    
+    print(f"\nOggetti totali da validare: {total}")
+    print(f"  • MERGED_CRITICAL:       {critical_count}")
+    print(f"  • DISCOVERED_DEPENDENCY: {dependency_count}")
     print(f"Database EPCP3 da interrogare: {len(EPCP3_DATABASES)}")
     print("\nInizio validazione...\n")
     
@@ -561,34 +574,91 @@ def generate_excel_output(df, stats, output_path):
 
 def main():
     print("\n" + "="*80)
-    print("VALIDAZIONE OGGETTI CRITICI MERGED SU EPCP3 - ANALISI FASE 0")
+    print("VALIDAZIONE TUTTI GLI OGGETTI SU EPCP3 - ANALISI FASE 0")
     print("="*80)
-    print(f"\nInput:  {INPUT_EXCEL}")
-    print(f"Output: {OUTPUT_EXCEL}\n")
+    print(f"\nInput 1 (CRITICI):      {INPUT_MERGED_EXCEL}")
+    print(f"Input 2 (DIPENDENZE):   {INPUT_DEPENDENCIES_EXCEL}")
+    print(f"Output:                 {OUTPUT_EXCEL}\n")
     
-    # Leggi Excel MERGED (prova vari sheet)
+    # ============================
+    # LEGGI FILE 1: OGGETTI CRITICI MERGED (2675)
+    # ============================
     try:
         # Prova prima sheet "All Objects"
         try:
-            df = pd.read_excel(INPUT_EXCEL, sheet_name='All Objects')
-            print(f"✓ Lette {len(df)} righe da sheet 'All Objects'")
+            df_merged = pd.read_excel(INPUT_MERGED_EXCEL, sheet_name='All Objects')
+            print(f"✓ FILE 1: Lette {len(df_merged)} righe da sheet 'All Objects'")
         except:
             # Fallback su primo sheet
-            df = pd.read_excel(INPUT_EXCEL)
-            print(f"✓ Lette {len(df)} righe dal primo sheet")
+            df_merged = pd.read_excel(INPUT_MERGED_EXCEL)
+            print(f"✓ FILE 1: Lette {len(df_merged)} righe dal primo sheet")
         
-        print(f"  Colonne originali: {list(df.columns)[:10]}...")  # Prime 10 colonne
-        
-        # Verifica colonne essenziali
-        required_cols = ['Database', 'Schema', 'ObjectName']
-        missing_cols = [col for col in required_cols if col not in df.columns]
-        if missing_cols:
-            print(f"⚠️  Colonne mancanti: {missing_cols}")
-            print(f"   Colonne disponibili: {list(df.columns)}")
-            return
+        # Aggiungi colonna Origine
+        df_merged['Origine'] = 'MERGED_CRITICAL'
+        print(f"  Colonne FILE 1: {list(df_merged.columns)[:8]}...")  # Prime 8 colonne
         
     except Exception as e:
-        print(f"✗ Errore lettura Excel: {e}")
+        print(f"✗ Errore lettura FILE 1 (MERGED): {e}")
+        import traceback
+        traceback.print_exc()
+        return
+    
+    # ============================
+    # LEGGI FILE 2: OGGETTI DA VALIDARE (5896)
+    # ============================
+    try:
+        df_dependencies = pd.read_excel(INPUT_DEPENDENCIES_EXCEL)
+        print(f"✓ FILE 2: Lette {len(df_dependencies)} righe")
+        
+        # Aggiungi colonna Origine
+        df_dependencies['Origine'] = 'DISCOVERED_DEPENDENCY'
+        print(f"  Colonne FILE 2: {list(df_dependencies.columns)[:8]}...")  # Prime 8 colonne
+        
+    except Exception as e:
+        print(f"✗ Errore lettura FILE 2 (DEPENDENCIES): {e}")
+        import traceback
+        traceback.print_exc()
+        return
+    
+    # ============================
+    # UNISCI I DUE DATASET
+    # ============================
+    print(f"\n🔗 Unione dataset...")
+    
+    # Identifica colonne comuni tra i due file
+    common_cols = list(set(df_merged.columns) & set(df_dependencies.columns))
+    print(f"  Colonne comuni: {len(common_cols)}")
+    print(f"  {common_cols[:10]}..." if len(common_cols) > 10 else f"  {common_cols}")
+    
+    # Allinea le colonne: usa tutte le colonne di df_merged + aggiungi colonne mancanti da df_dependencies
+    all_columns = list(df_merged.columns)
+    for col in df_dependencies.columns:
+        if col not in all_columns:
+            all_columns.append(col)
+            df_merged[col] = None  # Aggiungi colonna vuota a df_merged
+    
+    # Allinea df_dependencies alle stesse colonne
+    for col in all_columns:
+        if col not in df_dependencies.columns:
+            df_dependencies[col] = None
+    
+    # Riordina colonne per entrambi i dataframe
+    df_merged = df_merged[all_columns]
+    df_dependencies = df_dependencies[all_columns]
+    
+    # Concatena
+    df = pd.concat([df_merged, df_dependencies], ignore_index=True)
+    
+    print(f"✓ Dataset uniti: {len(df)} oggetti totali")
+    print(f"  • MERGED_CRITICAL:       {len(df[df['Origine'] == 'MERGED_CRITICAL'])}")
+    print(f"  • DISCOVERED_DEPENDENCY: {len(df[df['Origine'] == 'DISCOVERED_DEPENDENCY'])}")
+    
+    # Verifica colonne essenziali
+    required_cols = ['Database', 'Schema', 'ObjectName', 'Origine']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        print(f"⚠️  Colonne mancanti: {missing_cols}")
+        print(f"   Colonne disponibili: {list(df.columns)}")
         return
     
     # Valida e arricchisci con analisi EPCP3
@@ -601,9 +671,15 @@ def main():
         print("\n" + "="*80)
         print("✅ VALIDAZIONE COMPLETATA")
         print("="*80)
+        
+        critical_count = len(df[df['Origine'] == 'MERGED_CRITICAL'])
+        dependency_count = len(df[df['Origine'] == 'DISCOVERED_DEPENDENCY'])
+        
         print(f"\nRisultati FASE 0:")
-        print(f"  • Totale oggetti critici:  {len(df)}")
-        print(f"  • FOUND su EPCP3:          {stats['FOUND_EPCP3']} ({stats['FOUND_EPCP3']/len(df)*100:.1f}%)")
+        print(f"  • Totale oggetti:          {len(df)}")
+        print(f"    - MERGED_CRITICAL:       {critical_count}")
+        print(f"    - DISCOVERED_DEPENDENCY: {dependency_count}")
+        print(f"\n  • FOUND su EPCP3:          {stats['FOUND_EPCP3']} ({stats['FOUND_EPCP3']/len(df)*100:.1f}%)")
         print(f"  • NOT FOUND su EPCP3:      {stats['NOT_FOUND_EPCP3']} ({stats['NOT_FOUND_EPCP3']/len(df)*100:.1f}%)")
         print(f"\n  • ✅ OK per FASE 0:        {stats['OK_FASE0']} oggetti")
         print(f"  • 🚫 BLOCCO FASE 0:        {stats['BLOCCO_FASE0']} oggetti (cross-server)")
