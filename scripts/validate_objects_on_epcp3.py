@@ -511,17 +511,28 @@ def generate_excel_output(df, stats, output_path):
             if len(not_found_df) > 0:
                 not_found_df.to_excel(writer, sheet_name='NOT_FOUND_EPCP3', index=False)
             
-            # Sheet 6: Per Livello + Validazione EPCP3
+            # Sheet 6: Per Livello + Validazione EPCP3 (L1, L2, L3, L4)
             if len(found_df) > 0:
                 for level in ['L1', 'L2', 'L3', 'L4']:
                     level_df = found_df[found_df['Livello'] == level].copy()
                     if len(level_df) > 0:
                         level_df.to_excel(writer, sheet_name=f'{level}_EPCP3', index=False)
             
+            # Sheet 6b: Nuovi oggetti senza Livello (dal file dependencies - 5896)
+            if len(found_df) > 0:
+                new_objects_df = found_df[
+                    (found_df['Livello'].isna()) | (found_df['Livello'] == '')
+                ].copy()
+                if len(new_objects_df) > 0:
+                    new_objects_df.to_excel(writer, sheet_name='New_Objects_Dependencies', index=False)
+            
             # Sheet 7: Summary statistiche FASE 0
+            # Conta nuovi oggetti senza livello
+            new_objects_count = len(found_df[(found_df['Livello'].isna()) | (found_df['Livello'] == '')]) if len(found_df) > 0 else 0
+            
             summary_data = {
                 'Categoria': [
-                    'Totale oggetti critici (MERGED)',
+                    'Totale oggetti (MERGED + NEW)',
                     '',
                     'FOUND su EPCP3',
                     'NOT FOUND su EPCP3',
@@ -533,7 +544,8 @@ def generate_excel_output(df, stats, output_path):
                     '  L1 (Tabelle critiche)',
                     '  L2 (Dipendenze L1)',
                     '  L3 (Dipendenze L2)',
-                    '  L4 (Dipendenze L3)'
+                    '  L4 (Dipendenze L3)',
+                    '  New Objects (da Dependencies)'
                 ],
                 'Conteggio': [
                     len(df),
@@ -548,7 +560,8 @@ def generate_excel_output(df, stats, output_path):
                     len(found_df[found_df['Livello'] == 'L1']) if len(found_df) > 0 else 0,
                     len(found_df[found_df['Livello'] == 'L2']) if len(found_df) > 0 else 0,
                     len(found_df[found_df['Livello'] == 'L3']) if len(found_df) > 0 else 0,
-                    len(found_df[found_df['Livello'] == 'L4']) if len(found_df) > 0 else 0
+                    len(found_df[found_df['Livello'] == 'L4']) if len(found_df) > 0 else 0,
+                    new_objects_count
                 ],
                 'Percentuale': [
                     '100%',
@@ -558,6 +571,7 @@ def generate_excel_output(df, stats, output_path):
                     '',
                     f"{stats['OK_FASE0']/stats['FOUND_EPCP3']*100:.1f}%" if stats['FOUND_EPCP3'] > 0 else '0%',
                     f"{stats['BLOCCO_FASE0']/stats['FOUND_EPCP3']*100:.1f}%" if stats['FOUND_EPCP3'] > 0 else '0%',
+                    '',
                     '',
                     '',
                     '',
