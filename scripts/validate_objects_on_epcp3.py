@@ -524,7 +524,27 @@ def generate_excel_output(df, stats, output_path):
             df.to_excel(writer, sheet_name='All_Objects_Validated', index=False)
             
             # Sheet 2: Solo oggetti FOUND su EPCP3
+            # DEBUG: Verifica tipo colonna EPCP3_Found
+            print(f"\n🔍 DEBUG EPCP3_Found:")
+            print(f"  • Tipo colonna: {df['EPCP3_Found'].dtype}")
+            print(f"  • Valori unici: {df['EPCP3_Found'].unique()}")
+            print(f"  • Count True: {(df['EPCP3_Found'] == True).sum()}")
+            print(f"  • Count 'VERO': {(df['EPCP3_Found'] == 'VERO').sum()}")
+            
             found_df = df[df['EPCP3_Found'] == True].copy()
+            print(f"  • Righe in found_df: {len(found_df)}")
+            
+            # DEBUG: Verifica SQL Definition per cross-server analysis
+            if len(found_df) > 0:
+                has_sql_def = found_df['EPCP3_SQLDefinition'].notna().sum()
+                no_sql_def = len(found_df) - has_sql_def
+                print(f"  • Con SQL Definition: {has_sql_def}")
+                print(f"  • Senza SQL Definition: {no_sql_def} (probabilmente tabelle)")
+                
+                # Conta per ObjectType
+                if 'EPCP3_ObjectType' in found_df.columns:
+                    type_counts = found_df['EPCP3_ObjectType'].value_counts()
+                    print(f"  • Breakdown per tipo: {dict(type_counts.head(5))}")
             
             # DEBUG: Verifica FOUND per Livello
             print(f"\n🔍 DEBUG FOUND su EPCP3:")
@@ -554,19 +574,25 @@ def generate_excel_output(df, stats, output_path):
                 not_found_df.to_excel(writer, sheet_name='NOT_FOUND_EPCP3', index=False)
             
             # Sheet 6: Per Livello + Validazione EPCP3 (L1, L2, L3, L4)
-            if len(found_df) > 0:
+            # IMPORTANTE: Crea sheet per TUTTI gli oggetti, non solo quelli FOUND
+            if 'Livello' in df.columns:
                 for level in ['L1', 'L2', 'L3', 'L4']:
-                    level_df = found_df[found_df['Livello'] == level].copy()
+                    level_df = df[df['Livello'] == level].copy()
                     if len(level_df) > 0:
-                        level_df.to_excel(writer, sheet_name=f'{level}_EPCP3', index=False)
+                        level_df.to_excel(writer, sheet_name=f'{level}_ALL', index=False)
+                        # Crea anche sheet solo per quelli trovati su EPCP3
+                        level_found_df = level_df[level_df['EPCP3_Found'] == True].copy()
+                        if len(level_found_df) > 0:
+                            level_found_df.to_excel(writer, sheet_name=f'{level}_EPCP3', index=False)
             
             # Sheet 6b: Nuovi oggetti senza Livello (dal file dependencies - 5896)
-            if len(found_df) > 0:
-                new_objects_df = found_df[
-                    (found_df['Livello'].isna()) | (found_df['Livello'] == '')
-                ].copy()
-                if len(new_objects_df) > 0:
-                    new_objects_df.to_excel(writer, sheet_name='New_Objects_Dependencies', index=False)
+            new_objects_df = df[(df['Livello'].isna()) | (df['Livello'] == '')].copy()
+            if len(new_objects_df) > 0:
+                new_objects_df.to_excel(writer, sheet_name='New_Objects_ALL', index=False)
+                # Solo quelli trovati
+                new_found_df = new_objects_df[new_objects_df['EPCP3_Found'] == True].copy()
+                if len(new_found_df) > 0:
+                    new_found_df.to_excel(writer, sheet_name='New_Objects_EPCP3', index=False)
             
             # Sheet 7: Summary statistiche FASE 0
             # Conta nuovi oggetti senza livello
