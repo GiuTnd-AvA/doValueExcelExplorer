@@ -9,9 +9,10 @@ from datetime import datetime
 # =========================
 # CONFIG
 # =========================
-# Path ai due report da unire
+# Path ai tre report da unire
 REPORT_1_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\LINEAGE_HYBRID_REPORT_1.txt'
 REPORT_2_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\LINEAGE_HYBRID_REPORT_2.txt'
+REPORT_3_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\LINEAGE_HYBRID_REPORT_3.txt'
 
 # Output
 OUTPUT_PATH = r'\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\Esportazione Oggetti SQL\LINEAGE_HYBRID_REPORT_MERGED.txt'
@@ -156,9 +157,9 @@ def parse_lineage_report(file_path):
         traceback.print_exc()
         return objects_by_level
 
-def merge_objects(objects1, objects2):
+def merge_objects(objects1, objects2, objects3=None):
     """
-    Unisce due dizionari di oggetti eliminando duplicati.
+    Unisce tre dizionari di oggetti eliminando duplicati.
     In caso di duplicati, mantiene quello con più informazioni.
     """
     print("\n🔄 Merge oggetti...")
@@ -173,6 +174,7 @@ def merge_objects(objects1, objects2):
     stats = {
         'total_1': 0,
         'total_2': 0,
+        'total_3': 0,
         'duplicates': 0,
         'unique': 0
     }
@@ -228,6 +230,8 @@ def merge_objects(objects1, objects2):
     print(f"\n📊 Statistiche Merge:")
     print(f"  • Report 1: {stats['total_1']} oggetti")
     print(f"  • Report 2: {stats['total_2']} oggetti")
+    if objects3:
+        print(f"  • Report 3: {stats['total_3']} oggetti")
     print(f"  • Duplicati rimossi: {stats['duplicates']}")
     print(f"  • Totale unici: {stats['unique']}")
     
@@ -244,7 +248,8 @@ def generate_merged_report(merged_objects, stats, output_path):
             f.write("LINEAGE HYBRID REPORT - MERGED (Oggetti da Migrare)\n")
             f.write("="*100 + "\n\n")
             f.write(f"Data generazione: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Source: Merge di 2 report lineage\n\n")
+            num_reports = 3 if stats.get('total_3', 0) > 0 else 2
+            f.write(f"Source: Merge di {num_reports} report lineage\n\n")
             f.write("CRITERIO CRITICITÀ IBRIDO:\n")
             f.write("  ✓ Oggetti con operazioni DML/DDL (INSERT/UPDATE/DELETE/CREATE/ALTER)\n")
             f.write("  ✓ OPPURE Oggetti con ReferenceCount >= 50 (dipendenze critiche)\n\n")
@@ -783,15 +788,17 @@ def main():
     print("="*80)
     print(f"\nReport 1: {REPORT_1_PATH}")
     print(f"Report 2: {REPORT_2_PATH}")
+    print(f"Report 3: {REPORT_3_PATH}")
     print(f"Output TXT:   {OUTPUT_PATH}")
     print(f"Output EXCEL: {OUTPUT_EXCEL_PATH}")
     
-    # 1. Parse entrambi i report
+    # 1. Parse i tre report
     objects1 = parse_lineage_report(REPORT_1_PATH)
     objects2 = parse_lineage_report(REPORT_2_PATH)
+    objects3 = parse_lineage_report(REPORT_3_PATH)
     
     # 2. Merge eliminando duplicati
-    merged, stats = merge_objects(objects1, objects2)
+    merged, stats = merge_objects(objects1, objects2, objects3)
     
     # 3. Genera report unificato TXT
     success_txt = generate_merged_report(merged, stats, OUTPUT_PATH)
