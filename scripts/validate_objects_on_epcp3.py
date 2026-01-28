@@ -250,17 +250,17 @@ def get_connection_string(database):
         f"Trusted_Connection=yes;"
     )
 
-def find_object_in_database(database, object_name):
+def get_all_objects_from_database(database):
     """
-    Cerca un oggetto in un database specifico.
-    Returns: (found, object_type, schema_name, sql_definition)
+    Estrae TUTTI gli oggetti da un database in una query sola (MOLTO PIÙ VELOCE!).
+    Returns: dict {object_name_lower: (object_name, object_type, schema_name, sql_definition)}
     """
     try:
         conn_str = get_connection_string(database)
-        conn = pyodbc.connect(conn_str, timeout=5)
+        conn = pyodbc.connect(conn_str, timeout=10)
         cursor = conn.cursor()
         
-        # Query per cercare l'oggetto
+        # Query per estrarre TUTTI gli oggetti rilevanti
         query = """
         SELECT 
             o.name AS ObjectName,
@@ -268,8 +268,8 @@ def find_object_in_database(database, object_name):
             SCHEMA_NAME(o.schema_id) AS SchemaName,
             OBJECT_DEFINITION(o.object_id) AS SQLDefinition
         FROM sys.objects o
-        WHERE LOWER(o.name) = LOWER(?)
-          AND o.type IN ('P', 'FN', 'IF', 'TF', 'TR', 'V', 'U')  -- SP, Functions, Triggers, Views, Tables
+        WHERE o.type IN ('P', 'FN', 'IF', 'TF', 'TR', 'V', 'U')  -- SP, Functions, Triggers, Views, Tables
+          AND o.is_ms_shipped = 0  -- Escludi oggetti di sistema
         ORDER BY 
           CASE o.type 
             WHEN 'P' THEN 1  -- Stored Procedure
@@ -281,26 +281,25 @@ def find_object_in_database(database, object_name):
           END
         """
         
-        cursor.execute(query, object_name)
-        row = cursor.fetchone()
+        cursor.execute(query)
+        rows = cursor.fetchall()
         
-        if row:
-            obj_name = row.ObjectName
-            obj_type = row.ObjectType
-            schema = row.SchemaName
+        # Costruisci dizionario {nome_lower: (nome, type, schema, definition)}
+        objects_dict = {}
+        for row in rows:
+            obj_name_lower = row.ObjectName.lower()
             sql_def = row.SQLDefinition if row.SQLDefinition else ''
-            
-            cursor.close()
-            conn.close()
-            return True, obj_type, schema, sql_def
+            objects_dict[obj_name_lower] = (row.ObjectName, row.ObjectType, row.SchemaName, sql_def)
         
         cursor.close()
         conn.close()
-        return False, None, None, None
         
+        return objects_dict
+            
     except Exception as e:
-        # Skip database silently se non accessibile
-        return False, None, None, None
+        # Database non accessibile o altro errore
+        print(f"    ⚠️ Errore accesso database {database}: {str(e)[:50]}")
+        return {}
 
 def parse_object_key(object_key):
     """
@@ -356,7 +355,22 @@ def validate_and_analyze_objects(df):
     print(f"  • MERGED_CRITICAL:       {critical_count}")
     print(f"  • DISCOVERED_DEPENDENCY: {dependency_count}")
     print(f"Database EPCP3 da interrogare: {len(EPCP3_DATABASES)}")
-    print("\nInizio validazione...\n")
+    
+    # =============================
+    # OTTIMIZZAZIONE: Estrai TUTTI gli oggetti da ogni database UNA VOLTA SOLA
+    # Invece di fare 8571 × 53 = ~454k query, facciamo solo 53 query!
+    # =============================
+    print("\n🚀 Caricamento catalogo oggetti da EPCP3 (53 database)...")
+    database_catalogs = {}  # {database: {object_name_lower: (name, type, schema, definition)}}
+    
+    for db_num, database in enumerate(EPCP3_DATABASES, start=1):
+        print(f"  [{db_num}/{len(EPCP3_DATABASES)}] Caricamento {database}...", end=' ')
+        objects_dict = get_all_objects_from_database(database)
+        database_catalogs[database] = objects_dict
+        print(f"✓ {len(objects_dict)} oggetti")
+    
+    print(f"\n✓ Catalogo completo caricato in memoria!")
+    print("\n🔍 Inizio validazione oggetti...\n")
     
     for row_num, (idx, row) in enumerate(df.iterrows(), start=1):
         # Estrai informazioni dall'oggetto (formato [Database].[Schema].[ObjectName])
@@ -382,22 +396,22 @@ def validate_and_analyze_objects(df):
             stats['MISSING_DATA'] += 1
             continue
         
-        # Cerca oggetto in tutti i database EPCP3
+        # Cerca oggetto in tutti i database EPCP3 (LOOKUP IN MEMORIA - VELOCISSIMO!)
         found_on_epcp3 = False
         found_in_databases = []
         found_sql_def = None
         found_obj_type = None
         found_schema = None
+        object_name_lower = object_name.lower()
         
-        for database in EPCP3_DATABASES:
-            is_found, obj_type, schema, sql_def = find_object_in_database(database, object_name)
-            
-            if is_found:
+        for database, objects_dict in database_catalogs.items():
+            if object_name_lower in objects_dict:
                 found_on_epcp3 = True
                 found_in_databases.append(database)
                 
                 # Prendi la prima occorrenza per analisi dettagliata
                 if found_sql_def is None:
+                    obj_name, obj_type, schema, sql_def = objects_dict[object_name_lower]
                     found_sql_def = sql_def
                     found_obj_type = obj_type
                     found_schema = schema
@@ -652,6 +666,25 @@ def main():
     print(f"✓ Dataset uniti: {len(df)} oggetti totali")
     print(f"  • MERGED_CRITICAL:       {len(df[df['Origine'] == 'MERGED_CRITICAL'])}")
     print(f"  • DISCOVERED_DEPENDENCY: {len(df[df['Origine'] == 'DISCOVERED_DEPENDENCY'])}")
+    
+    # ============================
+    # OTTIMIZZAZIONE: RIMUOVI DUPLICATI (stesso ObjectName)
+    # Mantieni solo la prima occorrenza (priorità a MERGED_CRITICAL se presente)
+    # ============================
+    print(f"\n🔄 Rimozione duplicati...")
+    original_count = len(df)
+    
+    # Ordina per dare priorità a MERGED_CRITICAL
+    df = df.sort_values('Origine', ascending=True)  # DISCOVERED viene dopo MERGED
+    
+    # Rimuovi duplicati basandoti su ObjectName (case-insensitive)
+    df['ObjectName_Lower'] = df['ObjectName'].str.lower()
+    df = df.drop_duplicates(subset=['ObjectName_Lower'], keep='first')
+    df = df.drop(columns=['ObjectName_Lower'])
+    
+    duplicates_removed = original_count - len(df)
+    print(f"✓ Rimossi {duplicates_removed} duplicati")
+    print(f"  Oggetti unici da validare: {len(df)}")
     
     # Verifica colonne essenziali
     required_cols = ['Database', 'Schema', 'ObjectName', 'Origine']
