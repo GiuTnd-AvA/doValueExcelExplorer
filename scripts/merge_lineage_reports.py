@@ -184,6 +184,8 @@ def merge_objects(objects1, objects2, objects3=None):
         
         stats['total_1'] += len(objects1[level])
         stats['total_2'] += len(objects2[level])
+        if objects3:
+            stats['total_3'] += len(objects3[level])
         
         # Processa oggetti dal report 1
         for obj in objects1[level]:
@@ -218,6 +220,40 @@ def merge_objects(objects1, objects2, objects3=None):
                 seen_keys[key] = obj
                 stats['duplicates'] += 1
             else:
+                # Nuovo oggetto
+                seen_keys[key] = obj
+        
+        # Processa oggetti dal report 3
+        if objects3:
+            for obj in objects3[level]:
+                key = obj['Key']
+                
+                if key in seen_keys:
+                    # Duplicato: merge intelligente
+                    existing = seen_keys[key]
+                    
+                    # Prendi il ReferenceCount più alto
+                    if obj.get('ReferenceCount') and existing.get('ReferenceCount'):
+                        obj['ReferenceCount'] = max(obj['ReferenceCount'], existing['ReferenceCount'])
+                    elif existing.get('ReferenceCount'):
+                        obj['ReferenceCount'] = existing['ReferenceCount']
+                    
+                    # Prendi dati più completi
+                    if not obj.get('ObjectType') and existing.get('ObjectType'):
+                        obj['ObjectType'] = existing['ObjectType']
+                    
+                    if not obj.get('Motivo') and existing.get('Motivo'):
+                        obj['Motivo'] = existing['Motivo']
+                    
+                    if not obj.get('Criticità_Tecnica') and existing.get('Criticità_Tecnica'):
+                        obj['Criticità_Tecnica'] = existing['Criticità_Tecnica']
+                    
+                    # Aggiorna
+                    seen_keys[key] = obj
+                    stats['duplicates'] += 1
+                else:
+                    # Nuovo oggetto
+                    seen_keys[key] = obj
                 # Nuovo oggetto
                 seen_keys[key] = obj
         
