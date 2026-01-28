@@ -525,6 +525,16 @@ def generate_excel_output(df, stats, output_path):
             
             # Sheet 2: Solo oggetti FOUND su EPCP3
             found_df = df[df['EPCP3_Found'] == True].copy()
+            
+            # DEBUG: Verifica FOUND per Livello
+            print(f"\n🔍 DEBUG FOUND su EPCP3:")
+            if len(found_df) > 0 and 'Livello' in found_df.columns:
+                print(f"  • L1 FOUND: {len(found_df[found_df['Livello'] == 'L1'])}")
+                print(f"  • L2 FOUND: {len(found_df[found_df['Livello'] == 'L2'])}")
+                print(f"  • L3 FOUND: {len(found_df[found_df['Livello'] == 'L3'])}")
+                print(f"  • L4 FOUND: {len(found_df[found_df['Livello'] == 'L4'])}")
+                print(f"  • New Objects FOUND: {len(found_df[(found_df['Livello'].isna()) | (found_df['Livello'] == '')])}")
+            
             if len(found_df) > 0:
                 found_df.to_excel(writer, sheet_name='Found_on_EPCP3', index=False)
             
