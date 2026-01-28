@@ -257,7 +257,7 @@ def get_all_objects_from_database(database):
     """
     try:
         conn_str = get_connection_string(database)
-        conn = pyodbc.connect(conn_str, timeout=3)
+        conn = pyodbc.connect(conn_str, timeout=30)
         cursor = conn.cursor()
         
         # Query per estrarre TUTTI gli oggetti rilevanti
@@ -367,13 +367,9 @@ def validate_and_analyze_objects(df):
     
     for db_num, database in enumerate(EPCP3_DATABASES, start=1):
         print(f"  [{db_num}/{len(EPCP3_DATABASES)}] Caricamento {database}...", end=' ', flush=True)
-        try:
-            objects_dict = get_all_objects_from_database(database)
-            database_catalogs[database] = objects_dict
-            print(f"✓ {len(objects_dict)} oggetti", flush=True)
-        except Exception as e:
-            print(f"✗ ERRORE: {str(e)[:80]}", flush=True)
-            database_catalogs[database] = {}
+        objects_dict = get_all_objects_from_database(database)
+        database_catalogs[database] = objects_dict
+        print(f"✓ {len(objects_dict)} oggetti", flush=True)
     
     print(f"\n✓ Catalogo completo caricato in memoria!")
     print("\n🔍 Inizio validazione oggetti...\n")
@@ -674,23 +670,29 @@ def main():
     print(f"  • DISCOVERED_DEPENDENCY: {len(df[df['Origine'] == 'DISCOVERED_DEPENDENCY'])}")
     
     # ============================
-    # OTTIMIZZAZIONE: RIMUOVI DUPLICATI (stesso ObjectName)
-    # Mantieni solo la prima occorrenza (priorità a MERGED_CRITICAL se presente)
+    # OTTIMIZZAZIONE: RIMUOVI DUPLICATI solo tra i due file
+    # Mantieni TUTTI gli oggetti MERGED (anche se stesso nome ma livelli diversi)
+    # Aggiungi solo oggetti DISCOVERED che NON esistono già nel MERGED
     # ============================
-    print(f"\n🔄 Rimozione duplicati...")
+    print(f"\n🔄 Rimozione duplicati tra file...")
     original_count = len(df)
     
-    # Ordina per dare priorità a MERGED_CRITICAL
-    df = df.sort_values('Origine', ascending=True)  # DISCOVERED viene dopo MERGED
+    # Crea set degli ObjectName presenti nel MERGED (case-insensitive)
+    merged_objects = set(df_merged['ObjectName'].str.lower())
     
-    # Rimuovi duplicati basandoti su ObjectName (case-insensitive)
-    df['ObjectName_Lower'] = df['ObjectName'].str.lower()
-    df = df.drop_duplicates(subset=['ObjectName_Lower'], keep='first')
-    df = df.drop(columns=['ObjectName_Lower'])
+    # Filtra df_dependencies: tieni solo oggetti NON presenti nel MERGED
+    df_dependencies_unique = df_dependencies[
+        ~df_dependencies['ObjectName'].str.lower().isin(merged_objects)
+    ]
+    
+    # Riconcatena: TUTTI i MERGED + solo DISCOVERED unici
+    df = pd.concat([df_merged, df_dependencies_unique], ignore_index=True)
     
     duplicates_removed = original_count - len(df)
-    print(f"✓ Rimossi {duplicates_removed} duplicati")
-    print(f"  Oggetti unici da validare: {len(df)}")
+    print(f"✓ Rimossi {duplicates_removed} oggetti già presenti in MERGED")
+    print(f"  Oggetti totali da validare: {len(df)}")
+    print(f"  • Da MERGED (TUTTI):      {len(df_merged)}")
+    print(f"  • Da DEPENDENCIES (nuovi): {len(df_dependencies_unique)}")
     
     # Verifica colonne essenziali
     required_cols = ['Database', 'Schema', 'ObjectName', 'Origine']
