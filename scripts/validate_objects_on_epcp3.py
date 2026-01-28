@@ -257,7 +257,7 @@ def get_all_objects_from_database(database):
     """
     try:
         conn_str = get_connection_string(database)
-        conn = pyodbc.connect(conn_str, timeout=10)
+        conn = pyodbc.connect(conn_str, timeout=3)
         cursor = conn.cursor()
         
         # Query per estrarre TUTTI gli oggetti rilevanti
@@ -361,13 +361,19 @@ def validate_and_analyze_objects(df):
     # Invece di fare 8571 × 53 = ~454k query, facciamo solo 53 query!
     # =============================
     print("\n🚀 Caricamento catalogo oggetti da EPCP3 (53 database)...")
+    import sys
+    sys.stdout.flush()
     database_catalogs = {}  # {database: {object_name_lower: (name, type, schema, definition)}}
     
     for db_num, database in enumerate(EPCP3_DATABASES, start=1):
-        print(f"  [{db_num}/{len(EPCP3_DATABASES)}] Caricamento {database}...", end=' ')
-        objects_dict = get_all_objects_from_database(database)
-        database_catalogs[database] = objects_dict
-        print(f"✓ {len(objects_dict)} oggetti")
+        print(f"  [{db_num}/{len(EPCP3_DATABASES)}] Caricamento {database}...", end=' ', flush=True)
+        try:
+            objects_dict = get_all_objects_from_database(database)
+            database_catalogs[database] = objects_dict
+            print(f"✓ {len(objects_dict)} oggetti", flush=True)
+        except Exception as e:
+            print(f"✗ ERRORE: {str(e)[:80]}", flush=True)
+            database_catalogs[database] = {}
     
     print(f"\n✓ Catalogo completo caricato in memoria!")
     print("\n🔍 Inizio validazione oggetti...\n")
