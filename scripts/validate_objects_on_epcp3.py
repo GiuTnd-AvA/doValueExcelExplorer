@@ -466,13 +466,26 @@ def validate_and_analyze_objects(df):
     df['Has_Cross_Server'] = has_cross_server_list
     df['Blocco_Fase0'] = blocco_fase0_list
     
-    # Rimuovi colonne completamente vuote (create durante merge)
-    print(f"\n🧹 Pulizia colonne vuote...")
+    # Rimuovi colonne vuote o inutili (create durante merge)
+    print(f"\n🧹 Pulizia colonne...")
     cols_before = len(df.columns)
-    df = df.dropna(axis=1, how='all')
-    cols_after = len(df.columns)
-    if cols_before > cols_after:
-        print(f"  ✓ Rimosse {cols_before - cols_after} colonne vuote")
+    
+    # Lista colonne da rimuovere (vuote o duplicate)
+    cols_to_remove = []
+    for col in df.columns:
+        # Rimuovi colonne Unnamed
+        if col.startswith('Unnamed:'):
+            cols_to_remove.append(col)
+        # Rimuovi colonne completamente vuote
+        elif df[col].isna().all():
+            cols_to_remove.append(col)
+        # Rimuovi colonne duplicate (SERVER, DATABASE, SCHEMA, OGGETTO sono già in altre colonne)
+        elif col in ['SERVER', 'DATABASE', 'SCHEMA', 'OGGETTO'] and col not in ['Database', 'Schema', 'ObjectName']:
+            cols_to_remove.append(col)
+    
+    if cols_to_remove:
+        df = df.drop(columns=cols_to_remove)
+        print(f"  ✓ Rimosse {len(cols_to_remove)} colonne: {cols_to_remove[:5]}{'...' if len(cols_to_remove) > 5 else ''}")
     
     print(f"\n✓ Validazione completata!")
     print(f"  FOUND su EPCP3:     {stats['FOUND_EPCP3']}")
@@ -744,15 +757,6 @@ def main():
     else:
         print(f"\n⚠️  ATTENZIONE: Colonna 'Livello' non trovata nel dataset!")
     
-    # DEBUG: Verifica distribuzione per Livello
-    if 'Livello' in df.columns:
-        print(f"\n🔍 Debug Livelli:")
-        for level in ['L1', 'L2', 'L3', 'L4']:
-            count = len(df[df['Livello'] == level])
-            print(f"  • {level}: {count} oggetti")
-    else:
-        print(f"\n⚠️  ATTENZIONE: Colonna 'Livello' non trovata nel dataset!")
-    
     # Verifica colonne essenziali
     required_cols = ['Database', 'Schema', 'ObjectName', 'Origine']
     missing_cols = [col for col in required_cols if col not in df.columns]
@@ -762,7 +766,9 @@ def main():
         return
     
     # Valida e arricchisci con analisi EPCP3
+    print(f"\n➡️  Oggetti da validare: {len(df)}")
     df_validated, stats = validate_and_analyze_objects(df)
+    print(f"\n➡️  Oggetti dopo validazione: {len(df_validated)}")
     
     # Genera Excel output
     success = generate_excel_output(df_validated, stats, OUTPUT_EXCEL)
