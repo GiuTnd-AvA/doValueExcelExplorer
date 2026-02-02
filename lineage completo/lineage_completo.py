@@ -21,7 +21,7 @@ import pyodbc
 # ========================
 # CONFIG
 # ========================
-DEFAULT_EXCEL = rf"\\dobank\progetti\S1\2025_pg_Unified_Data_Analytics_Tool\7. Reverse engingeering\Lineage completo\Filepath+tabelle_dirette.xlsx"
+DEFAULT_EXCEL = rf"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool\7. Reverse engingeering\Lineage completo\Filepath+tabelle_dirette.xlsx"
 DEFAULT_SHEET = 0           # oppure il nome del foglio
 DEFAULT_SERVER = "EPCP3"
 DEFAULT_DATABASE = "CORESQL7"
