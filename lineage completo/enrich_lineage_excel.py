@@ -311,6 +311,7 @@ def main() -> None:
 
     print("[1/4] Loading Excel ...")
     df = pd.read_excel(input_path, sheet_name=args.sheet)
+    df.rename(columns=lambda c: str(c).strip(), inplace=True)
     ensure_columns(df, TARGET_COLUMNS)
 
     conn_pool = ConnectionPool(args.server, args.driver)
