@@ -10,6 +10,7 @@ a partire dalle tabelle elencate in un file Excel (colonne Schema.Table e Join e
 """
 
 import argparse
+import re
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -76,6 +77,7 @@ def parse_schema_table(raw_value: str) -> Tuple[str, str, str]:
 
 def extract_contexts_from_excel(path: Path, sheet) -> List[OriginContext]:
     df = pd.read_excel(path, sheet_name=sheet)
+    df.rename(columns=lambda c: str(c).strip(), inplace=True)
     contexts: List[OriginContext] = []
 
     def append_context(raw_table: str, row: pd.Series) -> None:
@@ -99,13 +101,24 @@ def extract_contexts_from_excel(path: Path, sheet) -> List[OriginContext]:
         )
 
     for _, row in df.iterrows():
-        base_table = row.get("Schema.Table")
-        append_context(base_table, row)
+        seen_values = set()
+
+        def try_append(value: str) -> None:
+            normalized = (value or "").strip()
+            if not normalized:
+                return
+            if normalized in seen_values:
+                return
+            seen_values.add(normalized)
+            append_context(normalized, row)
+
+        try_append(row.get("Schema.Table"))
+        try_append(row.get("Tabella origine"))
 
         join_values = str(row.get("Join e SubQuery", "") or "")
         if join_values and join_values.lower() != "nan":
-            for part in join_values.split(";"):
-                append_context(part.strip(), row)
+            for part in re.split(r"[;,]\s*", join_values):
+                try_append(part)
 
     return contexts
 
