@@ -263,7 +263,7 @@ def aggregate_metadata(
         "oggetti_totali7.Dipendenze_Tabella": " ; ".join(dep_tables),
         "oggetti_totali7.Count_Dipendenza_Tabella": str(len(dep_tables)),
         "oggetti_totali7.Dipendenze_Oggetto": " ; ".join(dep_objects),
-        "oggetti_totali7.Count_Dipendenza_Oggetto": str(len(dep_objects)),
+        "oggetti_totali7.Count_Dipendenze_Oggetto": str(len(dep_objects)),
     }
 
 
@@ -312,6 +312,13 @@ def main() -> None:
     print("[1/4] Loading Excel ...")
     df = pd.read_excel(input_path, sheet_name=args.sheet)
     df.rename(columns=lambda c: str(c).strip(), inplace=True)
+    legacy_columns = {
+        "oggetti_totali7.Count_Dipendenza_Tabella": "oggetti_totali7.Count_Dipendenze_Tabella",
+        "oggetti_totali7.Count_Dipendenza_Oggetto": "oggetti_totali7.Count_Dipendenze_Oggetto",
+    }
+    for old, new in legacy_columns.items():
+        if old in df.columns and new not in df.columns:
+            df.rename(columns={old: new}, inplace=True)
     ensure_columns(df, TARGET_COLUMNS)
 
     conn_pool = ConnectionPool(args.server, args.driver)
@@ -324,6 +331,8 @@ def main() -> None:
             if not new_values:
                 continue
             for col, value in new_values.items():
+                if col not in df.columns:
+                    df[col] = ""
                 if not normalize_str(df.at[idx, col]):
                     df.at[idx, col] = value
             enriched_rows += 1
