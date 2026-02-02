@@ -10,9 +10,9 @@ a partire dalle tabelle elencate in un file Excel (colonne Schema.Table e Join e
 """
 
 import argparse
-from collections import deque
+from collections import defaultdict, deque
 from pathlib import Path
-from typing import List, Set, Tuple
+from typing import Dict, List, Tuple
 
 import pandas as pd
 import pyodbc
@@ -26,7 +26,7 @@ DEFAULT_SERVER = "EPCP3"
 DEFAULT_DATABASE = "CORESQL7"
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
 DEFAULT_MAX_DEPTH = 5
-DEFAULT_OUTPUT = "dipendenze_ricorsive.xlsx"
+DEFAULT_OUTPUT = "lineage_layers.xlsx"
 
 
 def get_connection(server: str, database: str, driver: str) -> pyodbc.Connection:
@@ -39,108 +39,118 @@ def get_connection(server: str, database: str, driver: str) -> pyodbc.Connection
     return pyodbc.connect(conn_str, timeout=15)
 
 
-def normalize_table_name(name: str) -> str:
-    """Restituisce solo il nome oggetto (senza schema) in lowercase."""
-    if not name:
-        return ""
-    name = name.strip()
-    if "." in name:
-        return name.split(".")[-1].strip().lower()
-    return name.lower()
+def parse_schema_table(raw_value: str) -> Tuple[str, str, str]:
+    """Restituisce schema, nome (in uppercase originale) e display completo."""
+    if not raw_value or str(raw_value).strip() in {"", "nan", "None"}:
+        return "", "", ""
+    raw_value = str(raw_value).strip()
+    if "." in raw_value:
+        schema, name = raw_value.split(".", 1)
+    else:
+        schema, name = "dbo", raw_value
+    return schema.strip(), name.strip(), f"{schema.strip()}.{name.strip()}"
 
 
-def extract_tables_from_excel(path: Path, sheet) -> Set[str]:
+def extract_contexts_from_excel(path: Path, sheet) -> List[Dict[str, str]]:
     df = pd.read_excel(path, sheet_name=sheet)
-    tables = set()
+    contexts: List[Dict[str, str]] = []
 
-    if "Schema.Table" in df.columns:
-        tables.update(
-            normalize_table_name(val)
-            for val in df["Schema.Table"].dropna().astype(str)
-        )
+    def append_context(raw_table: str, row: pd.Series):
+        schema, name, display = parse_schema_table(raw_table)
+        if not display:
+            return
+        key = f"{schema.lower()}::{name.lower()}"
+        contexts.append({
+            "file_name": str(row.get("File_name", "")).strip(),
+            "server": str(row.get("Server", DEFAULT_SERVER)).strip() or DEFAULT_SERVER,
+            "database": str(row.get("Database", DEFAULT_DATABASE)).strip() or DEFAULT_DATABASE,
+            "origin_schema": schema,
+            "origin_name": name,
+            "origin_display": display,
+            "origin_key": key,
+        })
 
-    if "Join e SubQuery" in df.columns:
-        for val in df["Join e SubQuery"].dropna().astype(str):
-            parts = [normalize_table_name(p) for p in val.split(";")]
-            tables.update(filter(None, parts))
+    for _, row in df.iterrows():
+        base_table = row.get("Schema.Table")
+        append_context(base_table, row)
 
-    tables.discard("")  # rimuovi eventuali stringhe vuote
-    return tables
+        join_values = str(row.get("Join e SubQuery", ""))
+        if join_values and join_values.lower() != "nan":
+            for part in join_values.split(";"):
+                append_context(part.strip(), row)
+
+    return contexts
 
 
 def fetch_referencing_objects(
-    conn: pyodbc.Connection, table_names: List[str]
+    conn: pyodbc.Connection, targets: List[Tuple[str, str]]
 ) -> List[Tuple[str, str, str]]:
     """
-    Ritorna (referencing_object, type_desc, referenced_entity) per gli oggetti
-    che referenziano una qualunque tabella di table_names.
+    Restituisce (schema, nome, type_desc) degli oggetti che referenziano
+    gli elementi indicati da targets (lista di tuple schema/nome).
     """
-    if not table_names:
+    if not targets:
         return []
 
-    placeholders = ",".join("?" for _ in table_names)
+    conditions = []
+    params: List[str] = []
+    for schema, name in targets:
+        conditions.append("(ISNULL(d.referenced_schema_name, 'dbo') = ? AND d.referenced_entity_name = ?)")
+        params.extend([schema or 'dbo', name])
+
+    where_clause = " OR ".join(conditions)
     query = f"""
         SELECT DISTINCT
-            o.name   AS referencing_object,
-            o.type_desc,
-            d.referenced_entity_name
+            SCHEMA_NAME(o.schema_id) AS referencing_schema,
+            o.name AS referencing_object,
+            o.type_desc
         FROM sys.sql_expression_dependencies d
         JOIN sys.objects o ON d.referencing_id = o.object_id
-        WHERE d.referenced_entity_name IN ({placeholders})
+        WHERE {where_clause}
     """
+
     cursor = conn.cursor()
-    cursor.execute(query, table_names)
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     cursor.close()
-    return [(row[0], row[1], row[2]) for row in rows]
+    return [(row[0] or 'dbo', row[1], row[2]) for row in rows]
 
 
-def recursive_dependency_discovery(
+def discover_layers_for_origin(
     conn: pyodbc.Connection,
-    starting_tables: Set[str],
+    origin_schema: str,
+    origin_name: str,
     max_depth: int,
-) -> List[Tuple[str, str, str, int, str, str]]:
-    """
-    Ritorna lista di tuple:
-        (object_name, object_type, depends_on, depth, origin_table, path)
-    """
-    results = []
-    visited = set()  # (name_lower, depth)
+) -> List[Dict[str, str]]:
+    """Ritorna lista di archi (parent -> child) con profondità."""
+    edges: List[Dict[str, str]] = []
     queue = deque()
-
-    for tbl in starting_tables:
-        queue.append((tbl, 0, tbl, tbl))  # (current, depth, depends_on, path)
+    queue.append((origin_schema, origin_name, 'TABLE', 0))
+    visited_nodes = set()
 
     while queue:
-        target, depth, origin, path = queue.popleft()
-        key = (target.lower(), depth)
-        if key in visited or depth > max_depth:
+        parent_schema, parent_name, parent_type, depth = queue.popleft()
+        if depth >= max_depth:
             continue
-        visited.add(key)
-
-        refs = fetch_referencing_objects(conn, [target])
-        for obj_name, obj_type, referenced in refs:
-            obj_name_clean = obj_name.lower()
-            results.append(
-                (obj_name, obj_type, referenced, depth, origin, path)
-            )
-            queue.append(
-                (
-                    obj_name_clean,
-                    depth + 1,
-                    referenced,
-                    f"{path} -> {obj_name_clean}",
-                )
-            )
-    return results
-
-
-def save_results(records: List[Tuple[str, str, str, int, str, str]], output_path: Path):
-    columns = ["ObjectName", "ObjectType", "DependsOn", "Depth", "OriginTable", "Path"]
-    df = pd.DataFrame(records, columns=columns)
-    df.sort_values(by=["OriginTable", "Depth", "ObjectName"], inplace=True)
-    df.to_excel(output_path, index=False)
-    print(f"✅ Dipendenze salvate in: {output_path}")
+        targets = [(parent_schema, parent_name)]
+        refs = fetch_referencing_objects(conn, targets)
+        for child_schema, child_name, child_type in refs:
+            child_key = (child_schema.lower(), child_name.lower(), depth + 1)
+            edge = {
+                'depth': depth + 1,
+                'parent_schema': parent_schema,
+                'parent_name': parent_name,
+                'parent_type': parent_type,
+                'child_schema': child_schema,
+                'child_name': child_name,
+                'child_type': child_type,
+            }
+            edges.append(edge)
+            if child_key in visited_nodes:
+                continue
+            visited_nodes.add(child_key)
+            queue.append((child_schema, child_name, child_type, depth + 1))
+    return edges
 
 
 def parse_args():
@@ -157,6 +167,55 @@ def parse_args():
     return parser.parse_args()
 
 
+def build_excel_layers(
+    contexts: List[Dict[str, str]],
+    edges_map: Dict[str, List[Dict[str, str]]],
+    max_depth: int,
+    output_path: Path,
+    server: str,
+    database: str,
+):
+    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        # Sheet L1 (per file)
+        l1_rows: List[Dict[str, str]] = []
+        for ctx in contexts:
+            edges = edges_map.get(ctx['origin_key'], [])
+            for edge in edges:
+                if edge['depth'] != 1:
+                    continue
+                l1_rows.append({
+                    'FileName': ctx['file_name'],
+                    'Server': ctx['server'],
+                    'Database': ctx['database'],
+                    'Tabella origine': ctx['origin_display'],
+                    'Object L1': f"{edge['child_schema']}.{edge['child_name']}",
+                    'Object L1 Type': edge['child_type'],
+                })
+        l1_df = pd.DataFrame(l1_rows, columns=[
+            'FileName', 'Server', 'Database', 'Tabella origine', 'Object L1', 'Object L1 Type'
+        ])
+        l1_df.to_excel(writer, sheet_name='L1', index=False)
+
+        # Sheets L2..Ln
+        for depth in range(2, max_depth + 1):
+            rows = []
+            for edges in edges_map.values():
+                for edge in edges:
+                    if edge['depth'] == depth:
+                        rows.append({
+                            'Server': server,
+                            'Database': database,
+                            f'Object L{depth-1}': f"{edge['parent_schema']}.{edge['parent_name']}",
+                            f'Object L{depth-1} Type': edge['parent_type'],
+                            f'Object L{depth}': f"{edge['child_schema']}.{edge['child_name']}",
+                            f'Object L{depth} Type': edge['child_type'],
+                        })
+            if rows:
+                pd.DataFrame(rows).to_excel(writer, sheet_name=f'L{depth}', index=False)
+
+    print(f"✅ Excel generato: {output_path}")
+
+
 def main():
     args = parse_args()
     excel_path = Path(args.excel)
@@ -164,23 +223,46 @@ def main():
         raise FileNotFoundError(f"Excel non trovato: {excel_path}")
 
     print("📥 Lettura Excel e normalizzazione tabelle...")
-    tables = extract_tables_from_excel(excel_path, args.sheet)
-    if not tables:
+    contexts = extract_contexts_from_excel(excel_path, args.sheet)
+    if not contexts:
         print("⚠️ Nessuna tabella trovata nel file.")
         return
-    print(f"   Tabelle iniziali: {len(tables)}")
+    print(f"   Righe contestuali: {len(contexts)}")
+
+    unique_origins: Dict[str, Tuple[str, str]] = {}
+    for ctx in contexts:
+        unique_origins.setdefault(ctx['origin_key'], (ctx['origin_schema'], ctx['origin_name']))
+
+    print(f"   Tabelle uniche da analizzare: {len(unique_origins)}")
 
     print("🔌 Connessione a SQL Server...")
     conn = get_connection(args.server, args.database, args.driver)
 
-    print("🔁 Analisi ricorsiva dipendenze...")
-    records = recursive_dependency_discovery(conn, tables, args.max_depth)
-    print(f"   Oggetti trovati: {len(records)}")
-
-    print("💾 Salvataggio risultati...")
-    save_results(records, Path(args.output))
+    edges_map: Dict[str, List[Dict[str, str]]] = {}
+    max_depth_found = 0
+    for key, (schema, name) in unique_origins.items():
+        edges = discover_layers_for_origin(conn, schema, name, args.max_depth)
+        if edges:
+            max_depth_found = max(max_depth_found, max(edge['depth'] for edge in edges))
+        edges_map[key] = edges
 
     conn.close()
+
+    if max_depth_found == 0:
+        print("⚠️ Nessuna dipendenza trovata.")
+    else:
+        print(f"   Profondità massima trovata: L{max_depth_found}")
+
+    print("💾 Salvataggio risultati...")
+    build_excel_layers(
+        contexts,
+        edges_map,
+        max_depth_found or args.max_depth,
+        Path(args.output),
+        args.server,
+        args.database,
+    )
+
     print("🏁 Completato!")
 
 
