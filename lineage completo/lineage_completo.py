@@ -11,7 +11,7 @@ a partire dalle tabelle elencate in un file Excel (colonne Schema.Table e Join e
 
 import argparse
 import re
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -87,7 +87,7 @@ def extract_contexts_from_excel(path: Path, sheet) -> List[OriginContext]:
         file_name = str(row.get("File_name", "") or "").strip()
         server = str(row.get("Server", "") or "").strip() or DEFAULT_SERVER
         database = str(row.get("Database", "") or "").strip() or DEFAULT_DATABASE
-        origin_key = f"{schema.lower()}::{name.lower()}"
+        origin_key = f"{server.lower()}::{database.lower()}::{schema.lower()}::{name.lower()}"
         contexts.append(
             OriginContext(
                 file_name=file_name,
@@ -266,24 +266,37 @@ def main():
         return
     print(f"   Righe contestuali: {len(contexts)}")
 
-    unique_origins: Dict[str, Tuple[str, str]] = {}
+    total_unique = len({ctx.origin_key for ctx in contexts})
+    print(f"   Tabelle uniche da analizzare: {total_unique}")
+
+    print("[2/4] Connessione e discovery per server/database...")
+    contexts_by_conn: Dict[Tuple[str, str], List[OriginContext]] = defaultdict(list)
     for ctx in contexts:
-        unique_origins.setdefault(ctx.origin_key, (ctx.origin_schema, ctx.origin_name))
-
-    print(f"   Tabelle uniche da analizzare: {len(unique_origins)}")
-
-    print("[2/4] Connessione a SQL Server...")
-    conn = get_connection(args.server, args.database, args.driver)
+        contexts_by_conn[(ctx.server, ctx.database)].append(ctx)
 
     edges_map: Dict[str, List[LineageEdge]] = {}
     max_depth_found = 0
-    for key, (schema, name) in unique_origins.items():
-        edges = discover_layers_for_origin(conn, schema, name, args.max_depth)
-        if edges:
-            max_depth_found = max(max_depth_found, max(edge.depth for edge in edges))
-        edges_map[key] = edges
 
-    conn.close()
+    for (server, database), ctx_group in contexts_by_conn.items():
+        print(f"   -> Connessione {server}/{database} (origini: {len(ctx_group)})")
+        try:
+            conn = get_connection(server, database, args.driver)
+        except pyodbc.Error as exc:  # pragma: no cover - logging only
+            print(f"[ERR] Impossibile connettersi a {server}/{database}: {exc}")
+            continue
+
+        unique_origins: Dict[str, Tuple[str, str]] = {}
+        for ctx in ctx_group:
+            unique_origins.setdefault(ctx.origin_key, (ctx.origin_schema, ctx.origin_name))
+        print(f"      Tabelle distinte su {server}/{database}: {len(unique_origins)}")
+
+        for key, (schema, name) in unique_origins.items():
+            edges = discover_layers_for_origin(conn, schema, name, args.max_depth)
+            if edges:
+                max_depth_found = max(max_depth_found, max(edge.depth for edge in edges))
+            edges_map[key] = edges
+
+        conn.close()
 
     if max_depth_found == 0:
         print("[WARN] Nessuna dipendenza trovata.")
