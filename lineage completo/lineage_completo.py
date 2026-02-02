@@ -10,7 +10,8 @@ a partire dalle tabelle elencate in un file Excel (colonne Schema.Table e Join e
 """
 
 import argparse
-from collections import defaultdict, deque
+from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -27,6 +28,28 @@ DEFAULT_DATABASE = "CORESQL7"
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
 DEFAULT_MAX_DEPTH = 5
 DEFAULT_OUTPUT = "lineage_layers.xlsx"
+
+
+@dataclass(frozen=True)
+class OriginContext:
+    file_name: str
+    server: str
+    database: str
+    origin_schema: str
+    origin_name: str
+    origin_display: str
+    origin_key: str
+
+
+@dataclass(frozen=True)
+class LineageEdge:
+    depth: int
+    parent_schema: str
+    parent_name: str
+    parent_type: str
+    child_schema: str
+    child_name: str
+    child_type: str
 
 
 def get_connection(server: str, database: str, driver: str) -> pyodbc.Connection:
@@ -51,30 +74,35 @@ def parse_schema_table(raw_value: str) -> Tuple[str, str, str]:
     return schema.strip(), name.strip(), f"{schema.strip()}.{name.strip()}"
 
 
-def extract_contexts_from_excel(path: Path, sheet) -> List[Dict[str, str]]:
+def extract_contexts_from_excel(path: Path, sheet) -> List[OriginContext]:
     df = pd.read_excel(path, sheet_name=sheet)
-    contexts: List[Dict[str, str]] = []
+    contexts: List[OriginContext] = []
 
-    def append_context(raw_table: str, row: pd.Series):
+    def append_context(raw_table: str, row: pd.Series) -> None:
         schema, name, display = parse_schema_table(raw_table)
         if not display:
             return
-        key = f"{schema.lower()}::{name.lower()}"
-        contexts.append({
-            "file_name": str(row.get("File_name", "")).strip(),
-            "server": str(row.get("Server", DEFAULT_SERVER)).strip() or DEFAULT_SERVER,
-            "database": str(row.get("Database", DEFAULT_DATABASE)).strip() or DEFAULT_DATABASE,
-            "origin_schema": schema,
-            "origin_name": name,
-            "origin_display": display,
-            "origin_key": key,
-        })
+        file_name = str(row.get("File_name", "") or "").strip()
+        server = str(row.get("Server", "") or "").strip() or DEFAULT_SERVER
+        database = str(row.get("Database", "") or "").strip() or DEFAULT_DATABASE
+        origin_key = f"{schema.lower()}::{name.lower()}"
+        contexts.append(
+            OriginContext(
+                file_name=file_name,
+                server=server,
+                database=database,
+                origin_schema=schema,
+                origin_name=name,
+                origin_display=display,
+                origin_key=origin_key,
+            )
+        )
 
     for _, row in df.iterrows():
         base_table = row.get("Schema.Table")
         append_context(base_table, row)
 
-        join_values = str(row.get("Join e SubQuery", ""))
+        join_values = str(row.get("Join e SubQuery", "") or "")
         if join_values and join_values.lower() != "nan":
             for part in join_values.split(";"):
                 append_context(part.strip(), row)
@@ -121,9 +149,9 @@ def discover_layers_for_origin(
     origin_schema: str,
     origin_name: str,
     max_depth: int,
-) -> List[Dict[str, str]]:
+) -> List[LineageEdge]:
     """Ritorna lista di archi (parent -> child) con profondità."""
-    edges: List[Dict[str, str]] = []
+    edges: List[LineageEdge] = []
     queue = deque()
     queue.append((origin_schema, origin_name, 'TABLE', 0))
     visited_nodes = set()
@@ -136,15 +164,15 @@ def discover_layers_for_origin(
         refs = fetch_referencing_objects(conn, targets)
         for child_schema, child_name, child_type in refs:
             child_key = (child_schema.lower(), child_name.lower(), depth + 1)
-            edge = {
-                'depth': depth + 1,
-                'parent_schema': parent_schema,
-                'parent_name': parent_name,
-                'parent_type': parent_type,
-                'child_schema': child_schema,
-                'child_name': child_name,
-                'child_type': child_type,
-            }
+            edge = LineageEdge(
+                depth=depth + 1,
+                parent_schema=parent_schema,
+                parent_name=parent_name,
+                parent_type=parent_type,
+                child_schema=child_schema,
+                child_name=child_name,
+                child_type=child_type,
+            )
             edges.append(edge)
             if child_key in visited_nodes:
                 continue
@@ -168,28 +196,26 @@ def parse_args():
 
 
 def build_excel_layers(
-    contexts: List[Dict[str, str]],
-    edges_map: Dict[str, List[Dict[str, str]]],
+    contexts: List[OriginContext],
+    edges_map: Dict[str, List[LineageEdge]],
     max_depth: int,
     output_path: Path,
-    server: str,
-    database: str,
 ):
     with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
         # Sheet L1 (per file)
         l1_rows: List[Dict[str, str]] = []
         for ctx in contexts:
-            edges = edges_map.get(ctx['origin_key'], [])
+            edges = edges_map.get(ctx.origin_key, [])
             for edge in edges:
-                if edge['depth'] != 1:
+                if edge.depth != 1:
                     continue
                 l1_rows.append({
-                    'FileName': ctx['file_name'],
-                    'Server': ctx['server'],
-                    'Database': ctx['database'],
-                    'Tabella origine': ctx['origin_display'],
-                    'Object L1': f"{edge['child_schema']}.{edge['child_name']}",
-                    'Object L1 Type': edge['child_type'],
+                    'FileName': ctx.file_name,
+                    'Server': ctx.server,
+                    'Database': ctx.database,
+                    'Tabella origine': ctx.origin_display,
+                    'Object L1': f"{edge.child_schema}.{edge.child_name}",
+                    'Object L1 Type': edge.child_type,
                 })
         l1_df = pd.DataFrame(l1_rows, columns=[
             'FileName', 'Server', 'Database', 'Tabella origine', 'Object L1', 'Object L1 Type'
@@ -201,19 +227,17 @@ def build_excel_layers(
             rows = []
             for edges in edges_map.values():
                 for edge in edges:
-                    if edge['depth'] == depth:
+                    if edge.depth == depth:
                         rows.append({
-                            'Server': server,
-                            'Database': database,
-                            f'Object L{depth-1}': f"{edge['parent_schema']}.{edge['parent_name']}",
-                            f'Object L{depth-1} Type': edge['parent_type'],
-                            f'Object L{depth}': f"{edge['child_schema']}.{edge['child_name']}",
-                            f'Object L{depth} Type': edge['child_type'],
+                            f'Object L{depth-1}': f"{edge.parent_schema}.{edge.parent_name}",
+                            f'Object L{depth-1} Type': edge.parent_type,
+                            f'Object L{depth}': f"{edge.child_schema}.{edge.child_name}",
+                            f'Object L{depth} Type': edge.child_type,
                         })
             if rows:
                 pd.DataFrame(rows).to_excel(writer, sheet_name=f'L{depth}', index=False)
 
-    print(f"✅ Excel generato: {output_path}")
+    print(f"Report Excel generato: {output_path}")
 
 
 def main():
@@ -222,48 +246,47 @@ def main():
     if not excel_path.exists():
         raise FileNotFoundError(f"Excel non trovato: {excel_path}")
 
-    print("📥 Lettura Excel e normalizzazione tabelle...")
+    print("[1/4] Lettura Excel e normalizzazione tabelle...")
     contexts = extract_contexts_from_excel(excel_path, args.sheet)
     if not contexts:
-        print("⚠️ Nessuna tabella trovata nel file.")
+        print("[WARN] Nessuna tabella trovata nel file.")
         return
     print(f"   Righe contestuali: {len(contexts)}")
 
     unique_origins: Dict[str, Tuple[str, str]] = {}
     for ctx in contexts:
-        unique_origins.setdefault(ctx['origin_key'], (ctx['origin_schema'], ctx['origin_name']))
+        unique_origins.setdefault(ctx.origin_key, (ctx.origin_schema, ctx.origin_name))
 
     print(f"   Tabelle uniche da analizzare: {len(unique_origins)}")
 
-    print("🔌 Connessione a SQL Server...")
+    print("[2/4] Connessione a SQL Server...")
     conn = get_connection(args.server, args.database, args.driver)
 
-    edges_map: Dict[str, List[Dict[str, str]]] = {}
+    edges_map: Dict[str, List[LineageEdge]] = {}
     max_depth_found = 0
     for key, (schema, name) in unique_origins.items():
         edges = discover_layers_for_origin(conn, schema, name, args.max_depth)
         if edges:
-            max_depth_found = max(max_depth_found, max(edge['depth'] for edge in edges))
+            max_depth_found = max(max_depth_found, max(edge.depth for edge in edges))
         edges_map[key] = edges
 
     conn.close()
 
     if max_depth_found == 0:
-        print("⚠️ Nessuna dipendenza trovata.")
+        print("[WARN] Nessuna dipendenza trovata.")
     else:
-        print(f"   Profondità massima trovata: L{max_depth_found}")
+        print(f"   Profondita massima trovata: L{max_depth_found}")
 
-    print("💾 Salvataggio risultati...")
+    print("[3/4] Salvataggio risultati...")
+    resolved_max_depth = max_depth_found if int(max_depth_found) > 0 else int(args.max_depth)
     build_excel_layers(
         contexts,
         edges_map,
-        max_depth_found or args.max_depth,
+        resolved_max_depth,
         Path(args.output),
-        args.server,
-        args.database,
     )
 
-    print("🏁 Completato!")
+    print("[4/4] Completato!")
 
 
 if __name__ == "__main__":
