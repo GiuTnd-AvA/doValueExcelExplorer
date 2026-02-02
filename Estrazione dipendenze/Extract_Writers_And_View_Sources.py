@@ -39,7 +39,8 @@ except Exception:
 # ------------------------ Configurazione base ------------------------
 INPUT_EXCEL_PATH: Optional[str] = None   # es: r"C:\\path\\lista_oggetti.xlsx"
 OUTPUT_EXCEL_PATH: Optional[str] = None  # es: r"C:\\path\\writers_e_view_sources.xlsx"
-
+ROWS_PER_FILE: int = 20  # scrivi un file ogni N righe analizzate
+DEFAULT_SERVER: str = "EPCP3"
 DEFAULT_SERVER: str = "EPCP3"
 DEFAULT_DB: str = "master"
 
@@ -60,8 +61,21 @@ QUERY_TIMEOUT: int = 60
 ODBC_ENCRYPT_OPTS: str = "Encrypt=no;TrustServerCertificate=yes;"
 
 
+def _derive_part_path(base_path: str, part_index: int) -> str:
+    """Restituisce un path con suffisso _partN prima dell'estensione.
+
+    Per part_index == 1, restituisce base_path per mantenere intatto il primo nome.
+    """
+    root, ext = os.path.splitext(base_path)
+    if not ext:
+        ext = ".xlsx"
+    if part_index == 1:
+        return root + ext
+    return f"{root}_part{part_index}{ext}"
+
+
 class WritersAndViewSourcesExtractor:
-    def __init__(self, input_excel: str, output_excel: str):
+    def __init__(self, input_excel: str, output_excel: str, rows_per_file: int = ROWS_PER_FILE):
         if pyodbc is None:
             raise RuntimeError("pyodbc non installato. Esegui: pip install pyodbc")
         if pd is None:
@@ -74,6 +88,7 @@ class WritersAndViewSourcesExtractor:
         self.output_excel = output_excel or os.path.join(
             os.path.dirname(input_excel) or os.getcwd(), "Writers_And_View_Sources.xlsx"
         )
+        self.rows_per_file = max(1, int(rows_per_file))
 
     # ------------------------ Lettura input ------------------------
     def _read_items(self) -> List[Tuple[str, str, str, str]]:
@@ -288,6 +303,7 @@ class WritersAndViewSourcesExtractor:
         print(f"[DEP] Totale oggetti da elaborare: {total}")
         writers_rows: List[List[str]] = []
         view_src_rows: List[List[str]] = []
+        part: int = 1
         conns: Dict[Tuple[str, str], Any] = {}
         try:
             for idx, (server, db, schema, name) in enumerate(items, start=1):
@@ -314,6 +330,14 @@ class WritersAndViewSourcesExtractor:
                 if code.upper() == "V" or obj_type.upper().startswith("VIEW"):
                     for sschema, sname, stype in self._find_view_sources(conns[key], schema, name):
                         view_src_rows.append([server, db, schema, name, sschema, sname, stype])
+                # Scrivi chunk ogni N righe analizzate
+                if idx % self.rows_per_file == 0:
+                    out_path = _derive_part_path(self.output_excel, part)
+                    self._write_chunk(out_path, writers_rows, view_src_rows)
+                    print(f"[DEP] Creato file: {out_path}")
+                    writers_rows.clear()
+                    view_src_rows.clear()
+                    part += 1
         finally:
             for c in conns.values():
                 try:
@@ -321,59 +345,56 @@ class WritersAndViewSourcesExtractor:
                 except Exception:
                     pass
 
-        # Scrittura output
-        out_dir = os.path.dirname(self.output_excel)
+        # Scrivi l'ultimo chunk (se presente)
+        if writers_rows or view_src_rows:
+            out_path = _derive_part_path(self.output_excel, part)
+            self._write_chunk(out_path, writers_rows, view_src_rows)
+            print(f"[DEP] Creato file: {out_path}")
+
+        return self.output_excel
+
+    def _write_chunk(self, out_path: str, writers_rows: List[List[str]], view_src_rows: List[List[str]]) -> None:
+        """Scrive un chunk in un file Excel con due fogli: Writers e ViewSources."""
+        out_dir = os.path.dirname(out_path)
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
 
-        # Writers sheet
         writers_df = pd.DataFrame(
             writers_rows,
             columns=["Server", "DB", "Schema", "Object", "ObjectType", "WriterName", "WriterType", "DMLType"],
         )
-        # View sources sheet
         view_src_df = pd.DataFrame(
             view_src_rows,
             columns=["Server", "DB", "Schema", "View", "SourceSchema", "SourceName", "SourceType"],
         )
 
-        # Prova a usare il writer helper se disponibile
-        try:
-            from Report.Excel_Writer import write_dataframe_split_across_files  # type: ignore
-        except Exception:
-            write_dataframe_split_across_files = None  # type: ignore
-
-        if write_dataframe_split_across_files is None:
-            # Fallback: un unico file con 2 fogli
-            with pd.ExcelWriter(self.output_excel, engine="openpyxl", mode="w") as w:
-                if not writers_df.empty:
-                    writers_df.to_excel(w, index=False, sheet_name="Writers")
-                else:
-                    pd.DataFrame(columns=["Server","DB","Schema","Object","ObjectType","WriterName","WriterType","DMLType"]).to_excel(w, index=False, sheet_name="Writers")
-                if not view_src_df.empty:
-                    view_src_df.to_excel(w, index=False, sheet_name="ViewSources")
-                else:
-                    pd.DataFrame(columns=["Server","DB","Schema","View","SourceSchema","SourceName","SourceType"]).to_excel(w, index=False, sheet_name="ViewSources")
-        else:
-            # Usa helper per garantire split se necessario; manteniamo stesso base path con suffissi per ciascun foglio
-            base, ext = os.path.splitext(self.output_excel)
-            writers_path = f"{base}_writers{ext or '.xlsx'}"
-            sources_path = f"{base}_viewsources{ext or '.xlsx'}"
-            write_dataframe_split_across_files(writers_df, writers_path, sheet_name="Writers")
-            write_dataframe_split_across_files(view_src_df, sources_path, sheet_name="ViewSources")
-
-        return self.output_excel
+        with pd.ExcelWriter(out_path, engine="openpyxl", mode="w") as w:
+            if not writers_df.empty:
+                writers_df.to_excel(w, index=False, sheet_name="Writers")
+            else:
+                pd.DataFrame(columns=["Server","DB","Schema","Object","ObjectType","WriterName","WriterType","DMLType"]).to_excel(w, index=False, sheet_name="Writers")
+            if not view_src_df.empty:
+                view_src_df.to_excel(w, index=False, sheet_name="ViewSources")
+            else:
+                pd.DataFrame(columns=["Server","DB","Schema","View","SourceSchema","SourceName","SourceType"]).to_excel(w, index=False, sheet_name="ViewSources")
 
 
 def main() -> None:
-    if not INPUT_EXCEL_PATH:
-        print("ERRORE: configura INPUT_EXCEL_PATH in testa al file.")
+    import argparse
+    parser = argparse.ArgumentParser(description="Estrai writers e sorgenti di viste da una lista di oggetti.")
+    parser.add_argument("--input", dest="input_excel", default=INPUT_EXCEL_PATH, help="Path Excel input (Server, DB, Schema, Object)")
+    parser.add_argument("--output", dest="output_excel", default=OUTPUT_EXCEL_PATH, help="Path Excel di output base")
+    parser.add_argument("--rows-per-file", dest="rows_per_file", type=int, default=ROWS_PER_FILE, help="Numero di righe analizzate per file generato")
+    args = parser.parse_args()
+
+    if not args.input_excel:
+        print("ERRORE: specifica --input oppure configura INPUT_EXCEL_PATH in testa al file.")
         return
-    out_path = OUTPUT_EXCEL_PATH or ""
+    out_path = args.output_excel or ""
     try:
-        extractor = WritersAndViewSourcesExtractor(INPUT_EXCEL_PATH, out_path)
+        extractor = WritersAndViewSourcesExtractor(args.input_excel, out_path, rows_per_file=args.rows_per_file)
         out = extractor.run()
-        print(f"Output scritto in base path: {out}")
+        print(f"Output scritto con base path: {out}")
     except Exception as e:
         print(f"ERRORE: {e}")
         import traceback
