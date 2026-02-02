@@ -60,7 +60,7 @@ def get_object_dependencies_from_database(database, object_name, schema_name='db
     Ritorna lista di tuple: (referenced_database, referenced_schema, referenced_entity, referenced_type)
     """
     try:
-        conn = pyodbc.connect(get_connection_string(database), timeout=30)
+        conn = pyodbc.connect(get_connection_string(database), timeout=10)
         cursor = conn.cursor()
         
         # Query per estrarre dipendenze
@@ -98,7 +98,7 @@ def get_reverse_dependencies_from_database(database, object_name, schema_name='d
     Ritorna lista di tuple: (referencing_database, referencing_schema, referencing_entity, referencing_type)
     """
     try:
-        conn = pyodbc.connect(get_connection_string(database), timeout=30)
+        conn = pyodbc.connect(get_connection_string(database), timeout=10)
         cursor = conn.cursor()
         
         # Query per reverse dependencies
@@ -205,7 +205,7 @@ def analyze_lineage_for_sheet(df_sheet, sheet_name):
     }
     
     for idx, row in df_sheet.iterrows():
-        if (idx + 1) % 50 == 0:
+        if (idx + 1) % 10 == 0:
             print(f"     {idx + 1}/{len(df_sheet)}...", flush=True)
         
         object_name = str(row.get('ObjectName', '')).strip() if pd.notna(row.get('ObjectName')) else ''
@@ -240,9 +240,9 @@ def analyze_lineage_for_sheet(df_sheet, sheet_name):
             results['is_leaf'].append(False)
             continue
         
-        # Build dependency tree
+        # Build dependency tree (max_depth=2 per performance)
         try:
-            tree = build_dependency_tree(database, object_name, schema, max_depth=5)
+            tree = build_dependency_tree(database, object_name, schema, max_depth=2)
             
             direct_deps = tree['direct_dependencies']
             all_deps = tree['all_dependencies']
@@ -265,8 +265,9 @@ def analyze_lineage_for_sheet(df_sheet, sheet_name):
             results['is_root'].append(len(direct_deps) == 0)
             results['is_leaf'].append(len(reverse_deps) == 0)
         except Exception as e:
+            print(f"     ⚠️  Error on {object_name}: {str(e)[:80]}", flush=True)
             results['direct_deps_count'].append(0)
-            results['direct_deps_list'].append(f"ERROR: {str(e)}")
+            results['direct_deps_list'].append(f"ERROR: {str(e)[:100]}")
             results['all_deps_count'].append(0)
             results['all_deps_list'].append('')
             results['max_depth'].append(0)
@@ -365,12 +366,11 @@ def main():
     print(f"✓ File validazione caricato: {INPUT_VALIDATION_EXCEL.name}")
     print(f"   Sheet disponibili: {', '.join([str(s) for s in excel_file.sheet_names])}")
     
-    # Seleziona sheet da analizzare
+    # Seleziona sheet da analizzare (solo prioritari - evita OK_FASE0 con 6939 oggetti)
     sheets_to_analyze = [
-        'OK_FASE0',
-        'CORE_FASE0_Priority',
-        'BLOCCO_FASE0',
-        'Found_on_EPCP3'
+        'CORE_FASE0_Priority',  # Oggetti prioritari (~500 oggetti)
+        'BLOCCO_FASE0',         # Oggetti con cross-server deps (~384 oggetti)
+        'L1_EPCP3'              # Solo L1 (tabelle base - ~2014 oggetti)
     ]
     
     sheets_dict = {}
