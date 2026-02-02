@@ -98,7 +98,10 @@ def parse_args() -> argparse.Namespace:
 def normalize_str(value: object) -> str:
     if value is None:
         return ""
-    return str(value).strip()
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "nat", "none"}:
+        return ""
+    return text
 
 
 def ensure_columns(df: pd.DataFrame, columns: Iterable[str]) -> None:
