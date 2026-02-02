@@ -1,0 +1,117 @@
+DECLARE
+    @SchemaName sysname = N'dbo',
+    @TableName  sysname = N'YourTable';
+
+;WITH Target AS (
+    SELECT t.[object_id]      AS target_object_id,
+           QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) AS target_fullname
+    FROM sys.tables AS t
+    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+    WHERE s.name = @SchemaName
+      AND t.name = @TableName
+),
+-- 1) Dipendenze basate su espressioni (SP, funzioni, trigger, ecc.) ESCLUDENDO le viste
+ExprDeps AS (
+    SELECT 
+        d.referencing_id                   AS object_id,
+        o.[type]                           AS object_type,
+        o.[type_desc]                      AS object_type_desc,
+        s2.name                            AS schema_name,
+        o.name                             AS object_name,
+        QUOTENAME(s2.name) + N'.' + QUOTENAME(o.name) AS full_name,
+        N'EXPRESSION'                      AS dependency_kind,
+        COALESCE(d.referenced_schema_name, s.name)  AS referenced_schema_name,
+        COALESCE(d.referenced_entity_name,  t.name)  AS referenced_entity_name,
+        d.referencing_class_desc,
+        d.is_ambiguous
+    FROM sys.sql_expression_dependencies AS d
+    JOIN sys.objects o          ON o.object_id = d.referencing_id
+    JOIN sys.schemas s2         ON s2.schema_id = o.schema_id
+    CROSS APPLY (
+        SELECT s.name, t.name
+        FROM sys.tables t
+        JOIN sys.schemas s ON s.schema_id = t.schema_id
+    ) AS base -- solo per fallback nei COALESCE
+    CROSS JOIN Target tg
+    WHERE d.referenced_id = tg.target_object_id      -- riferimento diretto alla tabella
+      AND o.is_ms_shipped = 0
+      AND o.[type] <> 'V'                            -- ESCLUDI VIEWS
+),
+-- 2) Foreign key IN ENTRATA che puntano alla tabella target
+IncomingFK AS (
+    SELECT 
+        fk.[object_id]                   AS object_id,
+        o.[type]                         AS object_type,
+        o.[type_desc]                    AS object_type_desc,
+        s2.name                          AS schema_name,
+        o.name                           AS object_name,
+        QUOTENAME(s2.name) + N'.' + QUOTENAME(o.name) AS full_name,
+        N'FOREIGN KEY (incoming)'        AS dependency_kind,
+        NULL AS referenced_schema_name,
+        NULL AS referenced_entity_name,
+        CAST(NULL AS nvarchar(60)) AS referencing_class_desc,
+        CAST(NULL AS bit)         AS is_ambiguous
+    FROM sys.foreign_keys AS fk
+    JOIN Target tg ON fk.referenced_object_id = tg.target_object_id
+    JOIN sys.objects o ON o.object_id = fk.object_id
+    JOIN sys.schemas s2 ON s2.schema_id = o.schema_id
+    WHERE o.is_ms_shipped = 0
+),
+-- 3) Trigger sulla tabella target (dipendono dalla tabella)
+TableTriggers AS (
+    SELECT 
+        tr.[object_id]                   AS object_id,
+        o.[type]                         AS object_type,
+        o.[type_desc]                    AS object_type_desc,
+        s2.name                          AS schema_name,
+        o.name                           AS object_name,
+        QUOTENAME(s2.name) + N'.' + QUOTENAME(o.name) AS full_name,
+        N'TRIGGER'                       AS dependency_kind,
+        NULL AS referenced_schema_name,
+        NULL AS referenced_entity_name,
+        CAST(NULL AS nvarchar(60)) AS referencing_class_desc,
+        CAST(NULL AS bit)         AS is_ambiguous
+    FROM sys.triggers AS tr
+    JOIN Target tg ON tr.parent_id = tg.target_object_id
+    JOIN sys.objects o ON o.object_id = tr.object_id
+    JOIN sys.schemas s2 ON s2.schema_id = o.schema_id
+    WHERE o.is_ms_shipped = 0
+),
+-- 4) Trigger a livello database che referenziano la tabella target via espressione
+DbLevelTriggerExpr AS (
+    SELECT 
+        d.referencing_id                 AS object_id,
+        o.[type]                         AS object_type,
+        o.[type_desc]                    AS object_type_desc,
+        s2.name                          AS schema_name,
+        o.name                           AS object_name,
+        QUOTENAME(s2.name) + N'.' + QUOTENAME(o.name) AS full_name,
+        N'DB LEVEL TRIGGER (expr)'       AS dependency_kind,
+        d.referenced_schema_name,
+        d.referenced_entity_name,
+        d.referencing_class_desc,
+        d.is_ambiguous
+    FROM sys.sql_expression_dependencies AS d
+    JOIN sys.objects o          ON o.object_id = d.referencing_id
+    JOIN sys.schemas s2         ON s2.schema_id = o.schema_id
+    JOIN Target tg              ON d.referenced_id = tg.target_object_id
+    WHERE o.is_ms_shipped = 0
+      AND o.[type] = 'TR'                    -- database-level trigger è comunque type TR
+)
+SELECT DISTINCT
+    dep.object_type_desc,
+    dep.full_name       AS referencing_object,
+    dep.dependency_kind,
+    dep.referencing_class_desc,
+    dep.is_ambiguous
+FROM (
+    SELECT * FROM ExprDeps
+    UNION ALL
+    SELECT * FROM IncomingFK
+    UNION ALL
+    SELECT * FROM TableTriggers
+    UNION ALL
+    SELECT * FROM DbLevelTriggerExpr
+) AS dep
+ORDER BY dep.object_type_desc, dep.referencing_object;
+``

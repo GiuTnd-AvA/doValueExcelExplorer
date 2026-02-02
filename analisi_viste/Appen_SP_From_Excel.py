@@ -194,9 +194,10 @@ class SPDDLAppender:
 
         with open(out_path, "w", encoding="utf-8", errors="ignore") as f:
             for idx, r in enumerate(rows, start=1):
-                header = f"-- {idx} {r['object_name']}"
-                if r.get("object_type"):
-                    header += f" ({r['object_type']})"
+                obj_name = r.get("object_name") or "UNKNOWN_OBJECT"
+                obj_type = (r.get("object_type") or "").strip()
+                suffix = f"\t{obj_type}.sql" if obj_type else ""
+                header = f"--{idx} {obj_name}{suffix}"
                 f.write(header + "\n")
                 if r["ddl"]:
                     f.write(str(r["ddl"]))

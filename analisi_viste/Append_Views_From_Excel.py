@@ -20,7 +20,7 @@ except Exception:
 # Config di default (puoi sovrascrivere da CLI se necessario)
 # Imposta qui il percorso del tuo file Excel se vuoi evitare di passarlo da CLI.
 # Esempio: DEFAULT_EXCEL_PATH = r"C:\percorso\al\file.xlsx"
-DEFAULT_EXCEL_PATH: Optional[str] = None
+DEFAULT_EXCEL_PATH: Optional[str] = rf''
 DEFAULT_SHEET_NAME: Optional[str] = None  # usa il primo foglio se None
 DEFAULT_OUTPUT_PATH: Optional[str] = None  # se None, crea output vicino all'Excel
 
