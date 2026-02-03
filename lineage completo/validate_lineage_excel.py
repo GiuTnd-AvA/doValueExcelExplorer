@@ -33,6 +33,15 @@ MANDATORY_COLUMNS = [
     "Schema",
     "Table",
 ]
+DEFAULT_INPUT = (
+    r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
+    r"\7. Reverse engineering\Lineage completo\Lineage_Report_Tabelle_Oggetti 5 (version 1).xlsx"
+)
+DEFAULT_REPORT = (
+    r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
+    r"\7. Reverse engineering\Lineage completo\Lineage_Report_Tabelle_Oggetti 5 (version 1)_anomalie.xlsx"
+)
+
 OBJECT_COLUMNS = [
     "oggetti_totali7.Database",
     "oggetti_totali7.Schema",
@@ -55,12 +64,12 @@ VALID_MOTIVO = {"", "Lettura", "Scrittura", "Non rilevato", "Sconosciuto"}
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Trova valori mancanti o incoerenti nel lineage Excel")
-    parser.add_argument("--excel", required=True, help="Percorso del file Excel da validare")
+    parser.add_argument("--excel", default=DEFAULT_INPUT, help="Percorso del file Excel da validare")
     parser.add_argument("--sheet", default=0, help="Indice o nome del foglio da analizzare")
     parser.add_argument(
         "--report",
-        default=None,
-        help="Percorso opzionale per esportare il report delle anomalie (CSV o XLSX)",
+        default=DEFAULT_REPORT,
+        help="Percorso dove esportare il report delle anomalie (CSV o XLSX)",
     )
     return parser.parse_args()
 
