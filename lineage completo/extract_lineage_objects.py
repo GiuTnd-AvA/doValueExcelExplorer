@@ -27,6 +27,10 @@ DEFAULT_OUTPUT = (
     r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
     r"\7. Reverse engineering\Lineage completo\input_test_lineage_objects.xlsx"
 )
+DEFAULT_DEPENDENCY_OUTPUT = (
+    r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
+    r"\7. Reverse engineering\Lineage completo\input_test_lineage_dependencies.xlsx"
+)
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
 OBJECT_TYPES_OF_INTEREST = {
     "VIEW",
@@ -55,6 +59,14 @@ OUTPUT_COLUMNS = [
     "ObjectDefinition",
     "DependencyTables",
     "DependencyObjects",
+]
+
+DEPENDENCY_COLUMNS = [
+    "ObjectSchema",
+    "ObjectName",
+    "ObjectType",
+    "DependencyType",
+    "DependencyName",
 ]
 
 
@@ -105,6 +117,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--excel", default=DEFAULT_INPUT, help="Percorso del file Excel di input")
     parser.add_argument("--sheet", default=0, help="Indice o nome del foglio da elaborare")
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Percorso del file Excel normalizzato")
+    parser.add_argument(
+        "--dependency-output",
+        dest="dependency_output",
+        default=DEFAULT_DEPENDENCY_OUTPUT,
+        help="Percorso del file Excel con la lista normalizzata delle dipendenze",
+    )
     parser.add_argument("--driver", default=DEFAULT_DRIVER, help="Driver ODBC da usare per pyodbc")
     return parser.parse_args()
 
@@ -214,6 +232,7 @@ def main() -> None:
     base_df.rename(columns=lambda c: str(c).strip(), inplace=True)
 
     records: List[Dict[str, str]] = []
+    dependency_rows: List[Dict[str, str]] = []
     cache: Dict[Tuple[str, str, str, str], List[LineageObject]] = {}
     pool = ConnectionPool(args.driver)
 
@@ -253,6 +272,26 @@ def main() -> None:
                         "DependencyObjects": " ; ".join(obj.dep_objects),
                     }
                 )
+                for dep in obj.dep_tables:
+                    dependency_rows.append(
+                        {
+                            "ObjectSchema": obj.object_schema,
+                            "ObjectName": obj.object_name,
+                            "ObjectType": obj.object_type,
+                            "DependencyType": "TABLE",
+                            "DependencyName": dep,
+                        }
+                    )
+                for dep in obj.dep_objects:
+                    dependency_rows.append(
+                        {
+                            "ObjectSchema": obj.object_schema,
+                            "ObjectName": obj.object_name,
+                            "ObjectType": obj.object_type,
+                            "DependencyType": "OBJECT",
+                            "DependencyName": dep,
+                        }
+                    )
     finally:
         pool.close()
 
@@ -265,6 +304,15 @@ def main() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_excel(output_path, index=False)
     print(f"Creato file normalizzato con {len(records)} righe: {output_path}")
+
+    if dependency_rows:
+        dep_df = pd.DataFrame(dependency_rows, columns=DEPENDENCY_COLUMNS)
+        dep_path = Path(args.dependency_output)
+        dep_path.parent.mkdir(parents=True, exist_ok=True)
+        dep_df.to_excel(dep_path, index=False)
+        print(f"Elenco dipendenze esportato con {len(dependency_rows)} righe: {dep_path}")
+    else:
+        print("Nessuna dipendenza da esportare")
 
 
 if __name__ == "__main__":
