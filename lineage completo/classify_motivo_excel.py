@@ -34,8 +34,8 @@ WRITE_TEMPLATES = [
     r"\bselect\s+[^;]*?into\s+{target}(?:\s|\()",
 ]
 READ_TEMPLATES = [
-    r"\bfrom\s+{target}(?:\s|\(|$)",
-    r"\bjoin\s+{target}(?:\s|\(|$)",
+    r"\bfrom\s+{target}(?:\s|\(|,|$)",
+    r"\bjoin\s+{target}(?:\s|\(|,|$)",
 ]
 
 
@@ -67,20 +67,27 @@ def split_origin(value: str) -> Tuple[str, str]:
 
 
 def build_table_variants(schema: str, table: str) -> List[str]:
-    table = normalize_identifier(table).lower()
-    schema = normalize_identifier(schema).lower()
-    variants = []
-    if not table:
-        return variants
-    variants.append(rf"(?<!\w){re.escape(table)}(?!\w)")
-    variants.append(rf"\[\s*{re.escape(table)}\s*\]")
-    if schema:
-        variants.append(
-            rf"(?<!\w){re.escape(schema)}\s*\.\s*{re.escape(table)}(?!\w)"
-        )
-        variants.append(
-            rf"\[\s*{re.escape(schema)}\s*\]\s*\.\s*\[\s*{re.escape(table)}\s*\]"
-        )
+    table_clean = normalize_identifier(table).lower()
+    schema_clean = normalize_identifier(schema).lower()
+    if not table_clean:
+        return []
+    table_word = re.escape(table_clean)
+    table_bracket = rf"\[\s*{table_word}\s*\]"
+    variants = [rf"(?<!\w){table_word}(?!\w)", table_bracket]
+
+    def add_schema_variants(schema_pattern: str) -> None:
+        variants.append(rf"(?<!\w){schema_pattern}\s*\.\s*{table_word}(?!\w)")
+        variants.append(rf"{schema_pattern}\s*\.\s*{table_bracket}")
+
+    if schema_clean:
+        schema_word = re.escape(schema_clean)
+        schema_bracket = rf"\[\s*{schema_word}\s*\]"
+        add_schema_variants(schema_word)
+        add_schema_variants(schema_bracket)
+    else:
+        wildcard = r"(?:\w+|\[[^\]]+\])"
+        add_schema_variants(wildcard)
+
     return variants
 
 
@@ -93,17 +100,31 @@ def matches_any(template_list: Iterable[str], variants: Iterable[str], sql: str)
     return False
 
 
+def matches_column_reference(variants: Iterable[str], sql: str) -> bool:
+    for variant in variants:
+        pattern = rf"{variant}\s*\."
+        if re.search(pattern, sql, flags=re.IGNORECASE):
+            return True
+    return False
+
+
+def normalize_sql(sql_definition: str) -> str:
+    if not sql_definition:
+        return ""
+    return re.sub(r"\s+", " ", sql_definition).lower()
+
+
 def classify(sql_definition: str, origin_table: str) -> str:
     schema, table = split_origin(origin_table)
     if not table:
         return "Non rilevato"
-    sql = (sql_definition or "").lower()
+    sql = normalize_sql(sql_definition)
     variants = build_table_variants(schema, table)
     if not variants:
         return "Non rilevato"
     if matches_any(WRITE_TEMPLATES, variants, sql):
         return "Scrittura"
-    if matches_any(READ_TEMPLATES, variants, sql):
+    if matches_any(READ_TEMPLATES, variants, sql) or matches_column_reference(variants, sql):
         return "Lettura"
     return "Non rilevato"
 
