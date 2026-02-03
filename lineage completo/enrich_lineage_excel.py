@@ -280,6 +280,7 @@ def enrich_row(
     row: pd.Series,
     conn_pool: ConnectionPool,
     extra_databases: Iterable[str],
+    cache: Dict[Tuple[str, str, str], Dict[str, str]],
 ) -> Dict[str, str]:
     schema = normalize_str(row.get("Schema")) or "dbo"
     table = normalize_str(row.get("Table"))
@@ -294,12 +295,21 @@ def enrich_row(
 
     candidate_dbs = determine_candidate_databases(row, extra_databases)
     for database in candidate_dbs:
+        cache_key = (database.lower(), schema.lower(), table.lower())
+        if cache_key in cache:
+            cached = cache[cache_key]
+            if cached:
+                return cached
+            continue
         conn = conn_pool.get(database)
         if conn is None:
             continue
         objects = fetch_referencing_objects(conn, schema, table)
         if objects:
-            return aggregate_metadata(database, schema, table, objects)
+            aggregated = aggregate_metadata(database, schema, table, objects)
+            cache[cache_key] = aggregated
+            return aggregated
+        cache[cache_key] = {}
     return {}
 
 
@@ -323,11 +333,13 @@ def main() -> None:
 
     conn_pool = ConnectionPool(args.server, args.driver)
     enriched_rows = 0
+    total_rows = len(df)
+    cache: Dict[Tuple[str, str, str], Dict[str, str]] = {}
 
     try:
         print("[2/4] Enriching rows ...")
         for idx, row in df.iterrows():
-            new_values = enrich_row(row, conn_pool, args.extra_db)
+            new_values = enrich_row(row, conn_pool, args.extra_db, cache)
             if not new_values:
                 continue
             for col, value in new_values.items():
@@ -336,6 +348,8 @@ def main() -> None:
                 if not normalize_str(df.at[idx, col]):
                     df.at[idx, col] = value
             enriched_rows += 1
+            if (idx + 1) % 100 == 0:
+                print(f"   Processed {idx + 1}/{total_rows} rows (enriched {enriched_rows})")
     finally:
         conn_pool.close()
 
