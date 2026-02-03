@@ -1,10 +1,11 @@
-"""Extract SQL objects feeding tables listed in a lineage Excel workbook.
+"""Normalize lineage extraction: one row per SQL object feeding each table.
 
-The input workbook only contains the direct report-to-table mapping
-(Path_File, File_name, Server, Database, Schema, Table). This script
-creates a new workbook that also includes the SQL objects (views,
-procedures, functions, triggers) referencing each table, mirroring the
-`oggetti_totali7.*` columns produced by the previous enrichment flow.
+Given an Excel workbook that lists report files and the tables they read,
+this script discovers every view/procedure/function/trigger that
+references each table and outputs a flattened dataset where every row
+represents a single object referencing a single table. This avoids the
+previous ";" concatenations and makes the lineage easier to analyse or
+load into BI tools.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import argparse
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import pyodbc
@@ -24,21 +25,9 @@ DEFAULT_INPUT = (
 )
 DEFAULT_OUTPUT = (
     r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
-    r"\7. Reverse engineering\Lineage completo\input_test_lineage_enriched.xlsx"
+    r"\7. Reverse engineering\Lineage completo\input_test_lineage_objects.xlsx"
 )
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
-TARGET_COLUMNS = [
-    "oggetti_totali7.Database",
-    "oggetti_totali7.Schema",
-    "oggetti_totali7.ObjectName",
-    "oggetti_totali7.SQLDefinition",
-    "oggetti_totali7.ObjectType",
-    "oggetti_totali7.Motivo",
-    "oggetti_totali7.Dipendenze_Tabella",
-    "oggetti_totali7.Count_Dipendenza_Tabella",
-    "oggetti_totali7.Dipendenze_Oggetto",
-    "oggetti_totali7.Count_Dipendenza_Oggetto",
-]
 OBJECT_TYPES_OF_INTEREST = {
     "VIEW",
     "SQL_STORED_PROCEDURE",
@@ -52,6 +41,21 @@ WRITE_PATTERNS = (
     r"\bupdate\s+{target}\b",
     r"\bdelete\s+from\s+{target}\b",
 )
+OUTPUT_COLUMNS = [
+    "Path_File",
+    "File_name",
+    "Server",
+    "Database",
+    "Schema",
+    "Table",
+    "ObjectSchema",
+    "ObjectName",
+    "ObjectType",
+    "Motivo",
+    "ObjectDefinition",
+    "DependencyTables",
+    "DependencyObjects",
+]
 
 
 @dataclass(frozen=True)
@@ -74,18 +78,18 @@ class ConnectionPool:
         database_clean = database.strip()
         if not server_clean or not database_clean:
             return None
-        key = (server_clean.lower(), database_clean.lower())
-        if key not in self._pool:
+        cache_key = (server_clean.lower(), database_clean.lower())
+        if cache_key not in self._pool:
             conn_str = (
                 f"DRIVER={{{self.driver}}};SERVER={server_clean};DATABASE={database_clean};"
                 "Trusted_Connection=yes;"
             )
             try:
-                self._pool[key] = pyodbc.connect(conn_str, timeout=15)
+                self._pool[cache_key] = pyodbc.connect(conn_str, timeout=15)
             except pyodbc.Error as exc:
                 print(f"[ERR] Connessione fallita {server_clean}/{database_clean}: {exc}")
                 return None
-        return self._pool[key]
+        return self._pool[cache_key]
 
     def close(self) -> None:
         for conn in self._pool.values():
@@ -97,10 +101,10 @@ class ConnectionPool:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Estrai oggetti derivati per il file input_test_lineage")
+    parser = argparse.ArgumentParser(description="Estrai oggetti derivati in formato normalizzato")
     parser.add_argument("--excel", default=DEFAULT_INPUT, help="Percorso del file Excel di input")
     parser.add_argument("--sheet", default=0, help="Indice o nome del foglio da elaborare")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Percorso del file Excel arricchito")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Percorso del file Excel normalizzato")
     parser.add_argument("--driver", default=DEFAULT_DRIVER, help="Driver ODBC da usare per pyodbc")
     return parser.parse_args()
 
@@ -114,12 +118,6 @@ def normalize(value: object) -> str:
     return text
 
 
-def ensure_columns(df: pd.DataFrame, columns: Iterable[str]) -> None:
-    for col in columns:
-        if col not in df.columns:
-            df[col] = ""
-
-
 def classify_motivo(sql_definition: Optional[str], target_schema: str, target_table: str) -> str:
     if not sql_definition:
         return "Sconosciuto"
@@ -131,9 +129,9 @@ def classify_motivo(sql_definition: Optional[str], target_schema: str, target_ta
         f"[{(target_schema or 'dbo').lower()}].[{target_table.lower()}]",
         table,
     }
-    for raw_pattern in WRITE_PATTERNS:
+    for template in WRITE_PATTERNS:
         for candidate in candidates:
-            if re.search(raw_pattern.format(target=candidate), lowered):
+            if re.search(template.format(target=candidate), lowered):
                 return "Scrittura"
     return "Lettura"
 
@@ -206,56 +204,21 @@ def fetch_referencing_objects(
     return results
 
 
-def aggregate_metadata(
-    database: str,
-    target_schema: str,
-    target_table: str,
-    objects: List[LineageObject],
-) -> Dict[str, str]:
-    if not objects:
-        return {}
-    db_values = {database}
-    schemas = {obj.object_schema for obj in objects}
-    names = [f"{obj.object_schema}.{obj.object_name}" for obj in objects]
-    types = {obj.object_type for obj in objects}
-    definitions = [obj.definition.strip() for obj in objects if obj.definition]
-    motives = {
-        classify_motivo(obj.definition, target_schema, target_table)
-        for obj in objects
-    }
-    dep_tables = sorted({dep for obj in objects for dep in obj.dep_tables})
-    dep_objects = sorted({dep for obj in objects for dep in obj.dep_objects})
-
-    return {
-        "oggetti_totali7.Database": " ; ".join(sorted(db_values)),
-        "oggetti_totali7.Schema": " ; ".join(sorted(schemas)),
-        "oggetti_totali7.ObjectName": " ; ".join(names),
-        "oggetti_totali7.SQLDefinition": "\n\n".join(definitions),
-        "oggetti_totali7.ObjectType": " ; ".join(sorted(types)),
-        "oggetti_totali7.Motivo": " ; ".join(sorted(motives)),
-        "oggetti_totali7.Dipendenze_Tabella": " ; ".join(dep_tables),
-        "oggetti_totali7.Count_Dipendenza_Tabella": str(len(dep_tables)),
-        "oggetti_totali7.Dipendenze_Oggetto": " ; ".join(dep_objects),
-        "oggetti_totali7.Count_Dipendenza_Oggetto": str(len(dep_objects)),
-    }
-
-
 def main() -> None:
     args = parse_args()
     excel_path = Path(args.excel)
     if not excel_path.exists():
         raise FileNotFoundError(f"File non trovato: {excel_path}")
 
-    df = pd.read_excel(excel_path, sheet_name=args.sheet)
-    df.rename(columns=lambda c: str(c).strip(), inplace=True)
-    ensure_columns(df, TARGET_COLUMNS)
+    base_df = pd.read_excel(excel_path, sheet_name=args.sheet)
+    base_df.rename(columns=lambda c: str(c).strip(), inplace=True)
 
+    records: List[Dict[str, str]] = []
+    cache: Dict[Tuple[str, str, str, str], List[LineageObject]] = {}
     pool = ConnectionPool(args.driver)
-    cache: Dict[Tuple[str, str, str, str], Dict[str, str]] = {}
-    enriched = 0
 
     try:
-        for idx, row in df.iterrows():
+        for _, row in base_df.iterrows():
             server = normalize(row.get("Server"))
             database = normalize(row.get("Database"))
             schema = normalize(row.get("Schema")) or "dbo"
@@ -263,31 +226,45 @@ def main() -> None:
             if not (server and database and table):
                 continue
             cache_key = (server.lower(), database.lower(), schema.lower(), table.lower())
-            if cache_key in cache:
-                metadata = cache[cache_key]
-            else:
+            if cache_key not in cache:
                 conn = pool.get(server, database)
                 if conn is None:
-                    cache[cache_key] = {}
-                    continue
-                objects = fetch_referencing_objects(conn, schema, table)
-                metadata = aggregate_metadata(database, schema, table, objects)
-                cache[cache_key] = metadata
-            if not metadata:
+                    cache[cache_key] = []
+                else:
+                    cache[cache_key] = fetch_referencing_objects(conn, schema, table)
+            objects = cache[cache_key]
+            if not objects:
                 continue
-            for col, value in metadata.items():
-                df.at[idx, col] = value
-            enriched += 1
-            if enriched % 100 == 0:
-                print(f"Elaborate {enriched} righe con oggetti trovati")
+            for obj in objects:
+                records.append(
+                    {
+                        "Path_File": normalize(row.get("Path_File")),
+                        "File_name": normalize(row.get("File_name")),
+                        "Server": server,
+                        "Database": database,
+                        "Schema": schema,
+                        "Table": table,
+                        "ObjectSchema": obj.object_schema,
+                        "ObjectName": obj.object_name,
+                        "ObjectType": obj.object_type,
+                        "Motivo": classify_motivo(obj.definition, schema, table),
+                        "ObjectDefinition": obj.definition.strip(),
+                        "DependencyTables": " ; ".join(obj.dep_tables),
+                        "DependencyObjects": " ; ".join(obj.dep_objects),
+                    }
+                )
     finally:
         pool.close()
 
-    print(f"Totale righe con oggetti derivati: {enriched}")
+    if not records:
+        print("Nessun oggetto derivato trovato; nessun file creato")
+        return
+
+    output_df = pd.DataFrame(records, columns=OUTPUT_COLUMNS)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_excel(output_path, index=False)
-    print(f"File salvato in {output_path}")
+    output_df.to_excel(output_path, index=False)
+    print(f"Creato file normalizzato con {len(records)} righe: {output_path}")
 
 
 if __name__ == "__main__":
