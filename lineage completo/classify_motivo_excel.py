@@ -36,6 +36,7 @@ WRITE_TEMPLATES = [
 READ_TEMPLATES = [
     r"\bfrom\s+{target}(?:\s|\(|,|$)",
     r"\bjoin\s+{target}(?:\s|\(|,|$)",
+    r"\bfrom\b[^;]*?,\s*{target}(?:\s|\(|,|$)",
 ]
 
 
@@ -55,40 +56,56 @@ def normalize_identifier(value: str) -> str:
     return re.sub(r"[`\[\]\"]", "", value).strip()
 
 
-def split_origin(value: str) -> Tuple[str, str]:
+def split_origin(value: str) -> Tuple[str, str, str]:
     text = normalize_identifier(value)
     if not text:
-        return "", ""
-    if "." in text:
-        schema, table = text.split(".", 1)
-    else:
-        schema, table = "", text
-    return schema.strip(), table.strip()
+        return "", "", ""
+    parts = [part.strip() for part in text.split(".") if part.strip()]
+    if not parts:
+        return "", "", ""
+    if len(parts) == 1:
+        return "", "", parts[0]
+    if len(parts) == 2:
+        return "", parts[0], parts[1]
+    return parts[0], parts[1], parts[2]
 
 
-def build_table_variants(schema: str, table: str) -> List[str]:
-    table_clean = normalize_identifier(table).lower()
-    schema_clean = normalize_identifier(schema).lower()
-    if not table_clean:
+def _token_variants(token: str) -> List[str]:
+    clean = normalize_identifier(token).lower()
+    if not clean:
         return []
-    table_word = re.escape(table_clean)
-    table_bracket = rf"\[\s*{table_word}\s*\]"
-    variants = [rf"(?<!\w){table_word}(?!\w)", table_bracket]
+    escaped = re.escape(clean)
+    return [escaped, rf"\[\s*{escaped}\s*\]"]
 
-    def add_schema_variants(schema_pattern: str) -> None:
-        variants.append(rf"(?<!\w){schema_pattern}\s*\.\s*{table_word}(?!\w)")
-        variants.append(rf"{schema_pattern}\s*\.\s*{table_bracket}")
 
-    if schema_clean:
-        schema_word = re.escape(schema_clean)
-        schema_bracket = rf"\[\s*{schema_word}\s*\]"
-        add_schema_variants(schema_word)
-        add_schema_variants(schema_bracket)
-    else:
-        wildcard = r"(?:\w+|\[[^\]]+\])"
-        add_schema_variants(wildcard)
+def _wildcard_token() -> List[str]:
+    return [r"(?:\w+|\[[^\]]+\])"]
 
-    return variants
+
+def build_table_variants(database: str, schema: str, table: str) -> Tuple[List[str], List[str]]:
+    table_clean = normalize_identifier(table).lower()
+    if not table_clean:
+        return [], []
+
+    table_tokens = _token_variants(table_clean)
+    bare_variants = [rf"(?<!\w){tok}(?!\w)" for tok in table_tokens]
+
+    schema_tokens = _token_variants(schema) if schema else _wildcard_token()
+    database_tokens = _token_variants(database) if database else _wildcard_token()
+
+    qualified_variants: List[str] = []
+    for schema_token in schema_tokens:
+        for table_token in table_tokens:
+            qualified_variants.append(rf"{schema_token}\s*\.\s*{table_token}")
+
+    for database_token in database_tokens:
+        for schema_token in schema_tokens:
+            for table_token in table_tokens:
+                qualified_variants.append(
+                    rf"{database_token}\s*\.\s*{schema_token}\s*\.\s*{table_token}"
+                )
+
+    return bare_variants + qualified_variants, table_tokens
 
 
 def matches_any(template_list: Iterable[str], variants: Iterable[str], sql: str) -> bool:
@@ -100,9 +117,9 @@ def matches_any(template_list: Iterable[str], variants: Iterable[str], sql: str)
     return False
 
 
-def matches_column_reference(variants: Iterable[str], sql: str) -> bool:
-    for variant in variants:
-        pattern = rf"{variant}\s*\."
+def matches_column_reference(column_tokens: Iterable[str], sql: str) -> bool:
+    for token in column_tokens:
+        pattern = rf"{token}\s*\."
         if re.search(pattern, sql, flags=re.IGNORECASE):
             return True
     return False
@@ -115,16 +132,16 @@ def normalize_sql(sql_definition: str) -> str:
 
 
 def classify(sql_definition: str, origin_table: str) -> str:
-    schema, table = split_origin(origin_table)
+    database, schema, table = split_origin(origin_table)
     if not table:
         return "Non rilevato"
     sql = normalize_sql(sql_definition)
-    variants = build_table_variants(schema, table)
+    variants, column_tokens = build_table_variants(database, schema, table)
     if not variants:
         return "Non rilevato"
     if matches_any(WRITE_TEMPLATES, variants, sql):
         return "Scrittura"
-    if matches_any(READ_TEMPLATES, variants, sql) or matches_column_reference(variants, sql):
+    if matches_any(READ_TEMPLATES, variants, sql) or matches_column_reference(column_tokens, sql):
         return "Lettura"
     return "Non rilevato"
 
