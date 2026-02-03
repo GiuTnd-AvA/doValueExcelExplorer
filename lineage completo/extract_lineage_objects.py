@@ -1,20 +1,22 @@
-"""Normalize lineage extraction: one row per SQL object feeding each table.
+"""Recursive lineage extraction with normalized outputs for graph analytics.
 
-Given an Excel workbook that lists report files and the tables they read,
-this script discovers every view/procedure/function/trigger that
-references each table and outputs a flattened dataset where every row
-represents a single object referencing a single table. This avoids the
-previous ";" concatenations and makes the lineage easier to analyse or
-load into BI tools.
+Given the Excel workbook that lists each report file and the tables it reads,
+this script finds every database object (view/proc/function/trigger) referencing
+those tables, recursively expands downstream dependencies, and writes three
+flattened Excel datasets:
+1. Report-to-object links (one row per report/table/object tuple)
+2. Object-to-dependency edges (object -> table/object references)
+3. Catalog of every SQL object that appears while traversing the lineage graph
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Deque, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 import pyodbc
@@ -23,15 +25,20 @@ DEFAULT_INPUT = (
     r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
     r"\7. Reverse engineering\Lineage completo\input_test_lineage.xlsx"
 )
-DEFAULT_OUTPUT = (
+DEFAULT_REPORT_OUTPUT = (
     r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
-    r"\7. Reverse engineering\Lineage completo\input_test_lineage_objects.xlsx"
+    r"\7. Reverse engineering\Lineage completo\report_lineage_links.xlsx"
 )
 DEFAULT_DEPENDENCY_OUTPUT = (
     r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
-    r"\7. Reverse engineering\Lineage completo\input_test_lineage_dependencies.xlsx"
+    r"\7. Reverse engineering\Lineage completo\object_dependency_edges.xlsx"
+)
+DEFAULT_OBJECT_OUTPUT = (
+    r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
+    r"\7. Reverse engineering\Lineage completo\lineage_object_catalog.xlsx"
 )
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
+
 OBJECT_TYPES_OF_INTEREST = {
     "VIEW",
     "SQL_STORED_PROCEDURE",
@@ -40,18 +47,22 @@ OBJECT_TYPES_OF_INTEREST = {
     "SQL_INLINE_TABLE_VALUED_FUNCTION",
     "SQL_TRIGGER",
 }
+
 WRITE_PATTERNS = (
     r"\binsert\s+into\s+{target}\b",
     r"\bupdate\s+{target}\b",
     r"\bdelete\s+from\s+{target}\b",
 )
-OUTPUT_COLUMNS = [
+
+REPORT_COLUMNS = [
     "Path_File",
     "File_name",
     "Server",
     "Database",
     "Schema",
     "Table",
+    "ObjectServer",
+    "ObjectDatabase",
     "ObjectSchema",
     "ObjectName",
     "ObjectType",
@@ -62,22 +73,45 @@ OUTPUT_COLUMNS = [
 ]
 
 DEPENDENCY_COLUMNS = [
+    "ObjectServer",
+    "ObjectDatabase",
     "ObjectSchema",
     "ObjectName",
     "ObjectType",
     "DependencyType",
+    "DependencySchema",
     "DependencyName",
 ]
 
+OBJECT_CATALOG_COLUMNS = [
+    "Server",
+    "Database",
+    "ObjectSchema",
+    "ObjectName",
+    "ObjectType",
+    "ObjectDefinition",
+]
 
-@dataclass(frozen=True)
+
+@dataclass
 class LineageObject:
+    server: str
+    database: str
     object_schema: str
     object_name: str
     object_type: str
     definition: str
-    dep_tables: Tuple[str, ...]
-    dep_objects: Tuple[str, ...]
+    dep_tables: Tuple[Tuple[str, str], ...]
+    dep_objects: Tuple[Tuple[str, str, str], ...]
+
+
+def normalize(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if text.lower() in {"nan", "nat", "none"}:
+        return ""
+    return text
 
 
 class ConnectionPool:
@@ -90,18 +124,18 @@ class ConnectionPool:
         database_clean = database.strip()
         if not server_clean or not database_clean:
             return None
-        cache_key = (server_clean.lower(), database_clean.lower())
-        if cache_key not in self._pool:
+        key = (server_clean.lower(), database_clean.lower())
+        if key not in self._pool:
             conn_str = (
                 f"DRIVER={{{self.driver}}};SERVER={server_clean};DATABASE={database_clean};"
                 "Trusted_Connection=yes;"
             )
             try:
-                self._pool[cache_key] = pyodbc.connect(conn_str, timeout=15)
+                self._pool[key] = pyodbc.connect(conn_str, timeout=15)
             except pyodbc.Error as exc:
                 print(f"[ERR] Connessione fallita {server_clean}/{database_clean}: {exc}")
                 return None
-        return self._pool[cache_key]
+        return self._pool[key]
 
     def close(self) -> None:
         for conn in self._pool.values():
@@ -112,28 +146,19 @@ class ConnectionPool:
         self._pool.clear()
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Estrai oggetti derivati in formato normalizzato")
-    parser.add_argument("--excel", default=DEFAULT_INPUT, help="Percorso del file Excel di input")
-    parser.add_argument("--sheet", default=0, help="Indice o nome del foglio da elaborare")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Percorso del file Excel normalizzato")
-    parser.add_argument(
-        "--dependency-output",
-        dest="dependency_output",
-        default=DEFAULT_DEPENDENCY_OUTPUT,
-        help="Percorso del file Excel con la lista normalizzata delle dipendenze",
-    )
-    parser.add_argument("--driver", default=DEFAULT_DRIVER, help="Driver ODBC da usare per pyodbc")
-    return parser.parse_args()
-
-
-def normalize(value: object) -> str:
-    if value is None:
-        return ""
-    text = str(value).strip()
-    if text.lower() in {"nan", "nat", "none"}:
-        return ""
-    return text
+def list_server_databases(server: str, driver: str) -> List[str]:
+    conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE=master;Trusted_Connection=yes;"
+    try:
+        with pyodbc.connect(conn_str, timeout=10) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sys.databases "
+                "WHERE state_desc='ONLINE' AND database_id > 4"
+            )
+            return [row[0] for row in cursor.fetchall()]
+    except pyodbc.Error as exc:
+        print(f"[WARN] Impossibile leggere i database di {server}: {exc}")
+        return []
 
 
 def classify_motivo(sql_definition: Optional[str], target_schema: str, target_table: str) -> str:
@@ -154,7 +179,10 @@ def classify_motivo(sql_definition: Optional[str], target_schema: str, target_ta
     return "Lettura"
 
 
-def fetch_object_dependencies(conn: pyodbc.Connection, object_id: int) -> Tuple[List[str], List[str]]:
+def fetch_object_dependencies(
+    conn: pyodbc.Connection,
+    object_id: int,
+) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str, str]]]:
     query = (
         "SELECT"
         "    ISNULL(d.referenced_schema_name, '') AS ref_schema,"
@@ -166,23 +194,47 @@ def fetch_object_dependencies(conn: pyodbc.Connection, object_id: int) -> Tuple[
     )
     cursor = conn.cursor()
     cursor.execute(query, object_id)
-    tables: List[str] = []
-    objects: List[str] = []
+    tables: List[Tuple[str, str]] = []
+    objects: List[Tuple[str, str, str]] = []
     for ref_schema, ref_name, ref_type in cursor.fetchall():
         if not ref_name:
             continue
-        schema_part = ref_schema or "dbo"
-        qualified = f"{schema_part}.{ref_name}"
-        if ref_type in {"USER_TABLE", "VIEW"}:
-            tables.append(qualified)
+        schema_part = (ref_schema or "dbo").strip() or "dbo"
+        if ref_type == "USER_TABLE":
+            tables.append((schema_part, ref_name))
         else:
-            objects.append(qualified)
+            objects.append((schema_part, ref_name, ref_type or "UNKNOWN"))
     cursor.close()
-    return sorted(set(tables)), sorted(set(objects))
+    return tables, objects
+
+
+def build_lineage_object(
+    server: str,
+    database: str,
+    object_schema: str,
+    object_name: str,
+    object_type: str,
+    definition: Optional[str],
+    conn: pyodbc.Connection,
+    object_id: int,
+) -> LineageObject:
+    dep_tables, dep_objects = fetch_object_dependencies(conn, object_id)
+    return LineageObject(
+        server=server,
+        database=database,
+        object_schema=object_schema or "dbo",
+        object_name=object_name,
+        object_type=object_type,
+        definition=(definition or ""),
+        dep_tables=tuple(dep_tables),
+        dep_objects=tuple(dep_objects),
+    )
 
 
 def fetch_referencing_objects(
     conn: pyodbc.Connection,
+    server: str,
+    database: str,
     target_schema: str,
     target_table: str,
 ) -> List[LineageObject]:
@@ -204,22 +256,144 @@ def fetch_referencing_objects(
     )
     cursor = conn.cursor()
     cursor.execute(query, target_schema or "dbo", target_table)
-    rows = cursor.fetchall()
     results: List[LineageObject] = []
-    for object_id, object_schema, object_name, object_type, definition in rows:
-        dep_tables, dep_objects = fetch_object_dependencies(conn, object_id)
+    for object_id, object_schema, object_name, object_type, definition in cursor.fetchall():
         results.append(
-            LineageObject(
-                object_schema=(object_schema or "dbo"),
-                object_name=object_name,
-                object_type=object_type,
-                definition=(definition or ""),
-                dep_tables=tuple(dep_tables),
-                dep_objects=tuple(dep_objects),
+            build_lineage_object(
+                server,
+                database,
+                object_schema,
+                object_name,
+                object_type,
+                definition,
+                conn,
+                object_id,
             )
         )
     cursor.close()
     return results
+
+
+def fetch_object_by_name(
+    conn: pyodbc.Connection,
+    server: str,
+    database: str,
+    schema: str,
+    name: str,
+) -> Optional[LineageObject]:
+    lookup = (
+        "SELECT o.object_id, o.type_desc, OBJECT_DEFINITION(o.object_id)"
+        " FROM sys.objects o"
+        " WHERE o.is_ms_shipped = 0"
+        "   AND SCHEMA_NAME(o.schema_id) = ?"
+        "   AND o.name = ?"
+        "   AND o.type_desc IN ("
+        + ",".join(f"'{t}'" for t in OBJECT_TYPES_OF_INTEREST)
+        + ")"
+    )
+    cursor = conn.cursor()
+    cursor.execute(lookup, schema or "dbo", name)
+    row = cursor.fetchone()
+    cursor.close()
+    if not row:
+        return None
+    object_id, object_type, definition = row
+    return build_lineage_object(
+        server,
+        database,
+        schema or "dbo",
+        name,
+        object_type,
+        definition,
+        conn,
+        object_id,
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Lineage ricorsivo normalizzato per costruire un grafo"
+    )
+    parser.add_argument("--excel", default=DEFAULT_INPUT, help="Percorso del file Excel di input")
+    parser.add_argument("--sheet", default=0, help="Indice o nome del foglio da analizzare")
+    parser.add_argument(
+        "--report-output",
+        default=DEFAULT_REPORT_OUTPUT,
+        help="File Excel dei collegamenti Report→Oggetto",
+    )
+    parser.add_argument(
+        "--dependency-output",
+        default=DEFAULT_DEPENDENCY_OUTPUT,
+        help="File Excel delle dipendenze Oggetto→(Tabella/Oggetto)",
+    )
+    parser.add_argument(
+        "--object-output",
+        default=DEFAULT_OBJECT_OUTPUT,
+        help="File Excel con il catalogo degli oggetti rilevati",
+    )
+    parser.add_argument("--driver", default=DEFAULT_DRIVER, help="Driver ODBC da utilizzare")
+    parser.add_argument(
+        "--fallback-db",
+        action="append",
+        default=[],
+        help="Database aggiuntivi da provare quando quello indicato nella riga non restituisce risultati",
+    )
+    parser.add_argument(
+        "--scan-all-databases",
+        action="store_true",
+        help="Se impostato prova tutti i database online del server finche' non trova corrispondenze",
+    )
+    parser.add_argument(
+        "--override-server",
+        default="",
+        help="Forza l'uso di un singolo server per tutte le righe (es. EPCP3)",
+    )
+    return parser.parse_args()
+
+
+def make_object_key(server: str, database: str, schema: str, name: str) -> Tuple[str, str, str, str]:
+    return (server.lower(), database.lower(), schema.lower(), name.lower())
+
+
+def build_candidate_databases(
+    server: str,
+    primary: str,
+    fallback: Iterable[str],
+    scan_all: bool,
+    driver: str,
+    server_db_cache: Dict[str, List[str]],
+) -> List[str]:
+    ordered: List[str] = []
+    seen: set[str] = set()
+
+    def add_value(value: str) -> None:
+        if not value:
+            return
+        key = value.lower()
+        if key not in seen:
+            ordered.append(value)
+            seen.add(key)
+
+    add_value(primary)
+    for db in fallback:
+        add_value(db.strip())
+
+    if scan_all:
+        cache_key = server.lower()
+        if cache_key not in server_db_cache:
+            server_db_cache[cache_key] = list_server_databases(server, driver)
+        for db in server_db_cache[cache_key]:
+            add_value(db)
+
+    return ordered
+
+
+def format_table_list(items: Iterable[Tuple[str, str]]) -> str:
+    return " ; ".join(f"{schema}.{name}" for schema, name in items)
+
+
+def format_object_list(items: Iterable[Tuple[str, str, str]]) -> str:
+    return " ; ".join(f"{schema}.{name}" for schema, name, _ in items)
 
 
 def main() -> None:
@@ -228,91 +402,170 @@ def main() -> None:
     if not excel_path.exists():
         raise FileNotFoundError(f"File non trovato: {excel_path}")
 
-    base_df = pd.read_excel(excel_path, sheet_name=args.sheet)
-    base_df.rename(columns=lambda c: str(c).strip(), inplace=True)
+    df = pd.read_excel(excel_path, sheet_name=args.sheet)
+    df.rename(columns=lambda c: str(c).strip(), inplace=True)
 
-    records: List[Dict[str, str]] = []
-    dependency_rows: List[Dict[str, str]] = []
-    cache: Dict[Tuple[str, str, str, str], List[LineageObject]] = {}
     pool = ConnectionPool(args.driver)
+    object_catalog: Dict[Tuple[str, str, str, str], LineageObject] = {}
+    pending: Deque[LineageObject] = deque()  # Queue drives breadth-first recursion
+    report_records: List[Dict[str, str]] = []
+    server_db_cache: Dict[str, List[str]] = {}
+
+    def register_object(obj: LineageObject) -> LineageObject:
+        key = make_object_key(obj.server, obj.database, obj.object_schema, obj.object_name)
+        existing = object_catalog.get(key)
+        if existing is None:
+            object_catalog[key] = obj
+            pending.append(obj)
+            return obj
+        return existing
+
+    fallback_dbs = [normalize(db) for db in args.fallback_db if normalize(db)]
 
     try:
-        for _, row in base_df.iterrows():
-            server = normalize(row.get("Server"))
-            database = normalize(row.get("Database"))
+        for _, row in df.iterrows():
+            server = normalize(args.override_server or row.get("Server"))
+            database_hint = normalize(row.get("Database"))
             schema = normalize(row.get("Schema")) or "dbo"
             table = normalize(row.get("Table"))
-            if not (server and database and table):
+            if not (server and table):
                 continue
-            cache_key = (server.lower(), database.lower(), schema.lower(), table.lower())
-            if cache_key not in cache:
-                conn = pool.get(server, database)
+
+            candidate_dbs = build_candidate_databases(
+                server,
+                database_hint,
+                fallback_dbs,
+                args.scan_all_databases,
+                args.driver,
+                server_db_cache,
+            )
+
+            objects: List[LineageObject] = []
+            matched_db = ""
+            for candidate_db in candidate_dbs or [database_hint]:
+                if not candidate_db:
+                    continue
+                conn = pool.get(server, candidate_db)
                 if conn is None:
-                    cache[cache_key] = []
-                else:
-                    cache[cache_key] = fetch_referencing_objects(conn, schema, table)
-            objects = cache[cache_key]
+                    continue
+                objects = fetch_referencing_objects(conn, server, candidate_db, schema, table)
+                if objects:
+                    matched_db = candidate_db
+                    break
+
             if not objects:
                 continue
+
             for obj in objects:
-                records.append(
+                stored = register_object(obj)
+                report_records.append(
                     {
                         "Path_File": normalize(row.get("Path_File")),
                         "File_name": normalize(row.get("File_name")),
                         "Server": server,
-                        "Database": database,
+                        "Database": matched_db or database_hint,
                         "Schema": schema,
                         "Table": table,
-                        "ObjectSchema": obj.object_schema,
-                        "ObjectName": obj.object_name,
-                        "ObjectType": obj.object_type,
-                        "Motivo": classify_motivo(obj.definition, schema, table),
-                        "ObjectDefinition": obj.definition.strip(),
-                        "DependencyTables": " ; ".join(obj.dep_tables),
-                        "DependencyObjects": " ; ".join(obj.dep_objects),
+                        "ObjectServer": stored.server,
+                        "ObjectDatabase": stored.database,
+                        "ObjectSchema": stored.object_schema,
+                        "ObjectName": stored.object_name,
+                        "ObjectType": stored.object_type,
+                        "Motivo": classify_motivo(stored.definition, schema, table),
+                        "ObjectDefinition": stored.definition.strip(),
+                        "DependencyTables": format_table_list(stored.dep_tables),
+                        "DependencyObjects": format_object_list(stored.dep_objects),
                     }
                 )
-                for dep in obj.dep_tables:
-                    dependency_rows.append(
-                        {
-                            "ObjectSchema": obj.object_schema,
-                            "ObjectName": obj.object_name,
-                            "ObjectType": obj.object_type,
-                            "DependencyType": "TABLE",
-                            "DependencyName": dep,
-                        }
-                    )
-                for dep in obj.dep_objects:
-                    dependency_rows.append(
-                        {
-                            "ObjectSchema": obj.object_schema,
-                            "ObjectName": obj.object_name,
-                            "ObjectType": obj.object_type,
-                            "DependencyType": "OBJECT",
-                            "DependencyName": dep,
-                        }
-                    )
+
+        processed: set[Tuple[str, str, str, str]] = set()
+        while pending:
+            current = pending.popleft()
+            key = make_object_key(
+                current.server,
+                current.database,
+                current.object_schema,
+                current.object_name,
+            )
+            if key in processed:
+                continue
+            processed.add(key)
+            conn = pool.get(current.server, current.database)
+            if conn is None:
+                continue
+            for dep_schema, dep_name, dep_type in current.dep_objects:
+                if dep_type not in OBJECT_TYPES_OF_INTEREST:
+                    continue
+                dep_key = make_object_key(current.server, current.database, dep_schema or "dbo", dep_name)
+                if dep_key in object_catalog:
+                    continue
+                dep_obj = fetch_object_by_name(conn, current.server, current.database, dep_schema, dep_name)
+                if dep_obj:
+                    register_object(dep_obj)
     finally:
         pool.close()
 
-    if not records:
-        print("Nessun oggetto derivato trovato; nessun file creato")
+    if not report_records:
+        print("Nessun oggetto derivato individuato")
         return
 
-    output_df = pd.DataFrame(records, columns=OUTPUT_COLUMNS)
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_df.to_excel(output_path, index=False)
-    print(f"Creato file normalizzato con {len(records)} righe: {output_path}")
+    dep_rows: List[Dict[str, str]] = []
+    for obj in object_catalog.values():
+        for dep_schema, dep_name in obj.dep_tables:
+            dep_rows.append(
+                {
+                    "ObjectServer": obj.server,
+                    "ObjectDatabase": obj.database,
+                    "ObjectSchema": obj.object_schema,
+                    "ObjectName": obj.object_name,
+                    "ObjectType": obj.object_type,
+                    "DependencyType": "TABLE",
+                    "DependencySchema": dep_schema,
+                    "DependencyName": dep_name,
+                }
+            )
+        for dep_schema, dep_name, dep_type in obj.dep_objects:
+            dep_rows.append(
+                {
+                    "ObjectServer": obj.server,
+                    "ObjectDatabase": obj.database,
+                    "ObjectSchema": obj.object_schema,
+                    "ObjectName": obj.object_name,
+                    "ObjectType": obj.object_type,
+                    "DependencyType": dep_type,
+                    "DependencySchema": dep_schema,
+                    "DependencyName": dep_name,
+                }
+            )
 
-    if dependency_rows:
-        dep_df = pd.DataFrame(dependency_rows, columns=DEPENDENCY_COLUMNS)
-        dep_path = Path(args.dependency_output)
-        dep_path.parent.mkdir(parents=True, exist_ok=True)
-        dep_df.to_excel(dep_path, index=False)
-        print(f"Elenco dipendenze esportato con {len(dependency_rows)} righe: {dep_path}")
-    else:
-        print("Nessuna dipendenza da esportare")
+    report_df = pd.DataFrame(report_records, columns=REPORT_COLUMNS)
+    report_path = Path(args.report_output)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_df.to_excel(report_path, index=False)
+    print(f"Report→Oggetto: {len(report_records)} righe -> {report_path}")
+
+    dep_df = pd.DataFrame(dep_rows, columns=DEPENDENCY_COLUMNS)
+    dep_path = Path(args.dependency_output)
+    dep_path.parent.mkdir(parents=True, exist_ok=True)
+    dep_df.to_excel(dep_path, index=False)
+    print(f"Dipendenze normalizzate: {len(dep_rows)} righe -> {dep_path}")
+
+    obj_rows = [
+        {
+            "Server": obj.server,
+            "Database": obj.database,
+            "ObjectSchema": obj.object_schema,
+            "ObjectName": obj.object_name,
+            "ObjectType": obj.object_type,
+            "ObjectDefinition": obj.definition.strip(),
+        }
+        for obj in object_catalog.values()
+    ]
+    obj_df = pd.DataFrame(obj_rows, columns=OBJECT_CATALOG_COLUMNS)
+    obj_path = Path(args.object_output)
+    obj_path.parent.mkdir(parents=True, exist_ok=True)
+    obj_df.to_excel(obj_path, index=False)
+    print(f"Catalogo oggetti: {len(obj_rows)} elementi -> {obj_path}")
 
 
 if __name__ == "__main__":
