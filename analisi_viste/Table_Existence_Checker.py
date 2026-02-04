@@ -160,10 +160,11 @@ class TableExistenceChecker:
             except Exception:
                 pass
 
-    def _fetch_tables_in_db(self, db: str) -> Set[Tuple[str, str]]:
-        """Ritorna set di (schema, object_name) esistenti nel DB.
+    def _fetch_tables_in_db(self, db: str) -> Set[Tuple[str, str, str]]:
+        """Ritorna set di (schema, object_name, object_type_label) esistenti nel DB.
         Se INCLUDE_VIEWS=True, include anche le viste.
         Se INCLUDE_SYNONYMS=True, include anche i sinonimi.
+        object_type_label: 'USER_TABLE' | 'VIEW' | 'SYNONYM'
         """
         msg_kind = (
             "tabelle+viste+sinonimi" if INCLUDE_VIEWS and INCLUDE_SYNONYMS else
@@ -178,15 +179,15 @@ class TableExistenceChecker:
             if INCLUDE_VIEWS and INCLUDE_SYNONYMS:
                 sql = (
                     """
-                    SELECT s.name AS schema_name, t.name AS object_name
+                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
                     FROM sys.tables AS t
                     JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                     UNION ALL
-                    SELECT s.name AS schema_name, v.name AS object_name
+                    SELECT s.name AS schema_name, v.name AS object_name, 'VIEW' AS object_type
                     FROM sys.views AS v
                     JOIN sys.schemas AS s ON s.schema_id = v.schema_id
                     UNION ALL
-                    SELECT s.name AS schema_name, sy.name AS object_name
+                    SELECT s.name AS schema_name, sy.name AS object_name, 'SYNONYM' AS object_type
                     FROM sys.synonyms AS sy
                     JOIN sys.schemas AS s ON s.schema_id = sy.schema_id
                     """
@@ -194,11 +195,11 @@ class TableExistenceChecker:
             elif INCLUDE_VIEWS and not INCLUDE_SYNONYMS:
                 sql = (
                     """
-                    SELECT s.name AS schema_name, t.name AS object_name
+                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
                     FROM sys.tables AS t
                     JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                     UNION ALL
-                    SELECT s.name AS schema_name, v.name AS object_name
+                    SELECT s.name AS schema_name, v.name AS object_name, 'VIEW' AS object_type
                     FROM sys.views AS v
                     JOIN sys.schemas AS s ON s.schema_id = v.schema_id
                     """
@@ -206,11 +207,11 @@ class TableExistenceChecker:
             elif not INCLUDE_VIEWS and INCLUDE_SYNONYMS:
                 sql = (
                     """
-                    SELECT s.name AS schema_name, t.name AS object_name
+                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
                     FROM sys.tables AS t
                     JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                     UNION ALL
-                    SELECT s.name AS schema_name, sy.name AS object_name
+                    SELECT s.name AS schema_name, sy.name AS object_name, 'SYNONYM' AS object_type
                     FROM sys.synonyms AS sy
                     JOIN sys.schemas AS s ON s.schema_id = sy.schema_id
                     """
@@ -218,13 +219,13 @@ class TableExistenceChecker:
             else:
                 sql = (
                     """
-                    SELECT s.name AS schema_name, t.name AS object_name
+                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
                     FROM sys.tables AS t
                     JOIN sys.schemas AS s ON s.schema_id = t.schema_id
                     """
                 )
             cur.execute(sql)
-            fetched = {(str(r[0]), str(r[1])) for r in cur.fetchall()}
+            fetched = {(str(r[0]), str(r[1]), str(r[2])) for r in cur.fetchall()}
             print(f"[CHECK] Oggetti in {db}: {len(fetched)}")
             return fetched
         finally:
@@ -232,6 +233,201 @@ class TableExistenceChecker:
                 conn.close()
             except Exception:
                 pass
+
+    def _fetch_table_ddl(self, db: str, schema: str, table: str) -> str:
+        """Genera una definizione CREATE TABLE per una tabella usando metadata di sistema."""
+        conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
+        try:
+            tsql_stringagg = r"""
+DECLARE @schema_table nvarchar(512) = QUOTENAME(?) + N'.' + QUOTENAME(?);
+DECLARE @obj_id int = OBJECT_ID(@schema_table);
+IF @obj_id IS NULL
+    SELECT CAST(N'ERROR: tabella non trovata: ' + @schema_table AS nvarchar(max)) AS ddl;
+ELSE
+BEGIN
+    DECLARE @cols nvarchar(max) =
+    (
+        SELECT STRING_AGG(
+            N'[' + c.name + N'] ' +
+            UPPER(t.name) +
+            CASE 
+                WHEN t.name IN (N'char',N'nchar',N'varchar',N'nvarchar',N'binary',N'varbinary') 
+                     THEN N'(' + CASE 
+                                   WHEN t.name IN (N'nchar',N'nvarchar') 
+                                        THEN CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length/2 AS nvarchar(10)) END
+                                   ELSE CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length AS nvarchar(10)) END
+                                 END + N')'
+                WHEN t.name IN (N'decimal',N'numeric') 
+                     THEN N'(' + CAST(c.precision AS nvarchar(10)) + N',' + CAST(c.scale AS nvarchar(10)) + N')'
+                WHEN t.name IN (N'datetime2',N'time',N'datetimeoffset')
+                     THEN N'(' + CAST(c.scale AS nvarchar(10)) + N')'
+                ELSE N''
+            END +
+            CASE WHEN ic.is_identity = 1 
+                 THEN N' IDENTITY(' + CAST(ic.seed_value AS nvarchar(50)) + N',' + CAST(ic.increment_value AS nvarchar(50)) + N')' 
+                 ELSE N'' 
+            END +
+            CASE WHEN c.is_nullable = 0 THEN N' NOT NULL' ELSE N' NULL' END +
+            COALESCE(N' DEFAULT ' + dc.definition, N'')
+            , N',' + CHAR(13) + CHAR(10)
+        ) WITHIN GROUP (ORDER BY c.column_id)
+        FROM sys.columns c
+        JOIN sys.types t ON c.user_type_id = t.user_type_id
+        LEFT JOIN sys.default_constraints dc ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+        LEFT JOIN sys.identity_columns ic ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE c.object_id = @obj_id
+    );
+
+    DECLARE @pk nvarchar(max) =
+    (
+        SELECT N'CONSTRAINT [' + kc.name + N'] PRIMARY KEY (' +
+               STRING_AGG(N'[' + c.name + N']' + CASE WHEN ic.is_descending_key = 1 THEN N' DESC' ELSE N'' END, N', ')
+               WITHIN GROUP (ORDER BY ic.key_ordinal) + N')'
+        FROM sys.key_constraints kc
+        JOIN sys.indexes i ON i.object_id = kc.parent_object_id AND i.index_id = kc.unique_index_id
+        JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE kc.type = 'PK' AND kc.parent_object_id = @obj_id
+    );
+
+    SELECT N'CREATE TABLE ' + @schema_table + CHAR(13) + CHAR(10) +
+           N'(' + ISNULL(@cols, N'') + N')' +
+           ISNULL(CHAR(13) + CHAR(10) + @pk, N'') AS ddl;
+END
+"""
+            tsql_xmlpath = r"""
+DECLARE @schema_table nvarchar(512) = QUOTENAME(?) + N'.' + QUOTENAME(?);
+DECLARE @obj_id int = OBJECT_ID(@schema_table);
+IF @obj_id IS NULL
+    SELECT CAST(N'ERROR: tabella non trovata: ' + @schema_table AS nvarchar(max)) AS ddl;
+ELSE
+BEGIN
+    DECLARE @cols nvarchar(max) = N'';
+    SELECT @cols = STUFF((
+        SELECT N',' + CHAR(13) + CHAR(10) +
+               N'[' + c.name + N'] ' +
+               UPPER(t.name) +
+               CASE 
+                   WHEN t.name IN (N'char',N'nchar',N'varchar',N'nvarchar',N'binary',N'varbinary') 
+                        THEN N'(' + CASE 
+                                      WHEN t.name IN (N'nchar',N'nvarchar') 
+                                           THEN CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length/2 AS nvarchar(10)) END
+                                      ELSE CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length AS nvarchar(10)) END
+                                    END + N')'
+                   WHEN t.name IN (N'decimal',N'numeric') 
+                        THEN N'(' + CAST(c.precision AS nvarchar(10)) + N',' + CAST(c.scale AS nvarchar(10)) + N')'
+                   WHEN t.name IN (N'datetime2',N'time',N'datetimeoffset')
+                        THEN N'(' + CAST(c.scale AS nvarchar(10)) + N')'
+                   ELSE N''
+               END +
+               CASE WHEN ic.is_identity = 1 
+                    THEN N' IDENTITY(' + CAST(ic.seed_value AS nvarchar(50)) + N',' + CAST(ic.increment_value AS nvarchar(50)) + N')' 
+                    ELSE N'' 
+               END +
+               CASE WHEN c.is_nullable = 0 THEN N' NOT NULL' ELSE N' NULL' END +
+               COALESCE(N' DEFAULT ' + dc.definition, N'')
+        FROM sys.columns c
+        JOIN sys.types t ON c.user_type_id = t.user_type_id
+        LEFT JOIN sys.default_constraints dc ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+        LEFT JOIN sys.identity_columns ic ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE c.object_id = @obj_id
+        ORDER BY c.column_id
+        FOR XML PATH(''), TYPE
+    ).value('.', 'nvarchar(max)'), 1, 1, N'');
+
+    DECLARE @pk nvarchar(max) = NULL;
+    SELECT @pk = N'CONSTRAINT [' + kc.name + N'] PRIMARY KEY (' +
+                 STUFF((
+                    SELECT N', ' + N'[' + c.name + N']' + CASE WHEN ic.is_descending_key = 1 THEN N' DESC' ELSE N'' END
+                    FROM sys.index_columns ic
+                    JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                    WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id
+                    ORDER BY ic.key_ordinal
+                    FOR XML PATH(''), TYPE
+                 ).value('.', 'nvarchar(max)'), 1, 2, N'') + N')'
+    FROM sys.key_constraints kc
+    JOIN sys.indexes i ON i.object_id = kc.parent_object_id AND i.index_id = kc.unique_index_id
+    WHERE kc.type = 'PK' AND kc.parent_object_id = @obj_id;
+
+    SELECT N'CREATE TABLE ' + @schema_table + CHAR(13) + CHAR(10) +
+           N'(' + ISNULL(@cols, N'') + N')' +
+           ISNULL(CHAR(13) + CHAR(10) + @pk, N'') AS ddl;
+END
+"""
+            cur = conn.cursor()
+            try:
+                cur.execute(tsql_stringagg, (schema, table))
+            except Exception:
+                cur.execute(tsql_xmlpath, (schema, table))
+            row = cur.fetchone()
+            return str(row[0]) if row and row[0] is not None else ""
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _fetch_view_definition(self, db: str, schema: str, view: str) -> str:
+        """Ritorna la definizione testuale della vista dal DB."""
+        conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
+        try:
+            sql = (
+                """
+                SELECT sm.definition
+                FROM sys.sql_modules AS sm
+                WHERE sm.object_id = OBJECT_ID(QUOTENAME(?) + N'.' + QUOTENAME(?));
+                """
+            )
+            cur = conn.cursor()
+            try:
+                cur.execute(sql, (schema, view))
+                r = cur.fetchone()
+                if r and r[0]:
+                    return str(r[0])
+                cur.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(QUOTENAME(?) + N'.' + QUOTENAME(?)))", (schema, view))
+                r2 = cur.fetchone()
+                if r2 and r2[0]:
+                    return str(r2[0])
+                return "ERROR: definizione non disponibile (possibile oggetto crittografato)"
+            except Exception as e:
+                return f"ERROR: lettura definizione vista fallita: {e}"
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _fetch_synonym_ddl(self, db: str, schema: str, synonym: str) -> str:
+        """Costruisce CREATE SYNONYM basandosi su sys.synonyms.base_object_name."""
+        conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
+        try:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "SELECT base_object_name FROM sys.synonyms WHERE schema_id = SCHEMA_ID(?) AND name = ?",
+                    (schema, synonym),
+                )
+                r = cur.fetchone()
+                base = str(r[0]) if r and r[0] is not None else None
+                if not base:
+                    return f"ERROR: sinonimo non trovato: [{schema}].[{synonym}]"
+                return f"CREATE SYNONYM [{schema}].[{synonym}] FOR {base};"
+            except Exception as e:
+                return f"ERROR: lettura sinonimo fallita: {e}"
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _get_ddl(self, db: str, schema: str, name: str, obj_type: str) -> str:
+        t = (obj_type or "").upper()
+        if t == "VIEW":
+            return self._fetch_view_definition(db, schema, name)
+        if t == "SYNONYM":
+            return self._fetch_synonym_ddl(db, schema, name)
+        # default: table
+        return self._fetch_table_ddl(db, schema, name)
 
     # ------------------------------ Run principale ----------------------------
     def run(self) -> str:
@@ -280,27 +476,28 @@ class TableExistenceChecker:
                 db_errors[db.lower()] = msg
                 continue
             # Costruisci indici
-            by_table: Dict[str, List[Tuple[str, str]]] = {}
-            for sch, tbl in existing:
+            by_table: Dict[str, List[Tuple[str, str, str]]] = {}
+            for sch, tbl, typ in existing:
                 key = tbl.lower()
-                by_table.setdefault(key, []).append((sch, tbl))
+                by_table.setdefault(key, []).append((sch, tbl, typ))
 
             # Valuta target che chiedono proprio questo DB (o tutti i DB)
             matches_in_db = 0
             for idx, (tdb, tschema, ttable) in enumerate(norm_targets):
                 if tdb is not None and tdb != db.lower():
                     continue
-                matches: List[Tuple[str, str]] = []
+                matches: List[Tuple[str, str, str]] = []
                 if tschema:
                     # match preciso schema.table
                     candidates = by_table.get(ttable, [])
-                    matches = [(s, t) for (s, t) in candidates if s.lower() == tschema]
+                    matches = [(s, t, ty) for (s, t, ty) in candidates if s.lower() == tschema]
                 else:
                     # qualsiasi schema con quel table name
                     matches = by_table.get(ttable, [])
 
-                for (sch, tbl) in matches:
-                    results.append([self.server, db, sch, tbl, ""])  # nessun errore
+                for (sch, tbl, typ) in matches:
+                    ddl = self._get_ddl(db, sch, tbl, typ)
+                    results.append([self.server, db, sch, tbl, typ, ddl, ""])  # nessun errore
                     matches_in_db += 1
                     total_matches += 1
                     found_flags[idx] = True
@@ -315,23 +512,23 @@ class TableExistenceChecker:
                     continue
                 if orig_db and orig_db.lower() in db_errors:
                     err = f"Ricerca non eseguita su DB '{orig_db}': {db_errors[orig_db.lower()]}"
-                    results.append([self.server, orig_db, orig_schema or "", orig_table, err])
+                    results.append([self.server, orig_db, orig_schema or "", orig_table, "", "", err])
                 else:
                     if orig_db:
                         err = "Cercata ma non trovata"
-                        results.append([self.server, orig_db, orig_schema or "", orig_table, err])
+                        results.append([self.server, orig_db, orig_schema or "", orig_table, "", "", err])
                     else:
                         note = (
                             f" Non analizzati: {', '.join(errored_dbs)}" if errored_dbs else ""
                         )
                         err = f"Cercata ma non trovata in nessun DB utente.{note}"
-                        results.append([self.server, "", orig_schema or "", orig_table, err])
+                        results.append([self.server, "", orig_schema or "", orig_table, "", "", err])
 
         # Scrivi risultati
         out_dir = os.path.dirname(self.output_excel)
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir, exist_ok=True)
-        df_out = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table", "Error"])
+        df_out = pd.DataFrame(results, columns=["Server", "DB", "Schema", "Table", "ObjectType", "DDL", "Error"])
         # Normalizza la colonna Error per evitare NaN
         if "Error" in df_out.columns:
             df_out["Error"] = df_out["Error"].fillna("")
