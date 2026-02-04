@@ -42,6 +42,8 @@ CONNECTION_TEST_TIMEOUT: int = 3
 QUERY_TIMEOUT: int = 60
 # Includi anche le viste nella ricerca
 INCLUDE_VIEWS: bool = True
+# Includi anche i sinonimi (sys.synonyms) nella ricerca
+INCLUDE_SYNONYMS: bool = True
 
 
 class TableExistenceChecker:
@@ -161,12 +163,19 @@ class TableExistenceChecker:
     def _fetch_tables_in_db(self, db: str) -> Set[Tuple[str, str]]:
         """Ritorna set di (schema, object_name) esistenti nel DB.
         Se INCLUDE_VIEWS=True, include anche le viste.
+        Se INCLUDE_SYNONYMS=True, include anche i sinonimi.
         """
-        print(f"[CHECK] Carico elenco {'tabelle+viste' if INCLUDE_VIEWS else 'tabelle'} per DB: {db}")
+        msg_kind = (
+            "tabelle+viste+sinonimi" if INCLUDE_VIEWS and INCLUDE_SYNONYMS else
+            "tabelle+viste" if INCLUDE_VIEWS else
+            "tabelle+sinonimi" if INCLUDE_SYNONYMS else
+            "tabelle"
+        )
+        print(f"[CHECK] Carico elenco {msg_kind} per DB: {db}")
         conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
         try:
             cur = conn.cursor()
-            if INCLUDE_VIEWS:
+            if INCLUDE_VIEWS and INCLUDE_SYNONYMS:
                 sql = (
                     """
                     SELECT s.name AS schema_name, t.name AS object_name
@@ -176,6 +185,34 @@ class TableExistenceChecker:
                     SELECT s.name AS schema_name, v.name AS object_name
                     FROM sys.views AS v
                     JOIN sys.schemas AS s ON s.schema_id = v.schema_id
+                    UNION ALL
+                    SELECT s.name AS schema_name, sy.name AS object_name
+                    FROM sys.synonyms AS sy
+                    JOIN sys.schemas AS s ON s.schema_id = sy.schema_id
+                    """
+                )
+            elif INCLUDE_VIEWS and not INCLUDE_SYNONYMS:
+                sql = (
+                    """
+                    SELECT s.name AS schema_name, t.name AS object_name
+                    FROM sys.tables AS t
+                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+                    UNION ALL
+                    SELECT s.name AS schema_name, v.name AS object_name
+                    FROM sys.views AS v
+                    JOIN sys.schemas AS s ON s.schema_id = v.schema_id
+                    """
+                )
+            elif not INCLUDE_VIEWS and INCLUDE_SYNONYMS:
+                sql = (
+                    """
+                    SELECT s.name AS schema_name, t.name AS object_name
+                    FROM sys.tables AS t
+                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+                    UNION ALL
+                    SELECT s.name AS schema_name, sy.name AS object_name
+                    FROM sys.synonyms AS sy
+                    JOIN sys.schemas AS s ON s.schema_id = sy.schema_id
                     """
                 )
             else:
