@@ -44,6 +44,10 @@ QUERY_TIMEOUT: int = 60
 INCLUDE_VIEWS: bool = True
 # Includi anche i sinonimi (sys.synonyms) nella ricerca
 INCLUDE_SYNONYMS: bool = True
+# Includi stored procedure, funzioni (scalar/TVF), e trigger
+INCLUDE_PROCS: bool = True
+INCLUDE_FUNCTIONS: bool = True  # include FN, IF, TF
+INCLUDE_TRIGGERS: bool = True
 
 
 class TableExistenceChecker:
@@ -162,68 +166,59 @@ class TableExistenceChecker:
 
     def _fetch_tables_in_db(self, db: str) -> Set[Tuple[str, str, str]]:
         """Ritorna set di (schema, object_name, object_type_label) esistenti nel DB.
-        Se INCLUDE_VIEWS=True, include anche le viste.
-        Se INCLUDE_SYNONYMS=True, include anche i sinonimi.
-        object_type_label: 'USER_TABLE' | 'VIEW' | 'SYNONYM'
+        Include, in base ai flag: tabelle, viste, sinonimi, stored procedure, funzioni, trigger.
+        `object_type_label` è allineato a `sys.objects.type_desc` o literal 'SYNONYM'.
         """
-        msg_kind = (
-            "tabelle+viste+sinonimi" if INCLUDE_VIEWS and INCLUDE_SYNONYMS else
-            "tabelle+viste" if INCLUDE_VIEWS else
-            "tabelle+sinonimi" if INCLUDE_SYNONYMS else
-            "tabelle"
-        )
-        print(f"[CHECK] Carico elenco {msg_kind} per DB: {db}")
+        parts = [
+            # Tabelle
+            (
+                """
+                SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
+                FROM sys.tables AS t
+                JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+                """
+            )
+        ]
+        if INCLUDE_VIEWS:
+            parts.append(
+                """
+                SELECT s.name AS schema_name, v.name AS object_name, 'VIEW' AS object_type
+                FROM sys.views AS v
+                JOIN sys.schemas AS s ON s.schema_id = v.schema_id
+                """
+            )
+        if INCLUDE_SYNONYMS:
+            parts.append(
+                """
+                SELECT s.name AS schema_name, sy.name AS object_name, 'SYNONYM' AS object_type
+                FROM sys.synonyms AS sy
+                JOIN sys.schemas AS s ON s.schema_id = sy.schema_id
+                """
+            )
+
+        type_codes: List[str] = []
+        if INCLUDE_PROCS:
+            type_codes.append('P')
+        if INCLUDE_FUNCTIONS:
+            type_codes.extend(['FN', 'IF', 'TF'])
+        if INCLUDE_TRIGGERS:
+            type_codes.append('TR')
+        if type_codes:
+            in_list = ", ".join([f"'{c}'" for c in type_codes])
+            parts.append(
+                f"""
+                SELECT s.name AS schema_name, o.name AS object_name, o.type_desc AS object_type
+                FROM sys.objects AS o
+                JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+                WHERE o.type IN ({in_list})
+                """
+            )
+
+        sql = "\nUNION ALL\n".join(parts)
+        print(f"[CHECK] Carico elenco oggetti (flags: views={INCLUDE_VIEWS}, synonyms={INCLUDE_SYNONYMS}, procs={INCLUDE_PROCS}, functions={INCLUDE_FUNCTIONS}, triggers={INCLUDE_TRIGGERS}) per DB: {db}")
         conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
         try:
             cur = conn.cursor()
-            if INCLUDE_VIEWS and INCLUDE_SYNONYMS:
-                sql = (
-                    """
-                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
-                    FROM sys.tables AS t
-                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-                    UNION ALL
-                    SELECT s.name AS schema_name, v.name AS object_name, 'VIEW' AS object_type
-                    FROM sys.views AS v
-                    JOIN sys.schemas AS s ON s.schema_id = v.schema_id
-                    UNION ALL
-                    SELECT s.name AS schema_name, sy.name AS object_name, 'SYNONYM' AS object_type
-                    FROM sys.synonyms AS sy
-                    JOIN sys.schemas AS s ON s.schema_id = sy.schema_id
-                    """
-                )
-            elif INCLUDE_VIEWS and not INCLUDE_SYNONYMS:
-                sql = (
-                    """
-                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
-                    FROM sys.tables AS t
-                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-                    UNION ALL
-                    SELECT s.name AS schema_name, v.name AS object_name, 'VIEW' AS object_type
-                    FROM sys.views AS v
-                    JOIN sys.schemas AS s ON s.schema_id = v.schema_id
-                    """
-                )
-            elif not INCLUDE_VIEWS and INCLUDE_SYNONYMS:
-                sql = (
-                    """
-                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
-                    FROM sys.tables AS t
-                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-                    UNION ALL
-                    SELECT s.name AS schema_name, sy.name AS object_name, 'SYNONYM' AS object_type
-                    FROM sys.synonyms AS sy
-                    JOIN sys.schemas AS s ON s.schema_id = sy.schema_id
-                    """
-                )
-            else:
-                sql = (
-                    """
-                    SELECT s.name AS schema_name, t.name AS object_name, 'USER_TABLE' AS object_type
-                    FROM sys.tables AS t
-                    JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-                    """
-                )
             cur.execute(sql)
             fetched = {(str(r[0]), str(r[1]), str(r[2])) for r in cur.fetchall()}
             print(f"[CHECK] Oggetti in {db}: {len(fetched)}")
@@ -397,6 +392,36 @@ END
             except Exception:
                 pass
 
+    def _fetch_module_definition(self, db: str, schema: str, name: str) -> str:
+        """Ritorna definizione testuale per oggetti con modulo SQL (proc, func, trigger, view)."""
+        conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
+        try:
+            sql = (
+                """
+                SELECT sm.definition
+                FROM sys.sql_modules AS sm
+                WHERE sm.object_id = OBJECT_ID(QUOTENAME(?) + N'.' + QUOTENAME(?));
+                """
+            )
+            cur = conn.cursor()
+            try:
+                cur.execute(sql, (schema, name))
+                r = cur.fetchone()
+                if r and r[0]:
+                    return str(r[0])
+                cur.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(QUOTENAME(?) + N'.' + QUOTENAME(?)))", (schema, name))
+                r2 = cur.fetchone()
+                if r2 and r2[0]:
+                    return str(r2[0])
+                return "ERROR: definizione non disponibile (possibile oggetto crittografato)"
+            except Exception as e:
+                return f"ERROR: lettura definizione oggetto fallita: {e}"
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     def _fetch_synonym_ddl(self, db: str, schema: str, synonym: str) -> str:
         """Costruisce CREATE SYNONYM basandosi su sys.synonyms.base_object_name."""
         conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
@@ -426,6 +451,8 @@ END
             return self._fetch_view_definition(db, schema, name)
         if t == "SYNONYM":
             return self._fetch_synonym_ddl(db, schema, name)
+        if ("PROCEDURE" in t) or ("FUNCTION" in t) or ("TRIGGER" in t):
+            return self._fetch_module_definition(db, schema, name)
         # default: table
         return self._fetch_table_ddl(db, schema, name)
 
