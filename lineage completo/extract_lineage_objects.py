@@ -584,11 +584,31 @@ def main() -> None:
                     conn = pool.get(server, candidate_db)
                     if conn is None:
                         continue
-                    if not detected_source_type:
-                        detected = detect_source_object_type(conn, schema, table)
-                        if detected:
-                            detected_source_type = detected
-                    objects = fetch_referencing_objects(conn, server, candidate_db, schema, table, level=1)
+                    try:
+                        if not detected_source_type:
+                            detected = detect_source_object_type(conn, schema, table)
+                            if detected:
+                                detected_source_type = detected
+                        objects = fetch_referencing_objects(
+                            conn,
+                            server,
+                            candidate_db,
+                            schema,
+                            table,
+                            level=1,
+                        )
+                    except pyodbc.Error as exc:
+                        failure_records.append(
+                            {
+                                "Server": server,
+                                "Database": candidate_db,
+                                "Schema": schema,
+                                "Table": table,
+                                "SourceObjectType": detected_source_type or "UNKNOWN",
+                                "Reason": f"Permesso insufficiente: {exc}",
+                            }
+                        )
+                        continue
                     if objects:
                         matched_db = candidate_db
                         break
@@ -659,14 +679,27 @@ def main() -> None:
                 conn = current_conn if target_db == current.database else pool.get(current.server, target_db)
                 if conn is None:
                     continue
-                dep_obj = fetch_object_by_name(
-                    conn,
-                    current.server,
-                    target_db,
-                    schema_norm,
-                    dep_name,
-                    current.level + 1,
-                )
+                try:
+                    dep_obj = fetch_object_by_name(
+                        conn,
+                        current.server,
+                        target_db,
+                        schema_norm,
+                        dep_name,
+                        current.level + 1,
+                    )
+                except pyodbc.Error as exc:
+                    failure_records.append(
+                        {
+                            "Server": current.server,
+                            "Database": target_db,
+                            "Schema": schema_norm,
+                            "Table": dep_name,
+                            "SourceObjectType": dep_type,
+                            "Reason": f"Permesso insufficiente durante BFS: {exc}",
+                        }
+                    )
+                    continue
                 if dep_obj:
                     register_object(dep_obj)
         log_progress(f"Espansione ricorsiva completata: {len(processed)} oggetti espansi")
