@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +42,10 @@ DEFAULT_FAILURE_LOG = (
     r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
     r"\7. Reverse engineering\Lineage completo\lineage_failures_log.xlsx"
 )
+DEFAULT_SUMMARY_OUTPUT = (
+    r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
+    r"\7. Reverse engineering\Lineage completo\lineage_summary_metrics.xlsx"
+)
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
 
 OBJECT_TYPES_OF_INTEREST = {
@@ -59,17 +64,17 @@ WRITE_PATTERNS = (
 )
 
 REPORT_COLUMNS = [
-    "Path_File",
-    "File_name",
     "Server",
     "Database",
     "Schema",
     "Table",
+    "SourceObjectType",
     "ObjectServer",
     "ObjectDatabase",
     "ObjectSchema",
     "ObjectName",
     "ObjectType",
+    "ObjectExtractionLevel",
     "Motivo",
     "ObjectDefinition",
     "DependencyTables",
@@ -82,10 +87,12 @@ DEPENDENCY_COLUMNS = [
     "ObjectSchema",
     "ObjectName",
     "ObjectType",
+    "ObjectExtractionLevel",
     "DependencyType",
     "DependencyDatabase",
     "DependencySchema",
     "DependencyName",
+    "DependencyExtractionLevel",
 ]
 
 OBJECT_CATALOG_COLUMNS = [
@@ -94,16 +101,16 @@ OBJECT_CATALOG_COLUMNS = [
     "ObjectSchema",
     "ObjectName",
     "ObjectType",
+    "ExtractionLevel",
     "ObjectDefinition",
 ]
 
 FAILURE_COLUMNS = [
-    "Path_File",
-    "File_name",
     "Server",
     "Database",
     "Schema",
     "Table",
+    "SourceObjectType",
     "Reason",
 ]
 
@@ -116,6 +123,7 @@ class LineageObject:
     object_name: str
     object_type: str
     definition: str
+    level: int
     dep_tables: Tuple[Tuple[str, str, str], ...]  # (database, schema, name)
     dep_objects: Tuple[Tuple[str, str, str, str], ...]  # (database, schema, name, type)
 
@@ -194,6 +202,35 @@ def classify_motivo(sql_definition: Optional[str], target_schema: str, target_ta
     return "Lettura"
 
 
+def map_object_type(type_desc: str) -> str:
+    mapping = {
+        "USER_TABLE": "TABLE",
+        "VIEW": "VIEW",
+        "SYNONYM": "SYNONYM",
+        "SQL_INLINE_TABLE_VALUED_FUNCTION": "FUNCTION",
+        "SQL_SCALAR_FUNCTION": "FUNCTION",
+        "SQL_TABLE_VALUED_FUNCTION": "FUNCTION",
+    }
+    return mapping.get(type_desc.upper(), type_desc.upper())
+
+
+def detect_source_object_type(conn: pyodbc.Connection, schema: str, table: str) -> Optional[str]:
+    query = (
+        "SELECT TOP 1 type_desc"
+        " FROM sys.objects"
+        " WHERE is_ms_shipped = 0"
+        "   AND SCHEMA_NAME(schema_id) = ?"
+        "   AND name = ?"
+    )
+    cursor = conn.cursor()
+    cursor.execute(query, schema or "dbo", table)
+    row = cursor.fetchone()
+    cursor.close()
+    if not row:
+        return None
+    return map_object_type(row[0] or "")
+
+
 def resolve_dependency_type(ref_type: Optional[str], ref_class: Optional[str], ref_db: str) -> str:
     if ref_type:
         return ref_type
@@ -252,6 +289,7 @@ def build_lineage_object(
     definition: Optional[str],
     conn: pyodbc.Connection,
     object_id: int,
+    level: int,
 ) -> LineageObject:
     dep_tables, dep_objects = fetch_object_dependencies(conn, object_id)
     return LineageObject(
@@ -261,6 +299,7 @@ def build_lineage_object(
         object_name=object_name,
         object_type=object_type,
         definition=(definition or ""),
+        level=level,
         dep_tables=tuple(dep_tables),
         dep_objects=tuple(dep_objects),
     )
@@ -272,6 +311,7 @@ def fetch_referencing_objects(
     database: str,
     target_schema: str,
     target_table: str,
+    level: int,
 ) -> List[LineageObject]:
     query = (
         "SELECT"
@@ -303,6 +343,7 @@ def fetch_referencing_objects(
                 definition,
                 conn,
                 object_id,
+                    level,
             )
         )
     cursor.close()
@@ -315,6 +356,7 @@ def fetch_object_by_name(
     database: str,
     schema: str,
     name: str,
+    level: int,
 ) -> Optional[LineageObject]:
     lookup = (
         "SELECT o.object_id, o.type_desc, OBJECT_DEFINITION(o.object_id)"
@@ -342,6 +384,7 @@ def fetch_object_by_name(
         definition,
         conn,
         object_id,
+        level,
     )
 
 
@@ -370,6 +413,11 @@ def parse_args() -> argparse.Namespace:
         "--failure-log",
         default=DEFAULT_FAILURE_LOG,
         help="File Excel con l'elenco dei report per cui non e' stato trovato il lineage",
+    )
+    parser.add_argument(
+        "--summary-output",
+        default=DEFAULT_SUMMARY_OUTPUT,
+        help="File Excel con metriche riepilogative",
     )
     parser.add_argument("--driver", default=DEFAULT_DRIVER, help="Driver ODBC da utilizzare")
     parser.add_argument(
@@ -450,6 +498,10 @@ def main() -> None:
 
     df = pd.read_excel(excel_path, sheet_name=args.sheet)
     df.rename(columns=lambda c: str(c).strip(), inplace=True)
+    total_rows = len(df)
+    if total_rows == 0:
+        print("Nessuna riga presente nel file di input, nulla da elaborare")
+        return
 
     pool = ConnectionPool(args.driver)
     object_catalog: Dict[Tuple[str, str, str, str], LineageObject] = {}
@@ -457,11 +509,36 @@ def main() -> None:
     report_records: List[Dict[str, str]] = []
     failure_records: List[Dict[str, str]] = []
     server_db_cache: Dict[str, List[str]] = {}
+    start_time = time.time()
+
+    def log_progress(message: str) -> None:
+        elapsed = int(time.time() - start_time)
+        hours, remainder = divmod(elapsed, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"[{hours:02d}:{minutes:02d}:{seconds:02d}] {message}")
+
+    progress_interval = max(1, total_rows // 20)
+
+    def maybe_report_progress(current_row: int) -> None:
+        if total_rows == 0:
+            return
+        if current_row % progress_interval != 0 and current_row != total_rows:
+            return
+        pct = (current_row / total_rows) * 100
+        log_progress(
+            "Processate "
+            f"{current_row}/{total_rows} righe ({pct:.1f}%) - "
+            f"oggetti catalogo: {len(object_catalog)} - fallimenti: {len(failure_records)}"
+        )
+
+    log_progress(
+        f"Avvio lineage per {total_rows} righe da {excel_path}"
+    )
 
     def register_object(obj: LineageObject) -> LineageObject:
         key = make_object_key(obj.server, obj.database, obj.object_schema, obj.object_name)
         existing = object_catalog.get(key)
-        if existing is None:
+        if existing is None or obj.level < existing.level:
             object_catalog[key] = obj
             pending.append(obj)
             return obj
@@ -470,84 +547,90 @@ def main() -> None:
     fallback_dbs = [normalize(db) for db in args.fallback_db if normalize(db)]
 
     try:
-        for _, row in df.iterrows():
-            path_file = normalize(row.get("Path_File"))
-            file_name = normalize(row.get("File_name"))
-            server = normalize(args.override_server or row.get("Server"))
-            database_hint = normalize(row.get("Database"))
-            schema = normalize(row.get("Schema")) or "dbo"
-            table = normalize(row.get("Table"))
-            if not server or not table:
-                failure_records.append(
-                    {
-                        "Path_File": path_file,
-                        "File_name": file_name,
-                        "Server": server,
-                        "Database": database_hint,
-                        "Schema": schema,
-                        "Table": table,
-                        "Reason": "Server o tabella non valorizzati",
-                    }
-                )
-                continue
-
-            candidate_dbs = build_candidate_databases(
-                server,
-                database_hint,
-                fallback_dbs,
-                args.scan_all_databases,
-                args.driver,
-                server_db_cache,
-            )
-
-            objects: List[LineageObject] = []
-            matched_db = ""
-            for candidate_db in candidate_dbs or [database_hint]:
-                if not candidate_db:
+        for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
+            try:
+                server = normalize(args.override_server or row.get("Server"))
+                database_hint = normalize(row.get("Database"))
+                schema = normalize(row.get("Schema")) or "dbo"
+                table = normalize(row.get("Table"))
+                if not server or not table:
+                    failure_records.append(
+                        {
+                            "Server": server,
+                            "Database": database_hint,
+                            "Schema": schema,
+                            "Table": table,
+                            "SourceObjectType": "UNKNOWN",
+                            "Reason": "Server o tabella non valorizzati",
+                        }
+                    )
                     continue
-                conn = pool.get(server, candidate_db)
-                if conn is None:
+
+                candidate_dbs = build_candidate_databases(
+                    server,
+                    database_hint,
+                    fallback_dbs,
+                    args.scan_all_databases,
+                    args.driver,
+                    server_db_cache,
+                )
+
+                objects: List[LineageObject] = []
+                matched_db = ""
+                detected_source_type = ""
+                for candidate_db in candidate_dbs or [database_hint]:
+                    if not candidate_db:
+                        continue
+                    conn = pool.get(server, candidate_db)
+                    if conn is None:
+                        continue
+                    if not detected_source_type:
+                        detected = detect_source_object_type(conn, schema, table)
+                        if detected:
+                            detected_source_type = detected
+                    objects = fetch_referencing_objects(conn, server, candidate_db, schema, table, level=1)
+                    if objects:
+                        matched_db = candidate_db
+                        break
+
+                source_type = detected_source_type or "TABLE"
+
+                if not objects:
+                    failure_records.append(
+                        {
+                            "Server": server,
+                            "Database": database_hint,
+                            "Schema": schema,
+                            "Table": table,
+                            "SourceObjectType": source_type,
+                            "Reason": "Nessun oggetto SQL trovato nel server/database indicato",
+                        }
+                    )
                     continue
-                objects = fetch_referencing_objects(conn, server, candidate_db, schema, table)
-                if objects:
-                    matched_db = candidate_db
-                    break
 
-            if not objects:
-                failure_records.append(
-                    {
-                        "Path_File": path_file,
-                        "File_name": file_name,
-                        "Server": server,
-                        "Database": database_hint,
-                        "Schema": schema,
-                        "Table": table,
-                        "Reason": "Nessun oggetto SQL trovato nel server/database indicato",
-                    }
-                )
-                continue
-
-            for obj in objects:
-                stored = register_object(obj)
-                report_records.append(
-                    {
-                        "Path_File": path_file,
-                        "File_name": file_name,
-                        "Server": server,
-                        "Database": matched_db or database_hint,
-                        "Schema": schema,
-                        "Table": table,
-                        "ObjectServer": stored.server,
-                        "ObjectDatabase": stored.database,
-                        "ObjectSchema": stored.object_schema,
-                        "ObjectName": stored.object_name,
-                        "ObjectType": stored.object_type,
-                        "Motivo": classify_motivo(stored.definition, schema, table),
-                        "ObjectDefinition": stored.definition.strip(),
-                        "DependencyTables": format_table_list(stored.dep_tables),
-                        "DependencyObjects": format_object_list(stored.dep_objects),
-                    }
-                )
+                for obj in objects:
+                    stored = register_object(obj)
+                    report_records.append(
+                        {
+                            "Server": server,
+                            "Database": matched_db or database_hint,
+                            "Schema": schema,
+                            "Table": table,
+                            "SourceObjectType": source_type,
+                            "ObjectServer": stored.server,
+                            "ObjectDatabase": stored.database,
+                            "ObjectSchema": stored.object_schema,
+                            "ObjectName": stored.object_name,
+                            "ObjectType": stored.object_type,
+                            "ObjectExtractionLevel": stored.level,
+                            "Motivo": classify_motivo(stored.definition, schema, table),
+                            "ObjectDefinition": stored.definition.strip(),
+                            "DependencyTables": format_table_list(stored.dep_tables),
+                            "DependencyObjects": format_object_list(stored.dep_objects),
+                        }
+                    )
+            finally:
+                maybe_report_progress(row_idx)
 
         processed: set[Tuple[str, str, str, str]] = set()
         while pending:
@@ -576,14 +659,22 @@ def main() -> None:
                 conn = current_conn if target_db == current.database else pool.get(current.server, target_db)
                 if conn is None:
                     continue
-                dep_obj = fetch_object_by_name(conn, current.server, target_db, schema_norm, dep_name)
+                dep_obj = fetch_object_by_name(
+                    conn,
+                    current.server,
+                    target_db,
+                    schema_norm,
+                    dep_name,
+                    current.level + 1,
+                )
                 if dep_obj:
                     register_object(dep_obj)
+        log_progress(f"Espansione ricorsiva completata: {len(processed)} oggetti espansi")
     finally:
         pool.close()
 
     if not report_records:
-        print("Nessun oggetto derivato individuato")
+        log_progress("Nessun oggetto derivato individuato")
         return
 
     dep_rows: List[Dict[str, str]] = []
@@ -598,10 +689,12 @@ def main() -> None:
                     "ObjectSchema": obj.object_schema,
                     "ObjectName": obj.object_name,
                     "ObjectType": obj.object_type,
+                    "ObjectExtractionLevel": obj.level,
                     "DependencyType": "TABLE",
                     "DependencyDatabase": target_db,
                     "DependencySchema": schema_norm,
                     "DependencyName": dep_name,
+                    "DependencyExtractionLevel": "",
                 }
             )
         for dep_db, dep_schema, dep_name, dep_type in obj.dep_objects:
@@ -612,6 +705,9 @@ def main() -> None:
             referenced_obj = object_catalog.get(dep_key)
             if referenced_obj is not None:
                 resolved_type = referenced_obj.object_type
+                dependency_level = referenced_obj.level
+            else:
+                dependency_level = ""
             dep_rows.append(
                 {
                     "ObjectServer": obj.server,
@@ -619,10 +715,12 @@ def main() -> None:
                     "ObjectSchema": obj.object_schema,
                     "ObjectName": obj.object_name,
                     "ObjectType": obj.object_type,
+                    "ObjectExtractionLevel": obj.level,
                     "DependencyType": resolved_type,
                     "DependencyDatabase": target_db,
                     "DependencySchema": schema_norm,
                     "DependencyName": dep_name,
+                    "DependencyExtractionLevel": dependency_level,
                 }
             )
 
@@ -630,13 +728,30 @@ def main() -> None:
     report_path = Path(args.report_output)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_df.to_excel(report_path, index=False)
-    print(f"Report→Oggetto: {len(report_records)} righe -> {report_path}")
+    log_progress(f"Report→Oggetto: {len(report_records)} righe -> {report_path}")
 
     dep_df = pd.DataFrame(dep_rows, columns=DEPENDENCY_COLUMNS)
     dep_path = Path(args.dependency_output)
     dep_path.parent.mkdir(parents=True, exist_ok=True)
-    dep_df.to_excel(dep_path, index=False)
-    print(f"Dipendenze normalizzate: {len(dep_rows)} righe -> {dep_path}")
+    with pd.ExcelWriter(dep_path) as writer:
+        dep_df.to_excel(writer, sheet_name="All", index=False)
+        if not dep_df.empty:
+            level_values: List[int] = []
+            for raw_value in dep_df["ObjectExtractionLevel"].unique():
+                if raw_value in ("", None):
+                    continue
+                try:
+                    level_values.append(int(raw_value))
+                except (ValueError, TypeError):
+                    continue
+            for level_value in sorted(set(level_values)):
+                sheet_name = f"L{level_value}"
+                dep_df.loc[dep_df["ObjectExtractionLevel"] == level_value].to_excel(
+                    writer,
+                    sheet_name=sheet_name,
+                    index=False,
+                )
+    log_progress(f"Dipendenze normalizzate: {len(dep_rows)} righe -> {dep_path}")
 
     obj_rows = [
         {
@@ -645,6 +760,7 @@ def main() -> None:
             "ObjectSchema": obj.object_schema,
             "ObjectName": obj.object_name,
             "ObjectType": obj.object_type,
+            "ExtractionLevel": obj.level,
             "ObjectDefinition": obj.definition.strip(),
         }
         for obj in object_catalog.values()
@@ -653,16 +769,106 @@ def main() -> None:
     obj_path = Path(args.object_output)
     obj_path.parent.mkdir(parents=True, exist_ok=True)
     obj_df.to_excel(obj_path, index=False)
-    print(f"Catalogo oggetti: {len(obj_rows)} elementi -> {obj_path}")
+    log_progress(f"Catalogo oggetti: {len(obj_rows)} elementi -> {obj_path}")
 
     if failure_records:
         failure_df = pd.DataFrame(failure_records, columns=FAILURE_COLUMNS)
         failure_path = Path(args.failure_log)
         failure_path.parent.mkdir(parents=True, exist_ok=True)
         failure_df.to_excel(failure_path, index=False)
-        print(f"Log fallimenti lineage: {len(failure_records)} righe -> {failure_path}")
+        log_progress(f"Log fallimenti lineage: {len(failure_records)} righe -> {failure_path}")
     else:
-        print("Nessun fallimento di lineage da registrare")
+        log_progress("Nessun fallimento di lineage da registrare")
+
+    total_objects = len(object_catalog)
+    max_level = max((obj.level for obj in object_catalog.values()), default=0)
+    total_dep_tables = sum(len(obj.dep_tables) for obj in object_catalog.values())
+    total_dep_objects = sum(len(obj.dep_objects) for obj in object_catalog.values())
+    avg_dep_tables = (total_dep_tables / total_objects) if total_objects else 0
+    avg_dep_objects = (total_dep_objects / total_objects) if total_objects else 0
+    unique_reports = (
+        report_df[["Server", "Database", "Schema", "Table"]]
+        .drop_duplicates()
+        .shape[0]
+    )
+    processed_sources = report_df[["Server", "Schema", "Table"]].drop_duplicates().shape[0]
+    kpi_rows = [
+        {"Metric": "Oggetti SQL distinti", "Value": total_objects},
+        {"Metric": "Livello massimo estrazione", "Value": max_level},
+        {"Metric": "Media dependenze verso tabelle", "Value": round(avg_dep_tables, 2)},
+        {"Metric": "Media dependenze verso oggetti", "Value": round(avg_dep_objects, 2)},
+        {"Metric": "Tabelle sorgente con lineage", "Value": processed_sources},
+        {"Metric": "Combinazioni report-server", "Value": unique_reports},
+        {"Metric": "Righe report lineage", "Value": len(report_df)},
+        {"Metric": "Fallimenti lineage", "Value": len(failure_records)},
+    ]
+
+    if obj_df.empty:
+        objects_by_type_df = pd.DataFrame(columns=["ObjectType", "DistinctObjects"])
+        objects_per_db_df = pd.DataFrame(
+            columns=["Database", "DistinctObjects", "DistinctSchemas", "MaxExtractionLevel"]
+        )
+        levels_distribution_df = pd.DataFrame(columns=["ExtractionLevel", "DistinctObjects"])
+    else:
+        objects_by_type_df = (
+            obj_df.groupby("ObjectType")
+            .agg(DistinctObjects=("ObjectName", "nunique"))
+            .reset_index()
+            .sort_values("DistinctObjects", ascending=False)
+        )
+
+        objects_per_db_df = (
+            obj_df.groupby("Database")
+            .agg(
+                DistinctObjects=("ObjectName", "nunique"),
+                DistinctSchemas=("ObjectSchema", "nunique"),
+                MaxExtractionLevel=("ExtractionLevel", "max"),
+            )
+            .reset_index()
+            .sort_values("DistinctObjects", ascending=False)
+        )
+
+        levels_distribution_df = (
+            obj_df.groupby("ExtractionLevel")
+            .agg(DistinctObjects=("ObjectName", "nunique"))
+            .reset_index()
+            .sort_values("ExtractionLevel")
+        )
+
+    if report_df.empty:
+        report_weight_df = pd.DataFrame(
+            columns=["Database", "ReportRows", "DistinctSourceTables", "DistinctObjects", "SharePct"]
+        )
+    else:
+        report_weight_df = (
+            report_df.groupby("ObjectDatabase")
+            .agg(
+                ReportRows=("Table", "size"),
+                DistinctSourceTables=("Table", "nunique"),
+                DistinctObjects=("ObjectName", "nunique"),
+            )
+            .reset_index()
+        )
+    report_weight_df.rename(columns={"ObjectDatabase": "Database"}, inplace=True)
+    report_weight_df["Database"].replace("", "(vuoto)", inplace=True)
+    total_report_rows = report_weight_df["ReportRows"].sum()
+    if total_report_rows:
+        report_weight_df["SharePct"] = (
+            report_weight_df["ReportRows"] / total_report_rows * 100
+        ).round(2)
+    else:
+        report_weight_df["SharePct"] = 0
+
+    summary_path = Path(args.summary_output)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(summary_path) as writer:
+        pd.DataFrame(kpi_rows).to_excel(writer, sheet_name="KPIs", index=False)
+        objects_by_type_df.to_excel(writer, sheet_name="OggettiPerTipo", index=False)
+        objects_per_db_df.to_excel(writer, sheet_name="DatabaseOggetti", index=False)
+        report_weight_df.to_excel(writer, sheet_name="PesoDatabase", index=False)
+        levels_distribution_df.to_excel(writer, sheet_name="DistribuzioneLivelli", index=False)
+    log_progress(f"Metriche riepilogative -> {summary_path}")
+    log_progress("Script completato")
 
 
 if __name__ == "__main__":
