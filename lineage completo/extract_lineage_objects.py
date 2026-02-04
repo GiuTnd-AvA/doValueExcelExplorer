@@ -506,7 +506,7 @@ def main() -> None:
     pool = ConnectionPool(args.driver)
     object_catalog: Dict[Tuple[str, str, str, str], LineageObject] = {}
     pending: Deque[LineageObject] = deque()  # Queue drives breadth-first recursion
-    report_records: List[Dict[str, str]] = []
+    report_records: List[Dict[str, object]] = []
     failure_records: List[Dict[str, str]] = []
     server_db_cache: Dict[str, List[str]] = {}
     start_time = time.time()
@@ -677,7 +677,7 @@ def main() -> None:
         log_progress("Nessun oggetto derivato individuato")
         return
 
-    dep_rows: List[Dict[str, str]] = []
+    dep_rows: List[Dict[str, object]] = []
     for obj in object_catalog.values():
         for dep_db, dep_schema, dep_name in obj.dep_tables:
             target_db = dep_db or obj.database
