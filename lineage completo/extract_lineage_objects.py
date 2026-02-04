@@ -37,6 +37,10 @@ DEFAULT_OBJECT_OUTPUT = (
     r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
     r"\7. Reverse engineering\Lineage completo\lineage_object_catalog.xlsx"
 )
+DEFAULT_FAILURE_LOG = (
+    r"\\dobank\progetti\S1\2025_pj_Unified_Data_Analytics_Tool"
+    r"\7. Reverse engineering\Lineage completo\lineage_failures_log.xlsx"
+)
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
 
 OBJECT_TYPES_OF_INTEREST = {
@@ -79,6 +83,7 @@ DEPENDENCY_COLUMNS = [
     "ObjectName",
     "ObjectType",
     "DependencyType",
+    "DependencyDatabase",
     "DependencySchema",
     "DependencyName",
 ]
@@ -92,6 +97,16 @@ OBJECT_CATALOG_COLUMNS = [
     "ObjectDefinition",
 ]
 
+FAILURE_COLUMNS = [
+    "Path_File",
+    "File_name",
+    "Server",
+    "Database",
+    "Schema",
+    "Table",
+    "Reason",
+]
+
 
 @dataclass
 class LineageObject:
@@ -101,8 +116,8 @@ class LineageObject:
     object_name: str
     object_type: str
     definition: str
-    dep_tables: Tuple[Tuple[str, str], ...]
-    dep_objects: Tuple[Tuple[str, str, str], ...]
+    dep_tables: Tuple[Tuple[str, str, str], ...]  # (database, schema, name)
+    dep_objects: Tuple[Tuple[str, str, str, str], ...]  # (database, schema, name, type)
 
 
 def normalize(value: object) -> str:
@@ -179,31 +194,51 @@ def classify_motivo(sql_definition: Optional[str], target_schema: str, target_ta
     return "Lettura"
 
 
+def resolve_dependency_type(ref_type: Optional[str], ref_class: Optional[str], ref_db: str) -> str:
+    if ref_type:
+        return ref_type
+    if ref_db:
+        return "EXTERNAL_OBJECT"
+    if ref_class:
+        return ref_class.upper()
+    return "UNKNOWN"
+
+
 def fetch_object_dependencies(
     conn: pyodbc.Connection,
     object_id: int,
-) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str, str]]]:
+) -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str, str, str]]]:
     query = (
         "SELECT"
         "    ISNULL(d.referenced_schema_name, '') AS ref_schema,"
         "    d.referenced_entity_name AS ref_name,"
-        "    obj.type_desc AS ref_type"
+        "    obj.type_desc AS ref_type,"
+        "    ISNULL(d.referenced_database_name, '') AS ref_db,"
+        "    d.referenced_class_desc AS ref_class"
         " FROM sys.sql_expression_dependencies d"
         " LEFT JOIN sys.objects obj ON d.referenced_id = obj.object_id"
         " WHERE d.referencing_id = ?"
     )
     cursor = conn.cursor()
     cursor.execute(query, object_id)
-    tables: List[Tuple[str, str]] = []
-    objects: List[Tuple[str, str, str]] = []
-    for ref_schema, ref_name, ref_type in cursor.fetchall():
+    tables: List[Tuple[str, str, str]] = []
+    objects: List[Tuple[str, str, str, str]] = []
+    for ref_schema, ref_name, ref_type, ref_database, ref_class in cursor.fetchall():
         if not ref_name:
             continue
         schema_part = (ref_schema or "dbo").strip() or "dbo"
+        database_part = (ref_database or "").strip()
         if ref_type == "USER_TABLE":
-            tables.append((schema_part, ref_name))
+            tables.append((database_part, schema_part, ref_name))
         else:
-            objects.append((schema_part, ref_name, ref_type or "UNKNOWN"))
+            objects.append(
+                (
+                    database_part,
+                    schema_part,
+                    ref_name,
+                    resolve_dependency_type(ref_type, ref_class, database_part),
+                )
+            )
     cursor.close()
     return tables, objects
 
@@ -331,6 +366,11 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OBJECT_OUTPUT,
         help="File Excel con il catalogo degli oggetti rilevati",
     )
+    parser.add_argument(
+        "--failure-log",
+        default=DEFAULT_FAILURE_LOG,
+        help="File Excel con l'elenco dei report per cui non e' stato trovato il lineage",
+    )
     parser.add_argument("--driver", default=DEFAULT_DRIVER, help="Driver ODBC da utilizzare")
     parser.add_argument(
         "--fallback-db",
@@ -388,12 +428,18 @@ def build_candidate_databases(
     return ordered
 
 
-def format_table_list(items: Iterable[Tuple[str, str]]) -> str:
-    return " ; ".join(f"{schema}.{name}" for schema, name in items)
+def format_table_list(items: Iterable[Tuple[str, str, str]]) -> str:
+    def format_entry(db: str, schema: str, name: str) -> str:
+        return f"{db}.{schema}.{name}" if db else f"{schema}.{name}"
+
+    return " ; ".join(format_entry(db, schema, name) for db, schema, name in items)
 
 
-def format_object_list(items: Iterable[Tuple[str, str, str]]) -> str:
-    return " ; ".join(f"{schema}.{name}" for schema, name, _ in items)
+def format_object_list(items: Iterable[Tuple[str, str, str, str]]) -> str:
+    def format_entry(db: str, schema: str, name: str) -> str:
+        return f"{db}.{schema}.{name}" if db else f"{schema}.{name}"
+
+    return " ; ".join(format_entry(db, schema, name) for db, schema, name, _ in items)
 
 
 def main() -> None:
@@ -409,6 +455,7 @@ def main() -> None:
     object_catalog: Dict[Tuple[str, str, str, str], LineageObject] = {}
     pending: Deque[LineageObject] = deque()  # Queue drives breadth-first recursion
     report_records: List[Dict[str, str]] = []
+    failure_records: List[Dict[str, str]] = []
     server_db_cache: Dict[str, List[str]] = {}
 
     def register_object(obj: LineageObject) -> LineageObject:
@@ -424,11 +471,24 @@ def main() -> None:
 
     try:
         for _, row in df.iterrows():
+            path_file = normalize(row.get("Path_File"))
+            file_name = normalize(row.get("File_name"))
             server = normalize(args.override_server or row.get("Server"))
             database_hint = normalize(row.get("Database"))
             schema = normalize(row.get("Schema")) or "dbo"
             table = normalize(row.get("Table"))
-            if not (server and table):
+            if not server or not table:
+                failure_records.append(
+                    {
+                        "Path_File": path_file,
+                        "File_name": file_name,
+                        "Server": server,
+                        "Database": database_hint,
+                        "Schema": schema,
+                        "Table": table,
+                        "Reason": "Server o tabella non valorizzati",
+                    }
+                )
                 continue
 
             candidate_dbs = build_candidate_databases(
@@ -454,14 +514,25 @@ def main() -> None:
                     break
 
             if not objects:
+                failure_records.append(
+                    {
+                        "Path_File": path_file,
+                        "File_name": file_name,
+                        "Server": server,
+                        "Database": database_hint,
+                        "Schema": schema,
+                        "Table": table,
+                        "Reason": "Nessun oggetto SQL trovato nel server/database indicato",
+                    }
+                )
                 continue
 
             for obj in objects:
                 stored = register_object(obj)
                 report_records.append(
                     {
-                        "Path_File": normalize(row.get("Path_File")),
-                        "File_name": normalize(row.get("File_name")),
+                        "Path_File": path_file,
+                        "File_name": file_name,
                         "Server": server,
                         "Database": matched_db or database_hint,
                         "Schema": schema,
@@ -490,16 +561,22 @@ def main() -> None:
             if key in processed:
                 continue
             processed.add(key)
-            conn = pool.get(current.server, current.database)
-            if conn is None:
+            current_conn = pool.get(current.server, current.database)
+            if current_conn is None:
                 continue
-            for dep_schema, dep_name, dep_type in current.dep_objects:
-                if dep_type not in OBJECT_TYPES_OF_INTEREST:
+            for dep_db, dep_schema, dep_name, dep_type in current.dep_objects:
+                should_attempt = dep_type in OBJECT_TYPES_OF_INTEREST or dep_type in {"EXTERNAL_OBJECT", "UNKNOWN"}
+                if not should_attempt:
                     continue
-                dep_key = make_object_key(current.server, current.database, dep_schema or "dbo", dep_name)
+                schema_norm = (dep_schema or "dbo").strip() or "dbo"
+                target_db = dep_db or current.database
+                dep_key = make_object_key(current.server, target_db, schema_norm, dep_name)
                 if dep_key in object_catalog:
                     continue
-                dep_obj = fetch_object_by_name(conn, current.server, current.database, dep_schema, dep_name)
+                conn = current_conn if target_db == current.database else pool.get(current.server, target_db)
+                if conn is None:
+                    continue
+                dep_obj = fetch_object_by_name(conn, current.server, target_db, schema_norm, dep_name)
                 if dep_obj:
                     register_object(dep_obj)
     finally:
@@ -511,7 +588,9 @@ def main() -> None:
 
     dep_rows: List[Dict[str, str]] = []
     for obj in object_catalog.values():
-        for dep_schema, dep_name in obj.dep_tables:
+        for dep_db, dep_schema, dep_name in obj.dep_tables:
+            target_db = dep_db or obj.database
+            schema_norm = (dep_schema or "dbo").strip() or "dbo"
             dep_rows.append(
                 {
                     "ObjectServer": obj.server,
@@ -520,11 +599,19 @@ def main() -> None:
                     "ObjectName": obj.object_name,
                     "ObjectType": obj.object_type,
                     "DependencyType": "TABLE",
-                    "DependencySchema": dep_schema,
+                    "DependencyDatabase": target_db,
+                    "DependencySchema": schema_norm,
                     "DependencyName": dep_name,
                 }
             )
-        for dep_schema, dep_name, dep_type in obj.dep_objects:
+        for dep_db, dep_schema, dep_name, dep_type in obj.dep_objects:
+            target_db = dep_db or obj.database
+            schema_norm = (dep_schema or "dbo").strip() or "dbo"
+            dep_key = make_object_key(obj.server, target_db, schema_norm, dep_name)
+            resolved_type = dep_type
+            referenced_obj = object_catalog.get(dep_key)
+            if referenced_obj is not None:
+                resolved_type = referenced_obj.object_type
             dep_rows.append(
                 {
                     "ObjectServer": obj.server,
@@ -532,8 +619,9 @@ def main() -> None:
                     "ObjectSchema": obj.object_schema,
                     "ObjectName": obj.object_name,
                     "ObjectType": obj.object_type,
-                    "DependencyType": dep_type,
-                    "DependencySchema": dep_schema,
+                    "DependencyType": resolved_type,
+                    "DependencyDatabase": target_db,
+                    "DependencySchema": schema_norm,
                     "DependencyName": dep_name,
                 }
             )
@@ -566,6 +654,15 @@ def main() -> None:
     obj_path.parent.mkdir(parents=True, exist_ok=True)
     obj_df.to_excel(obj_path, index=False)
     print(f"Catalogo oggetti: {len(obj_rows)} elementi -> {obj_path}")
+
+    if failure_records:
+        failure_df = pd.DataFrame(failure_records, columns=FAILURE_COLUMNS)
+        failure_path = Path(args.failure_log)
+        failure_path.parent.mkdir(parents=True, exist_ok=True)
+        failure_df.to_excel(failure_path, index=False)
+        print(f"Log fallimenti lineage: {len(failure_records)} righe -> {failure_path}")
+    else:
+        print("Nessun fallimento di lineage da registrare")
 
 
 if __name__ == "__main__":
