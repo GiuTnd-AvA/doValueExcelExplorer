@@ -1,0 +1,169 @@
+/* =====================================================================
+   Trova dipendenze di una tabella (entranti/ uscenti) in SQL Server
+   Autore: (adattato per uso generale)
+   Parametri:
+       @SchemaName  = nome schema della tabella (es. 'dbo')
+       @TableName   = nome tabella (es. 'table0')
+   Output (unificato):
+       Direction    = 'INBOUND'  -> oggetti che dipendono dalla tabella
+                      'OUTBOUND' -> oggetti da cui la tabella dipende
+       RefDB        = database dell'oggetto referenziante (se noto)
+       RefSchema    = schema dell'oggetto referenziante
+       RefObject    = nome oggetto referenziante
+       RefType      = tipo (VIEW/PROC/FUNC/TRIGGER/SYNONYM/FK/...)
+       Detail       = dettaglio (colonne, FK name, ecc.)
+===================================================================== */
+
+DECLARE @SchemaName sysname = N'dbo';
+DECLARE @TableName  sysname = N'table0';
+
+SET NOCOUNT ON;
+
+IF OBJECT_ID(QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName)) IS NULL
+BEGIN
+    RAISERROR('La tabella %s.%s non esiste in %s.', 16, 1, @SchemaName, @TableName, DB_NAME());
+    RETURN;
+END
+
+;WITH
+-- Oggetto base
+base AS (
+    SELECT
+        DB_NAME()           AS db_name,
+        s.name              AS schema_name,
+        o.name              AS object_name,
+        o.object_id         AS object_id
+    FROM sys.objects o
+    JOIN sys.schemas s ON s.schema_id = o.schema_id
+    WHERE o.type = 'U'
+      AND s.name = @SchemaName
+      AND o.name = @TableName
+),
+
+-- 1) Dipendenze tramite metadati di parsing (inbound: chi usa la tabella)
+inbound_dep AS (
+    SELECT
+        'INBOUND'                           AS Direction,
+        ISNULL(d.referencing_database_name, DB_NAME()) AS RefDB,
+        sch.name                            AS RefSchema,
+        obj.name                            AS RefObject,
+        obj.type_desc                       AS RefType,
+        COALESCE(d.referencing_entity_name, obj.name) AS Detail
+    FROM sys.sql_expression_dependencies d
+    JOIN sys.objects obj
+         ON d.referencing_id = obj.object_id
+    JOIN sys.schemas sch
+         ON obj.schema_id = sch.schema_id
+    JOIN base b
+         ON (   d.referenced_id = b.object_id
+             OR (d.referenced_schema_name = b.schema_name AND d.referenced_entity_name = b.object_name))
+    WHERE obj.is_ms_shipped = 0
+),
+
+-- 2) Dipendenze tramite FK (inbound: tabelle che referenziano la tabella)
+inbound_fk AS (
+    SELECT
+        'INBOUND'   AS Direction,
+        DB_NAME()   AS RefDB,
+        sch.name    AS RefSchema,
+        t.name      AS RefObject,
+        'FOREIGN_KEY (from child -> base)' AS RefType,
+        fk.name     AS Detail
+    FROM sys.foreign_keys fk
+    JOIN sys.tables     t   ON fk.parent_object_id = t.object_id
+    JOIN sys.schemas    sch ON t.schema_id = sch.schema_id
+    JOIN base b             ON fk.referenced_object_id = b.object_id
+),
+
+-- 3) Dipendenze in uscita: FK che la tabella base ha verso altre tabelle
+outbound_fk AS (
+    SELECT
+        'OUTBOUND'  AS Direction,
+        DB_NAME()   AS RefDB,
+        sch.name    AS RefSchema,
+        t.name      AS RefObject,
+        'FOREIGN_KEY (base -> referenced)' AS RefType,
+        fk.name     AS Detail
+    FROM sys.foreign_keys fk
+    JOIN sys.tables     t   ON fk.referenced_object_id = t.object_id
+    JOIN sys.schemas    sch ON t.schema_id = sch.schema_id
+    JOIN base b             ON fk.parent_object_id = b.object_id
+),
+
+-- 4) Trigger che coinvolgono la tabella base (inbound: trigger su base)
+inbound_trg AS (
+    SELECT
+        'INBOUND'   AS Direction,
+        DB_NAME()   AS RefDB,
+        sch.name    AS RefSchema,
+        tr.name     AS RefObject,
+        'TRIGGER'   AS RefType,
+        QUOTENAME(sch.name) + '.' + QUOTENAME(tb.name) AS Detail
+    FROM sys.triggers tr
+    JOIN sys.tables  tb  ON tr.parent_id = tb.object_id
+    JOIN sys.schemas sch ON tb.schema_id = sch.schema_id
+    JOIN base b          ON tb.object_id = b.object_id
+),
+
+-- 5) Sinonimi che puntano alla tabella base (inbound)
+inbound_syn AS (
+    SELECT
+        'INBOUND'   AS Direction,
+        DB_NAME()   AS RefDB,
+        sch.name    AS RefSchema,
+        sy.name     AS RefObject,
+        'SYNONYM'   AS RefType,
+        sy.base_object_name AS Detail
+    FROM sys.synonyms sy
+    JOIN sys.schemas sch ON sy.schema_id = sch.schema_id
+    WHERE PARSENAME(sy.base_object_name, 2) = @SchemaName
+      AND PARSENAME(sy.base_object_name, 1) = @TableName
+),
+
+-- 6) Riferimenti testuali di fallback (vista/proc/func/trigger) - best effort
+--    Utile se per qualche motivo sys.sql_expression_dependencies non è popolato.
+inbound_text AS (
+    SELECT DISTINCT
+        'INBOUND'   AS Direction,
+        DB_NAME()   AS RefDB,
+        sch.name    AS RefSchema,
+        o.name      AS RefObject,
+        o.type_desc AS RefType,
+        'match text in definition' AS Detail
+    FROM sys.sql_modules m
+    JOIN sys.objects     o   ON m.object_id = o.object_id
+    JOIN sys.schemas     sch ON o.schema_id = sch.schema_id
+    CROSS APPLY (SELECT
+        '%' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) + '%') AS pat(pattern)
+    WHERE m.definition LIKE pat.pattern
+      AND o.is_ms_shipped = 0
+),
+
+-- 7) Dipendenze in uscita (la tabella base usa oggetti via computed columns, default, ecc.)
+--    Ci affidiamo a sql_expression_dependencies dove la tabella base è referenziante.
+outbound_dep AS (
+    SELECT
+        'OUTBOUND'                          AS Direction,
+        ISNULL(d.referenced_database_name, DB_NAME()) AS RefDB,
+        d.referenced_schema_name            AS RefSchema,
+        d.referenced_entity_name            AS RefObject,
+        'REFERENCED_OBJECT'                 AS RefType,
+        CAST(NULL AS sysname)               AS Detail
+    FROM sys.sql_expression_dependencies d
+    JOIN base b ON d.referencing_id = b.object_id
+    WHERE d.referenced_entity_name IS NOT NULL
+)
+
+SELECT Direction, RefDB, RefSchema, RefObject, RefType, Detail
+FROM (
+    SELECT * FROM inbound_dep
+    UNION ALL SELECT * FROM inbound_fk
+    UNION ALL SELECT * FROM inbound_trg
+    UNION ALL SELECT * FROM inbound_syn
+    UNION ALL SELECT * FROM inbound_text
+    UNION ALL SELECT * FROM outbound_fk
+    UNION ALL SELECT * FROM outbound_dep
+) x
+ORDER BY
+    CASE Direction WHEN 'INBOUND' THEN 0 ELSE 1 END,
+    RefType, RefSchema, RefObject;
