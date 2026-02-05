@@ -1,41 +1,33 @@
 DECLARE @Schema sysname = N'dbo';
-DECLARE @Table  sysname = N'table0';
-DECLARE @obj    nvarchar(400) = QUOTENAME(@Schema) + N'.' + QUOTENAME(@Table);
+DECLARE @Name   sysname = N'table0';  -- può essere anche una vista
+DECLARE @obj    nvarchar(517) = QUOTENAME(@Schema) + N'.' + QUOTENAME(@Name);
+DECLARE @objId  int, @isTable bit;
 
-IF OBJECT_ID(@obj, 'U') IS NULL
+-- verifica esistenza e tipo
+SELECT 
+  @objId  = OBJECT_ID(@obj),
+  @isTable = CASE WHEN OBJECTPROPERTY(OBJECT_ID(@obj),'IsUserTable') = 1 THEN 1 ELSE 0 END;
+
+IF @objId IS NULL
 BEGIN
-  RAISERROR('Tabella %s non trovata nel DB %s.', 16, 1, @obj, DB_NAME());
-  RETURN;
+    DECLARE @db sysname = DB_NAME();
+    DECLARE @msg nvarchar(400) = N'Oggetto ' + @obj + N' non trovato nel DB ' + @db + N'.';
+    THROW 50001, @msg, 1;
 END;
 
--- INBOUND: chi dipende dalla tabella (view/proc/func/trigger, ecc.)
-SELECT
-  Direction    = 'INBOUND',
-  RefDB        = DB_NAME(),
-  RefSchema    = re.referencing_schema_name,
-  RefObject    = re.referencing_entity_name,
-  RefType      = re.referencing_class_desc,
-  Detail       = NULL
+-- INBOUND: chi dipende da @obj (view/proc/func/trigger ecc.)
+SELECT 
+  Direction  = 'INBOUND',
+  RefDB      = DB_NAME(),
+  RefSchema  = re.referencing_schema_name,
+  RefObject  = re.referencing_entity_name,
+  RefType    = re.referencing_class_desc,
+  Detail     = NULL
 FROM sys.dm_sql_referencing_entities(@obj, 'OBJECT') AS re
 
 UNION ALL
 
--- INBOUND: tabelle figlie con FK -> tabella base
-SELECT
-  'INBOUND',
-  DB_NAME(),
-  s.name,
-  t.name,
-  'FOREIGN_KEY (child -> base)',
-  fk.name
-FROM sys.foreign_keys fk
-JOIN sys.tables  t  ON fk.parent_object_id = t.object_id
-JOIN sys.schemas s  ON t.schema_id = s.schema_id
-WHERE fk.referenced_object_id = OBJECT_ID(@obj)
-
-UNION ALL
-
--- OUTBOUND: oggetti referenziati dalla tabella (computed/default/chiavi, ecc.)
+-- OUTBOUND: oggetti referenziati da @obj (tabelle, viste, tipi, ecc.)
 SELECT
   'OUTBOUND',
   COALESCE(re2.referenced_database_name, DB_NAME()),
@@ -47,7 +39,23 @@ FROM sys.dm_sql_referenced_entities(@obj, 'OBJECT') AS re2
 
 UNION ALL
 
--- OUTBOUND: FK della tabella base verso altre tabelle
+-- INBOUND FK (solo se @obj è una TABELLA)
+SELECT
+  'INBOUND',
+  DB_NAME(),
+  s.name,
+  t.name,
+  'FOREIGN_KEY (child -> base)',
+  fk.name
+FROM sys.foreign_keys fk
+JOIN sys.tables  t  ON fk.parent_object_id = t.object_id
+JOIN sys.schemas s  ON t.schema_id = s.schema_id
+WHERE @isTable = 1
+  AND fk.referenced_object_id = @objId
+
+UNION ALL
+
+-- OUTBOUND FK (solo se @obj è una TABELLA)
 SELECT
   'OUTBOUND',
   DB_NAME(),
@@ -56,8 +64,9 @@ SELECT
   'FOREIGN_KEY (base -> referenced)',
   fk2.name
 FROM sys.foreign_keys fk2
-JOIN sys.tables  t2  ON fk2.referenced_object_id = t2.object_id
-JOIN sys.schemas s2  ON t2.schema_id = s2.schema_id
-WHERE fk2.parent_object_id = OBJECT_ID(@obj)
+JOIN sys.tables  t2 ON fk2.referenced_object_id = t2.object_id
+JOIN sys.schemas s2 ON t2.schema_id = s2.schema_id
+WHERE @isTable = 1
+  AND fk2.parent_object_id = @objId
 
 ORDER BY Direction, RefType, RefSchema, RefObject;
