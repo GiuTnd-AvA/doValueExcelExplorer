@@ -73,6 +73,56 @@ def sanitize_for_excel(value: object) -> str:
     return "".join(ch for ch in text if ch not in INVALID_EXCEL_CHARS)
 
 
+REPORT_GUIDE = [
+    "Ogni riga associa una tabella dell'Excel di input all'oggetto SQL trovato (vista/stored/funzione).",
+    "ObjectExtractionLevel indica il livello di scoperta: 1 = oggetto direttamente collegato al report, livelli maggiori sono dipendenze successive.",
+    "Motivo specifica se l'oggetto effettua lettura o scrittura sulla tabella sorgente (analisi del DDL).",
+    "DependencyTables e DependencyObjects elencano le dipendenze immediate dell'oggetto per consultazioni rapide.",
+]
+
+DEPENDENCY_GUIDE = [
+    "Rappresentazione normalizzata del grafo oggetto → tabella/oggetto.",
+    "Ogni riga è un arco diretto; ObjectExtractionLevel è il livello dell'oggetto sorgente, DependencyExtractionLevel quello del nodo di destinazione se noto.",
+    "Le schede L1, L2, ... filtrano automaticamente le dipendenze per livello dell'oggetto sorgente.",
+]
+
+CATALOG_GUIDE = [
+    "Catalogo degli oggetti SQL incontrati durante l'espansione del lineage.",
+    "ExtractionLevel permette di capire a quale distanza dal report si trova l'oggetto.",
+    "ObjectDefinition contiene il DDL completo utile a verificare logiche e join.",
+]
+
+FAILURE_GUIDE = [
+    "Elenco delle tabelle di input per cui non è stato possibile derivare il lineage.",
+    "Reason indica il motivo del fallimento (input incompleto, permessi insufficienti, nessun oggetto SQL trovato).",
+    "Utilizzare queste informazioni per correggere l'Excel o richiedere i privilegi necessari.",
+]
+
+SUMMARY_GUIDE = [
+    "Workbook di sintesi con KPI, breakdown per tipologia di oggetto e peso dei database sulla reportistica.",
+    "Usare il foglio KPIs per avere un colpo d'occhio, mentre gli altri fogli approfondiscono distribuzioni e pesi.",
+]
+
+
+def write_guide_sheet(writer: pd.ExcelWriter, lines: List[str]) -> None:
+    if not lines:
+        return
+    guide_df = pd.DataFrame({"Descrizione": lines})
+    guide_df.to_excel(writer, sheet_name="Guida", index=False)
+
+
+def export_single_sheet_with_guide(
+    df: pd.DataFrame,
+    path: Path,
+    sheet_name: str,
+    guide_lines: List[str],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(path) as writer:
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        write_guide_sheet(writer, guide_lines)
+
+
 REPORT_COLUMNS = [
     "Server",
     "Database",
@@ -790,8 +840,7 @@ def main() -> None:
 
     report_df = pd.DataFrame(report_records, columns=REPORT_COLUMNS)
     report_path = Path(args.report_output)
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_df.to_excel(report_path, index=False)
+    export_single_sheet_with_guide(report_df, report_path, "ReportLineage", REPORT_GUIDE)
     log_progress(f"Report→Oggetto: {len(report_records)} righe -> {report_path}")
 
     dep_df = pd.DataFrame(dep_rows, columns=DEPENDENCY_COLUMNS)
@@ -815,6 +864,7 @@ def main() -> None:
                     sheet_name=sheet_name,
                     index=False,
                 )
+        write_guide_sheet(writer, DEPENDENCY_GUIDE)
     log_progress(f"Dipendenze normalizzate: {len(dep_rows)} righe -> {dep_path}")
 
     obj_rows = [
@@ -831,15 +881,13 @@ def main() -> None:
     ]
     obj_df = pd.DataFrame(obj_rows, columns=OBJECT_CATALOG_COLUMNS)
     obj_path = Path(args.object_output)
-    obj_path.parent.mkdir(parents=True, exist_ok=True)
-    obj_df.to_excel(obj_path, index=False)
+    export_single_sheet_with_guide(obj_df, obj_path, "Catalogo", CATALOG_GUIDE)
     log_progress(f"Catalogo oggetti: {len(obj_rows)} elementi -> {obj_path}")
 
     if failure_records:
         failure_df = pd.DataFrame(failure_records, columns=FAILURE_COLUMNS)
         failure_path = Path(args.failure_log)
-        failure_path.parent.mkdir(parents=True, exist_ok=True)
-        failure_df.to_excel(failure_path, index=False)
+        export_single_sheet_with_guide(failure_df, failure_path, "Fallimenti", FAILURE_GUIDE)
         log_progress(f"Log fallimenti lineage: {len(failure_records)} righe -> {failure_path}")
     else:
         log_progress("Nessun fallimento di lineage da registrare")
@@ -931,6 +979,7 @@ def main() -> None:
         objects_per_db_df.to_excel(writer, sheet_name="DatabaseOggetti", index=False)
         report_weight_df.to_excel(writer, sheet_name="PesoDatabase", index=False)
         levels_distribution_df.to_excel(writer, sheet_name="DistribuzioneLivelli", index=False)
+        write_guide_sheet(writer, SUMMARY_GUIDE)
     log_progress(f"Metriche riepilogative -> {summary_path}")
     log_progress("Script completato")
 
