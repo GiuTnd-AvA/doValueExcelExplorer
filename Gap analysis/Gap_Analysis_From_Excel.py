@@ -125,7 +125,20 @@ class GapAnalyzer:
         cur = conn.cursor()
         cur.execute("SELECT OBJECT_ID(QUOTENAME(?) + '.' + QUOTENAME(?))", (schema, name))
         r = cur.fetchone()
-        return int(r[0]) if r and r[0] is not None else None
+        if r and r[0] is not None:
+            return int(r[0])
+        # Fallback: risolvi via sys.all_objects
+        cur.execute(
+            """
+            SELECT o.object_id
+            FROM sys.all_objects AS o
+            JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+            WHERE s.name = ? AND o.name = ?
+            """,
+            (schema, name),
+        )
+        r2 = cur.fetchone()
+        return int(r2[0]) if r2 and r2[0] is not None else None
 
     def _get_obj_type_code(self, conn, schema: str, name: str) -> Tuple[str, str]:
         """Ritorna (type_code, type_desc) da sys.all_objects per includere anche oggetti di sistema."""
@@ -171,6 +184,38 @@ class GapAnalyzer:
                 "scale": int(r[5]) if r[5] is not None else None,
                 "is_nullable": bool(r[6]) if r[6] is not None else True,
             })
+        return out
+
+    def _get_columns_info_info_schema(self, conn, schema: str, name: str) -> List[Dict[str, Any]]:
+        """Fallback: usa INFORMATION_SCHEMA.COLUMNS se object_id non è disponibile.
+        Non fornisce column_id reale, lo sintetizza con ROW_NUMBER su ordine di COLUMN_NAME.
+        """
+        sql = (
+            """
+            SELECT COLUMN_NAME, DATA_TYPE,
+                   CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE,
+                   IS_NULLABLE
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+            ORDER BY ORDINAL_POSITION
+            """
+        )
+        cur = conn.cursor()
+        cur.execute(sql, (schema, name))
+        rows = cur.fetchall()
+        out: List[Dict[str, Any]] = []
+        col_id = 1
+        for r in rows:
+            out.append({
+                "column_id": col_id,
+                "column": str(r[0]),
+                "type_name": str(r[1]).upper(),
+                "max_length": int(r[2]) if r[2] is not None else None,
+                "precision": int(r[3]) if r[3] is not None else None,
+                "scale": int(r[4]) if r[4] is not None else None,
+                "is_nullable": True if (str(r[5]).upper() == "YES") else False,
+            })
+            col_id += 1
         return out
 
     def _format_datatype(self, col: Dict[str, Any]) -> str:
@@ -229,9 +274,9 @@ class GapAnalyzer:
     def _sample_row(self, conn, schema: str, name: str, obj_type_code: str) -> Optional[Dict[str, Any]]:
         # Per TVF (IF/TF) aggiunge le parentesi senza argomenti; per altri oggetti semplice select
         if obj_type_code in ("IF", "TF"):
-            sql = f"SELECT TOP 1 * FROM {[schema] and '['+schema+']' or ''}.{ '['+name+']' }()"
+            sql = f"SELECT TOP 1 * FROM [{schema}].[{name}]()"
         else:
-            sql = f"SELECT TOP 1 * FROM {schema and '['+schema+']' or ''}.{ '['+name+']' }"
+            sql = f"SELECT TOP 1 * FROM [{schema}].[{name}]"
         cur = conn.cursor()
         try:
             cur.execute(sql)
@@ -254,26 +299,24 @@ class GapAnalyzer:
         conns: Dict[str, Any] = {}
         try:
             for (server, db, schema, name, objtype, ddl) in items:
-                # conn
+                # connessione per DB
                 if db not in conns:
                     conns[db] = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
                 conn = conns[db]
 
-                # Determina il tipo reale dell'oggetto (include oggetti di sistema)
-                type_code, type_desc = self._get_obj_type_code(conn, schema, name)
-                # Gestiamo oggetti a forma tabellare: U (tabella), V (vista), IF/TF (table-valued function)
-                if type_code not in ("U", "V", "IF", "TF"):
-                    results.append([server, db, schema, name, objtype, ddl, "", "", "", "", "", "Oggetto non supportato per gap analysis"])
-                    continue
-
+                # risolvi tipo (serve per TVF) e object_id
+                type_code, _ = self._get_obj_type_code(conn, schema, name)
                 obj_id = self._get_obj_id(conn, schema, name)
-                if not obj_id:
-                    results.append([server, db, schema, name, objtype, ddl, "", "", "", "", "", "Oggetto non trovato"])
-                    continue
 
-                columns = self._get_columns_info(conn, obj_id)
-                pk_cols = set(self._pk_members(conn, obj_id))
-                fk_cols = set(self._fk_members(conn, obj_id))
+                if obj_id:
+                    columns = self._get_columns_info(conn, obj_id)
+                    pk_cols = set(self._pk_members(conn, obj_id))
+                    fk_cols = set(self._fk_members(conn, obj_id))
+                else:
+                    columns = self._get_columns_info_info_schema(conn, schema, name)
+                    pk_cols = set()
+                    fk_cols = set()
+
                 sample = self._sample_row(conn, schema, name, type_code)
 
                 for col in columns:
