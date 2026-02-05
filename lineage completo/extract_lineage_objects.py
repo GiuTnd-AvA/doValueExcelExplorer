@@ -607,14 +607,25 @@ def main() -> None:
                             detected = detect_source_object_type(conn, schema, table)
                             if detected:
                                 detected_source_type = detected
-                        objects = fetch_referencing_objects(
-                            conn,
-                            server,
-                            candidate_db,
-                            schema,
-                            table,
-                            level=1,
-                        )
+                        if detected_source_type and detected_source_type != "TABLE":
+                            fetched = fetch_object_by_name(
+                                conn,
+                                server,
+                                candidate_db,
+                                schema,
+                                table,
+                                level=1,
+                            )
+                            objects = [fetched] if fetched else []
+                        else:
+                            objects = fetch_referencing_objects(
+                                conn,
+                                server,
+                                candidate_db,
+                                schema,
+                                table,
+                                level=1,
+                            )
                     except pyodbc.Error as exc:
                         add_failure_record(
                             {
@@ -647,6 +658,8 @@ def main() -> None:
                     continue
 
                 for obj in objects:
+                    if obj is None:
+                        continue
                     stored = register_object(obj)
                     report_records.append(
                         {
