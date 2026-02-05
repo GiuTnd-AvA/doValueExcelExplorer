@@ -63,6 +63,16 @@ WRITE_PATTERNS = (
     r"\bdelete\s+from\s+{target}\b",
 )
 
+INVALID_EXCEL_CHARS = {chr(i) for i in range(32)} - {"\t", "\n", "\r"}
+
+
+def sanitize_for_excel(value: object) -> str:
+    text = normalize(value)
+    if not text:
+        return ""
+    return "".join(ch for ch in text if ch not in INVALID_EXCEL_CHARS)
+
+
 REPORT_COLUMNS = [
     "Server",
     "Database",
@@ -507,7 +517,7 @@ def main() -> None:
     object_catalog: Dict[Tuple[str, str, str, str], LineageObject] = {}
     pending: Deque[LineageObject] = deque()  # Queue drives breadth-first recursion
     report_records: List[Dict[str, object]] = []
-    failure_records: List[Dict[str, str]] = []
+    failure_records: List[Dict[str, object]] = []
     server_db_cache: Dict[str, List[str]] = {}
     start_time = time.time()
 
@@ -546,6 +556,14 @@ def main() -> None:
 
     fallback_dbs = [normalize(db) for db in args.fallback_db if normalize(db)]
 
+    def add_failure_record(record: Dict[str, object]) -> None:
+        failure_records.append(
+            {
+                key: sanitize_for_excel(value) if isinstance(value, str) else value
+                for key, value in record.items()
+            }
+        )
+
     try:
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
             try:
@@ -554,7 +572,7 @@ def main() -> None:
                 schema = normalize(row.get("Schema")) or "dbo"
                 table = normalize(row.get("Table"))
                 if not server or not table:
-                    failure_records.append(
+                    add_failure_record(
                         {
                             "Server": server,
                             "Database": database_hint,
@@ -598,7 +616,7 @@ def main() -> None:
                             level=1,
                         )
                     except pyodbc.Error as exc:
-                        failure_records.append(
+                        add_failure_record(
                             {
                                 "Server": server,
                                 "Database": candidate_db,
@@ -616,7 +634,7 @@ def main() -> None:
                 source_type = detected_source_type or "TABLE"
 
                 if not objects:
-                    failure_records.append(
+                    add_failure_record(
                         {
                             "Server": server,
                             "Database": database_hint,
@@ -632,21 +650,21 @@ def main() -> None:
                     stored = register_object(obj)
                     report_records.append(
                         {
-                            "Server": server,
-                            "Database": matched_db or database_hint,
-                            "Schema": schema,
-                            "Table": table,
-                            "SourceObjectType": source_type,
-                            "ObjectServer": stored.server,
-                            "ObjectDatabase": stored.database,
-                            "ObjectSchema": stored.object_schema,
-                            "ObjectName": stored.object_name,
-                            "ObjectType": stored.object_type,
+                            "Server": sanitize_for_excel(server),
+                            "Database": sanitize_for_excel(matched_db or database_hint),
+                            "Schema": sanitize_for_excel(schema),
+                            "Table": sanitize_for_excel(table),
+                            "SourceObjectType": sanitize_for_excel(source_type),
+                            "ObjectServer": sanitize_for_excel(stored.server),
+                            "ObjectDatabase": sanitize_for_excel(stored.database),
+                            "ObjectSchema": sanitize_for_excel(stored.object_schema),
+                            "ObjectName": sanitize_for_excel(stored.object_name),
+                            "ObjectType": sanitize_for_excel(stored.object_type),
                             "ObjectExtractionLevel": stored.level,
-                            "Motivo": classify_motivo(stored.definition, schema, table),
-                            "ObjectDefinition": stored.definition.strip(),
-                            "DependencyTables": format_table_list(stored.dep_tables),
-                            "DependencyObjects": format_object_list(stored.dep_objects),
+                            "Motivo": sanitize_for_excel(classify_motivo(stored.definition, schema, table)),
+                            "ObjectDefinition": sanitize_for_excel(stored.definition.strip()),
+                            "DependencyTables": sanitize_for_excel(format_table_list(stored.dep_tables)),
+                            "DependencyObjects": sanitize_for_excel(format_object_list(stored.dep_objects)),
                         }
                     )
             finally:
@@ -689,7 +707,7 @@ def main() -> None:
                         current.level + 1,
                     )
                 except pyodbc.Error as exc:
-                    failure_records.append(
+                    add_failure_record(
                         {
                             "Server": current.server,
                             "Database": target_db,
@@ -717,16 +735,16 @@ def main() -> None:
             schema_norm = (dep_schema or "dbo").strip() or "dbo"
             dep_rows.append(
                 {
-                    "ObjectServer": obj.server,
-                    "ObjectDatabase": obj.database,
-                    "ObjectSchema": obj.object_schema,
-                    "ObjectName": obj.object_name,
-                    "ObjectType": obj.object_type,
+                    "ObjectServer": sanitize_for_excel(obj.server),
+                    "ObjectDatabase": sanitize_for_excel(obj.database),
+                    "ObjectSchema": sanitize_for_excel(obj.object_schema),
+                    "ObjectName": sanitize_for_excel(obj.object_name),
+                    "ObjectType": sanitize_for_excel(obj.object_type),
                     "ObjectExtractionLevel": obj.level,
                     "DependencyType": "TABLE",
-                    "DependencyDatabase": target_db,
-                    "DependencySchema": schema_norm,
-                    "DependencyName": dep_name,
+                    "DependencyDatabase": sanitize_for_excel(target_db),
+                    "DependencySchema": sanitize_for_excel(schema_norm),
+                    "DependencyName": sanitize_for_excel(dep_name),
                     "DependencyExtractionLevel": "",
                 }
             )
@@ -743,16 +761,16 @@ def main() -> None:
                 dependency_level = ""
             dep_rows.append(
                 {
-                    "ObjectServer": obj.server,
-                    "ObjectDatabase": obj.database,
-                    "ObjectSchema": obj.object_schema,
-                    "ObjectName": obj.object_name,
-                    "ObjectType": obj.object_type,
+                    "ObjectServer": sanitize_for_excel(obj.server),
+                    "ObjectDatabase": sanitize_for_excel(obj.database),
+                    "ObjectSchema": sanitize_for_excel(obj.object_schema),
+                    "ObjectName": sanitize_for_excel(obj.object_name),
+                    "ObjectType": sanitize_for_excel(obj.object_type),
                     "ObjectExtractionLevel": obj.level,
-                    "DependencyType": resolved_type,
-                    "DependencyDatabase": target_db,
-                    "DependencySchema": schema_norm,
-                    "DependencyName": dep_name,
+                    "DependencyType": sanitize_for_excel(resolved_type),
+                    "DependencyDatabase": sanitize_for_excel(target_db),
+                    "DependencySchema": sanitize_for_excel(schema_norm),
+                    "DependencyName": sanitize_for_excel(dep_name),
                     "DependencyExtractionLevel": dependency_level,
                 }
             )
@@ -788,13 +806,13 @@ def main() -> None:
 
     obj_rows = [
         {
-            "Server": obj.server,
-            "Database": obj.database,
-            "ObjectSchema": obj.object_schema,
-            "ObjectName": obj.object_name,
-            "ObjectType": obj.object_type,
+            "Server": sanitize_for_excel(obj.server),
+            "Database": sanitize_for_excel(obj.database),
+            "ObjectSchema": sanitize_for_excel(obj.object_schema),
+            "ObjectName": sanitize_for_excel(obj.object_name),
+            "ObjectType": sanitize_for_excel(obj.object_type),
             "ExtractionLevel": obj.level,
-            "ObjectDefinition": obj.definition.strip(),
+            "ObjectDefinition": sanitize_for_excel(obj.definition.strip()),
         }
         for obj in object_catalog.values()
     ]
