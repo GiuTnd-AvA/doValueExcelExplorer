@@ -5,6 +5,11 @@ Server, DB, Schema, Table, ObjectType, Error
 
 Se la voce non viene trovata in nessun DB, scrive una riga con Error valorizzato.
 Supporta anche input "schema.table" nella colonna `table`.
+
+Limitazioni note: in SQL Server, senza permesso di accesso (`CONNECT`) e/o `VIEW DEFINITION` su un database,
+non è possibile leggere i metadati degli oggetti (tabelle/viste/etc.) contenuti in quel database.
+Questo script rileva i database ai quali l'utente non ha accesso e li segnala nel risultato,
+ma non può verificare l'esistenza degli oggetti al loro interno senza i permessi adeguati.
 """
 
 import os
@@ -44,6 +49,9 @@ QUERY_TIMEOUT: int = 60
 # Cosa includere nella ricerca
 INCLUDE_VIEWS: bool = True
 INCLUDE_SYNONYMS: bool = True
+
+# Se true, aggiunge l'elenco dei DB non accessibili al messaggio di errore
+REPORT_NO_ACCESS_DBS: bool = True
 
 
 class ServerObjectFinder:
@@ -124,6 +132,25 @@ class ServerObjectFinder:
             except Exception:
                 pass
 
+    def _db_has_access(self, db: str) -> bool:
+        """Ritorna True se l'utente corrente ha accesso al DB (HAS_DBACCESS=1)."""
+        conn = pyodbc.connect(self._build_conn_str(None), timeout=QUERY_TIMEOUT)
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT HAS_DBACCESS(?)", (db,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            try:
+                return int(row[0]) == 1
+            except Exception:
+                return False
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     def _fetch_objects_in_db(self, db: str) -> Set[Tuple[str, str, str]]:
         """Ritorna set (schema, name, object_type_label)."""
         conn = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
@@ -167,10 +194,19 @@ class ServerObjectFinder:
             raise RuntimeError("Nessun nome tabella fornito.")
 
         databases = self._list_user_databases()
+        accessible_dbs: List[str] = []
+        no_access_dbs: List[str] = []
+        for db in databases:
+            if self._db_has_access(db):
+                accessible_dbs.append(db)
+            else:
+                no_access_dbs.append(db)
+
         results: List[List[str]] = []
         found_flags: List[bool] = [False] * len(targets)
 
-        for db in databases:
+        # Cerca solo sui DB accessibili
+        for db in accessible_dbs:
             existing = self._fetch_objects_in_db(db)
             by_table: Dict[str, List[Tuple[str, str, str]]] = {}
             for sch, nm, typ in existing:
@@ -183,10 +219,13 @@ class ServerObjectFinder:
                     results.append([self.server, db, s, n, t, ""])  # nessun errore
                     found_flags[idx] = True
 
-        # Not found rows
+        # Righe non trovate: aggiunge nota sui DB non accessibili
         for idx, (schema_opt, tname) in enumerate(targets):
             if not found_flags[idx]:
-                results.append([self.server, "", schema_opt or "", tname, "", "Non trovato su nessun DB utente del server."])
+                err = "Non trovato su nessun DB utente del server."
+                if REPORT_NO_ACCESS_DBS and no_access_dbs:
+                    err += f" DB non accessibili: {', '.join(no_access_dbs)}"
+                results.append([self.server, "", schema_opt or "", tname, "", err])
 
         # Write Excel
         out_dir = os.path.dirname(self.output_excel)
