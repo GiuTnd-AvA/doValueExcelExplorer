@@ -127,6 +127,23 @@ class GapAnalyzer:
         r = cur.fetchone()
         return int(r[0]) if r and r[0] is not None else None
 
+    def _get_obj_type_code(self, conn, schema: str, name: str) -> Tuple[str, str]:
+        """Ritorna (type_code, type_desc) da sys.all_objects per includere anche oggetti di sistema."""
+        sql = (
+            """
+            SELECT o.type, o.type_desc
+            FROM sys.all_objects AS o
+            JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+            WHERE s.name = ? AND o.name = ?
+            """
+        )
+        cur = conn.cursor()
+        cur.execute(sql, (schema, name))
+        r = cur.fetchone()
+        if not r:
+            return ("", "")
+        return (str(r[0]), str(r[1]))
+
     def _get_columns_info(self, conn, obj_id: int) -> List[Dict[str, Any]]:
         sql = (
             """
@@ -209,8 +226,12 @@ class GapAnalyzer:
         cur.execute(sql, (obj_id, obj_id))
         return [int(r[0]) for r in cur.fetchall()]
 
-    def _sample_row(self, conn, schema: str, name: str) -> Optional[Dict[str, Any]]:
-        sql = f"SELECT TOP 1 * FROM {schema and '['+schema+']' or ''}.{ '['+name+']' }"
+    def _sample_row(self, conn, schema: str, name: str, obj_type_code: str) -> Optional[Dict[str, Any]]:
+        # Per TVF (IF/TF) aggiunge le parentesi senza argomenti; per altri oggetti semplice select
+        if obj_type_code in ("IF", "TF"):
+            sql = f"SELECT TOP 1 * FROM {[schema] and '['+schema+']' or ''}.{ '['+name+']' }()"
+        else:
+            sql = f"SELECT TOP 1 * FROM {schema and '['+schema+']' or ''}.{ '['+name+']' }"
         cur = conn.cursor()
         try:
             cur.execute(sql)
@@ -238,31 +259,33 @@ class GapAnalyzer:
                     conns[db] = pyodbc.connect(self._build_conn_str(db), timeout=QUERY_TIMEOUT)
                 conn = conns[db]
 
-                # solo TABLE/VIEW
-                ot = (objtype or "").upper()
-                if ot not in ("USER_TABLE","VIEW"):
-                    results.append([server, db, schema, name, objtype, ddl, "", "", "", "", "Oggetto non supportato per gap analysis"])
+                # Determina il tipo reale dell'oggetto (include oggetti di sistema)
+                type_code, type_desc = self._get_obj_type_code(conn, schema, name)
+                # Gestiamo oggetti a forma tabellare: U (tabella), V (vista), IF/TF (table-valued function)
+                if type_code not in ("U", "V", "IF", "TF"):
+                    results.append([server, db, schema, name, objtype, ddl, "", "", "", "", "", "Oggetto non supportato per gap analysis"])
                     continue
 
                 obj_id = self._get_obj_id(conn, schema, name)
                 if not obj_id:
-                    results.append([server, db, schema, name, objtype, ddl, "", "", "", "", "Oggetto non trovato"])
+                    results.append([server, db, schema, name, objtype, ddl, "", "", "", "", "", "Oggetto non trovato"])
                     continue
 
                 columns = self._get_columns_info(conn, obj_id)
                 pk_cols = set(self._pk_members(conn, obj_id))
                 fk_cols = set(self._fk_members(conn, obj_id))
-                sample = self._sample_row(conn, schema, name)
+                sample = self._sample_row(conn, schema, name, type_code)
 
                 for col in columns:
                     colname = col["column"]
                     dtype = self._format_datatype(col)
+                    isnull = "Y" if col.get("is_nullable", True) else "N"
                     pk = "Y" if col["column_id"] in pk_cols else "N"
                     fk = "Y" if col["column_id"] in fk_cols else "N"
                     example = None
                     if sample is not None:
                         example = sample.get(colname)
-                    results.append([server, db, schema, name, objtype, ddl, colname, dtype, pk, fk, example])
+                    results.append([server, db, schema, name, objtype, ddl, colname, dtype, isnull, pk, fk, example])
         finally:
             for c in conns.values():
                 try:
@@ -276,7 +299,7 @@ class GapAnalyzer:
             os.makedirs(out_dir, exist_ok=True)
         df = pd.DataFrame(results, columns=[
             "Server", "DB", "Schema", "Table", "ObjectType", "DDL",
-            "Column", "DataType", "PrimaryKey", "ForeignKey", "ExampleValue"
+            "Column", "DataType", "IsNullable", "PrimaryKey", "ForeignKey", "ExampleValue"
         ])
 
         try:
