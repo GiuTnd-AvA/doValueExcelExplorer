@@ -274,6 +274,35 @@ def map_object_type(type_desc: str) -> str:
     return mapping.get(type_desc.upper(), type_desc.upper())
 
 
+def lookup_object_type(
+    conn: pyodbc.Connection,
+    schema: str,
+    name: str,
+) -> Optional[str]:
+    schema_clean = (schema or "dbo").strip() or "dbo"
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT TOP 1 type_desc FROM sys.objects "
+            "WHERE name = ? AND SCHEMA_NAME(schema_id) = ?",
+            name,
+            schema_clean,
+        )
+        row = cursor.fetchone()
+    except pyodbc.Error:
+        row = None
+    finally:
+        try:
+            if cursor is not None:
+                cursor.close()
+        except Exception:
+            pass
+    if row:
+        return map_object_type(row[0] or "")
+    return None
+
+
 def detect_source_object_type(conn: pyodbc.Connection, schema: str, table: str) -> Optional[str]:
     query = (
         "SELECT TOP 1 type_desc"
@@ -320,6 +349,7 @@ def fetch_object_dependencies(
     cursor.execute(query, object_id)
     tables: List[Tuple[str, str, str]] = []
     objects: List[Tuple[str, str, str, str]] = []
+    inference_cache: Dict[Tuple[str, str], Optional[str]] = {}
     for ref_schema, ref_name, ref_type, ref_database, ref_class in cursor.fetchall():
         if not ref_name:
             continue
@@ -327,15 +357,28 @@ def fetch_object_dependencies(
         database_part = (ref_database or "").strip()
         if ref_type == "USER_TABLE":
             tables.append((database_part, schema_part, ref_name))
-        else:
-            objects.append(
-                (
-                    database_part,
-                    schema_part,
-                    ref_name,
-                    resolve_dependency_type(ref_type, ref_class, database_part),
-                )
+            continue
+
+        resolved_type = resolve_dependency_type(ref_type, ref_class, database_part)
+        if resolved_type in {"UNKNOWN", "OBJECT_OR_COLUMN"} and not database_part:
+            cache_key = (schema_part.lower(), ref_name.lower())
+            if cache_key not in inference_cache:
+                inference_cache[cache_key] = lookup_object_type(conn, schema_part, ref_name)
+            inferred = inference_cache[cache_key]
+            if inferred == "TABLE":
+                tables.append((database_part, schema_part, ref_name))
+                continue
+            if inferred:
+                resolved_type = inferred
+
+        objects.append(
+            (
+                database_part,
+                schema_part,
+                ref_name,
+                resolved_type,
             )
+        )
     cursor.close()
     return tables, objects
 
