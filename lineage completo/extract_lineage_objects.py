@@ -101,6 +101,7 @@ FAILURE_GUIDE = [
 SUMMARY_GUIDE = [
     "Workbook di sintesi con KPI, breakdown per tipologia di oggetto e peso dei database sulla reportistica.",
     "Usare il foglio KPIs per avere un colpo d'occhio, mentre gli altri fogli approfondiscono distribuzioni e pesi.",
+    "Le schede DipendenzeTipo/DipendenzeServer e SintesiFallimenti evidenziano copertura e gap durante l'espansione.",
 ]
 
 
@@ -149,6 +150,7 @@ DEPENDENCY_COLUMNS = [
     "ObjectType",
     "ObjectExtractionLevel",
     "DependencyType",
+    "Server estratto",
     "DependencyDatabase",
     "DependencySchema",
     "DependencyName",
@@ -184,8 +186,8 @@ class LineageObject:
     object_type: str
     definition: str
     level: int
-    dep_tables: Tuple[Tuple[str, str, str], ...]  # (database, schema, name)
-    dep_objects: Tuple[Tuple[str, str, str, str], ...]  # (database, schema, name, type)
+    dep_tables: Tuple[Tuple[str, str, str, str], ...]  # (server, database, schema, name)
+    dep_objects: Tuple[Tuple[str, str, str, str, str], ...]  # (server, database, schema, name, type)
 
 
 def normalize(value: object) -> str:
@@ -195,6 +197,14 @@ def normalize(value: object) -> str:
     if text.lower() in {"nan", "nat", "none"}:
         return ""
     return text
+
+
+def format_two_part_name(schema: str, name: str) -> str:
+    schema_clean = (schema or "dbo").strip() or "dbo"
+    name_clean = (name or "").strip()
+    schema_escaped = schema_clean.replace("]", "]]" )
+    name_escaped = name_clean.replace("]", "]]" )
+    return f"[{schema_escaped}].[{name_escaped}]"
 
 
 class ConnectionPool:
@@ -330,16 +340,65 @@ def resolve_dependency_type(ref_type: Optional[str], ref_class: Optional[str], r
     return "UNKNOWN"
 
 
+def fetch_referenced_entities_fallback(
+    conn: pyodbc.Connection,
+    object_schema: str,
+    object_name: str,
+) -> List[Tuple[str, str, str, str, str, str]]:
+    cursor = None
+    rows: List[Tuple[str, str, str, str, str, str]] = []
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT"
+            "    ISNULL(referenced_schema_name, '') AS ref_schema,"
+            "    referenced_entity_name AS ref_name,"
+            "    referenced_type_desc AS ref_type,"
+            "    ISNULL(referenced_database_name, '') AS ref_db,"
+            "    ISNULL(referenced_server_name, '') AS ref_server,"
+            "    referenced_class_desc AS ref_class"
+            " FROM sys.dm_sql_referenced_entities(?, 'OBJECT')",
+            format_two_part_name(object_schema, object_name),
+        )
+        rows = [
+            (
+                (row[0] or ""),
+                row[1],
+                row[2],
+                (row[3] or ""),
+                (row[4] or ""),
+                row[5],
+            )
+            for row in cursor.fetchall()
+        ]
+    except Exception as exc:  # include permission errors or unsupported contexts
+        print(
+            "[WARN] Impossibile eseguire sys.dm_sql_referenced_entities per"
+            f" {object_schema}.{object_name}: {exc}"
+        )
+        rows = []
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except pyodbc.Error:
+                pass
+    return rows
+
+
 def fetch_object_dependencies(
     conn: pyodbc.Connection,
     object_id: int,
-) -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str, str, str]]]:
+    object_schema: str,
+    object_name: str,
+) -> Tuple[List[Tuple[str, str, str, str]], List[Tuple[str, str, str, str, str]]]:
     query = (
         "SELECT"
         "    ISNULL(d.referenced_schema_name, '') AS ref_schema,"
         "    d.referenced_entity_name AS ref_name,"
         "    obj.type_desc AS ref_type,"
         "    ISNULL(d.referenced_database_name, '') AS ref_db,"
+        "    ISNULL(d.referenced_server_name, '') AS ref_server,"
         "    d.referenced_class_desc AS ref_class"
         " FROM sys.sql_expression_dependencies d"
         " LEFT JOIN sys.objects obj ON d.referenced_id = obj.object_id"
@@ -347,39 +406,55 @@ def fetch_object_dependencies(
     )
     cursor = conn.cursor()
     cursor.execute(query, object_id)
-    tables: List[Tuple[str, str, str]] = []
-    objects: List[Tuple[str, str, str, str]] = []
+    base_rows = [
+        (
+            (row[0] or ""),
+            row[1],
+            row[2],
+            (row[3] or ""),
+            (row[4] or ""),
+            row[5],
+        )
+        for row in cursor.fetchall()
+    ]
+    cursor.close()
+    if not base_rows:
+        base_rows = fetch_referenced_entities_fallback(conn, object_schema, object_name)
+
+    tables: List[Tuple[str, str, str, str]] = []
+    objects: List[Tuple[str, str, str, str, str]] = []
     inference_cache: Dict[Tuple[str, str], Optional[str]] = {}
-    for ref_schema, ref_name, ref_type, ref_database, ref_class in cursor.fetchall():
+    for ref_schema, ref_name, ref_type, ref_database, ref_server, ref_class in base_rows:
         if not ref_name:
             continue
         schema_part = (ref_schema or "dbo").strip() or "dbo"
         database_part = (ref_database or "").strip()
+        server_part = (ref_server or "").strip()
         if ref_type == "USER_TABLE":
-            tables.append((database_part, schema_part, ref_name))
+            tables.append((server_part, database_part, schema_part, ref_name))
             continue
 
         resolved_type = resolve_dependency_type(ref_type, ref_class, database_part)
-        if resolved_type in {"UNKNOWN", "OBJECT_OR_COLUMN"} and not database_part:
+        if resolved_type in {"UNKNOWN", "OBJECT_OR_COLUMN"} and not database_part and not server_part:
             cache_key = (schema_part.lower(), ref_name.lower())
             if cache_key not in inference_cache:
                 inference_cache[cache_key] = lookup_object_type(conn, schema_part, ref_name)
             inferred = inference_cache[cache_key]
             if inferred == "TABLE":
-                tables.append((database_part, schema_part, ref_name))
+                tables.append((server_part, database_part, schema_part, ref_name))
                 continue
             if inferred:
                 resolved_type = inferred
 
         objects.append(
             (
+                server_part,
                 database_part,
                 schema_part,
                 ref_name,
                 resolved_type,
             )
         )
-    cursor.close()
     return tables, objects
 
 
@@ -394,7 +469,7 @@ def build_lineage_object(
     object_id: int,
     level: int,
 ) -> LineageObject:
-    dep_tables, dep_objects = fetch_object_dependencies(conn, object_id)
+    dep_tables, dep_objects = fetch_object_dependencies(conn, object_id, object_schema, object_name)
     return LineageObject(
         server=server,
         database=database,
@@ -579,18 +654,30 @@ def build_candidate_databases(
     return ordered
 
 
-def format_table_list(items: Iterable[Tuple[str, str, str]]) -> str:
-    def format_entry(db: str, schema: str, name: str) -> str:
-        return f"{db}.{schema}.{name}" if db else f"{schema}.{name}"
+def format_table_list(items: Iterable[Tuple[str, str, str, str]]) -> str:
+    def format_entry(server: str, db: str, schema: str, name: str) -> str:
+        if server and db:
+            return f"{server}.{db}.{schema}.{name}"
+        if server:
+            return f"{server}.{schema}.{name}"
+        if db:
+            return f"{db}.{schema}.{name}"
+        return f"{schema}.{name}"
 
-    return " ; ".join(format_entry(db, schema, name) for db, schema, name in items)
+    return " ; ".join(format_entry(server, db, schema, name) for server, db, schema, name in items)
 
 
-def format_object_list(items: Iterable[Tuple[str, str, str, str]]) -> str:
-    def format_entry(db: str, schema: str, name: str) -> str:
-        return f"{db}.{schema}.{name}" if db else f"{schema}.{name}"
+def format_object_list(items: Iterable[Tuple[str, str, str, str, str]]) -> str:
+    def format_entry(server: str, db: str, schema: str, name: str) -> str:
+        if server and db:
+            return f"{server}.{db}.{schema}.{name}"
+        if server:
+            return f"{server}.{schema}.{name}"
+        if db:
+            return f"{db}.{schema}.{name}"
+        return f"{schema}.{name}"
 
-    return " ; ".join(format_entry(db, schema, name) for db, schema, name, _ in items)
+    return " ; ".join(format_entry(server, db, schema, name) for server, db, schema, name, _ in items)
 
 
 def main() -> None:
@@ -791,22 +878,28 @@ def main() -> None:
             current_conn = pool.get(current.server, current.database)
             if current_conn is None:
                 continue
-            for dep_db, dep_schema, dep_name, dep_type in current.dep_objects:
+            for dep_server, dep_db, dep_schema, dep_name, dep_type in current.dep_objects:
                 should_attempt = dep_type in OBJECT_TYPES_OF_INTEREST or dep_type in {"EXTERNAL_OBJECT", "UNKNOWN"}
                 if not should_attempt:
                     continue
                 schema_norm = (dep_schema or "dbo").strip() or "dbo"
-                target_db = dep_db or current.database
-                dep_key = make_object_key(current.server, target_db, schema_norm, dep_name)
+                target_server = dep_server or current.server
+                target_db = dep_db or (current.database if target_server.lower() == current.server.lower() else dep_db)
+                if not target_db:
+                    continue
+                dep_key = make_object_key(target_server, target_db, schema_norm, dep_name)
                 if dep_key in object_catalog:
                     continue
-                conn = current_conn if target_db == current.database else pool.get(current.server, target_db)
+                if target_server.lower() == current.server.lower() and target_db == current.database:
+                    conn = current_conn
+                else:
+                    conn = pool.get(target_server, target_db)
                 if conn is None:
                     continue
                 try:
                     dep_obj = fetch_object_by_name(
                         conn,
-                        current.server,
+                        target_server,
                         target_db,
                         schema_norm,
                         dep_name,
@@ -815,7 +908,7 @@ def main() -> None:
                 except pyodbc.Error as exc:
                     add_failure_record(
                         {
-                            "Server": current.server,
+                            "Server": target_server,
                             "Database": target_db,
                             "Schema": schema_norm,
                             "Table": dep_name,
@@ -836,7 +929,8 @@ def main() -> None:
 
     dep_rows: List[Dict[str, object]] = []
     for obj in object_catalog.values():
-        for dep_db, dep_schema, dep_name in obj.dep_tables:
+        for dep_server, dep_db, dep_schema, dep_name in obj.dep_tables:
+            target_server = dep_server or obj.server
             target_db = dep_db or obj.database
             schema_norm = (dep_schema or "dbo").strip() or "dbo"
             dep_rows.append(
@@ -848,16 +942,18 @@ def main() -> None:
                     "ObjectType": sanitize_for_excel(obj.object_type),
                     "ObjectExtractionLevel": obj.level,
                     "DependencyType": "TABLE",
+                    "Server estratto": sanitize_for_excel(target_server),
                     "DependencyDatabase": sanitize_for_excel(target_db),
                     "DependencySchema": sanitize_for_excel(schema_norm),
                     "DependencyName": sanitize_for_excel(dep_name),
                     "DependencyExtractionLevel": "",
                 }
             )
-        for dep_db, dep_schema, dep_name, dep_type in obj.dep_objects:
+        for dep_server, dep_db, dep_schema, dep_name, dep_type in obj.dep_objects:
+            target_server = dep_server or obj.server
             target_db = dep_db or obj.database
             schema_norm = (dep_schema or "dbo").strip() or "dbo"
-            dep_key = make_object_key(obj.server, target_db, schema_norm, dep_name)
+            dep_key = make_object_key(target_server, target_db, schema_norm, dep_name)
             resolved_type = dep_type
             referenced_obj = object_catalog.get(dep_key)
             if referenced_obj is not None:
@@ -874,6 +970,7 @@ def main() -> None:
                     "ObjectType": sanitize_for_excel(obj.object_type),
                     "ObjectExtractionLevel": obj.level,
                     "DependencyType": sanitize_for_excel(resolved_type),
+                    "Server estratto": sanitize_for_excel(target_server),
                     "DependencyDatabase": sanitize_for_excel(target_db),
                     "DependencySchema": sanitize_for_excel(schema_norm),
                     "DependencyName": sanitize_for_excel(dep_name),
@@ -910,6 +1007,70 @@ def main() -> None:
         write_guide_sheet(writer, DEPENDENCY_GUIDE)
     log_progress(f"Dipendenze normalizzate: {len(dep_rows)} righe -> {dep_path}")
 
+    dep_metrics_df = dep_df.copy()
+    if dep_metrics_df.empty:
+        total_dependency_edges = 0
+        resolved_dependency_edges = 0
+        dependency_breakdown_df = pd.DataFrame(
+            columns=["DependencyType", "TotalEdges", "DistinctTargets", "ResolvedEdges", "ResolvedPct"]
+        )
+        dependency_server_df = pd.DataFrame(
+            columns=["TargetServer", "TotalEdges", "DistinctTargets", "SharePct"]
+        )
+    else:
+        dep_metrics_df.loc[:, "DependencyExtractionLevel"] = (
+            dep_metrics_df["DependencyExtractionLevel"].fillna("").astype(str).str.strip()
+        )
+        dep_metrics_df.loc[:, "DependencyType"] = (
+            dep_metrics_df["DependencyType"].fillna("").astype(str).str.strip()
+        )
+        dep_metrics_df.loc[:, "DependencyType"] = dep_metrics_df["DependencyType"].replace("", "(non rilevato)")
+        target_server = dep_metrics_df["Server estratto"].fillna("").astype(str).str.strip()
+        target_db = dep_metrics_df["DependencyDatabase"].fillna("").astype(str).str.strip()
+        target_schema = dep_metrics_df["DependencySchema"].fillna("").astype(str).str.strip()
+        target_name = dep_metrics_df["DependencyName"].fillna("").astype(str).str.strip()
+        dep_metrics_df.loc[:, "TargetServer"] = target_server.replace("", "(non rilevato)")
+        dep_metrics_df.loc[:, "ResolvedTarget"] = dep_metrics_df["DependencyExtractionLevel"].str.len() > 0
+        dep_metrics_df.loc[:, "TargetKey"] = (
+            target_server.str.lower()
+            + "|"
+            + target_db.str.lower()
+            + "|"
+            + target_schema.str.lower()
+            + "|"
+            + target_name.str.lower()
+        )
+        total_dependency_edges = int(dep_metrics_df.shape[0])
+        resolved_dependency_edges = int(dep_metrics_df["ResolvedTarget"].sum())
+        dependency_breakdown_df = (
+            dep_metrics_df.groupby("DependencyType")
+            .agg(
+                TotalEdges=("TargetKey", "size"),
+                DistinctTargets=("TargetKey", "nunique"),
+                ResolvedEdges=("ResolvedTarget", "sum"),
+            )
+            .reset_index()
+            .sort_values("TotalEdges", ascending=False)
+        )
+        dependency_breakdown_df.loc[:, "ResolvedPct"] = (
+            dependency_breakdown_df["ResolvedEdges"]
+            .div(dependency_breakdown_df["TotalEdges"].replace(0, pd.NA))
+            .fillna(0)
+            .round(2)
+        )
+        dependency_server_df = (
+            dep_metrics_df.groupby("TargetServer")
+            .agg(
+                TotalEdges=("TargetKey", "size"),
+                DistinctTargets=("TargetKey", "nunique"),
+            )
+            .reset_index()
+            .sort_values("TotalEdges", ascending=False)
+        )
+        dependency_server_df.loc[:, "SharePct"] = (
+            dependency_server_df["TotalEdges"] / total_dependency_edges * 100
+        ).round(2)
+
     obj_rows = [
         {
             "Server": sanitize_for_excel(obj.server),
@@ -927,13 +1088,33 @@ def main() -> None:
     export_single_sheet_with_guide(obj_df, obj_path, "Catalogo", CATALOG_GUIDE)
     log_progress(f"Catalogo oggetti: {len(obj_rows)} elementi -> {obj_path}")
 
-    if failure_records:
-        failure_df = pd.DataFrame(failure_records, columns=FAILURE_COLUMNS)
+    failure_df = pd.DataFrame(failure_records, columns=FAILURE_COLUMNS)
+    if not failure_df.empty:
         failure_path = Path(args.failure_log)
         export_single_sheet_with_guide(failure_df, failure_path, "Fallimenti", FAILURE_GUIDE)
         log_progress(f"Log fallimenti lineage: {len(failure_records)} righe -> {failure_path}")
     else:
         log_progress("Nessun fallimento di lineage da registrare")
+
+    if failure_df.empty:
+        failure_summary_df = pd.DataFrame(
+            columns=["Reason", "Occurrences", "DistinctServers", "DistinctTables", "SharePct"]
+        )
+    else:
+        total_failures = len(failure_df)
+        failure_summary_df = (
+            failure_df.groupby("Reason")
+            .agg(
+                Occurrences=("Table", "size"),
+                DistinctServers=("Server", "nunique"),
+                DistinctTables=("Table", "nunique"),
+            )
+            .reset_index()
+            .sort_values("Occurrences", ascending=False)
+        )
+        failure_summary_df.loc[:, "SharePct"] = (
+            failure_summary_df["Occurrences"] / total_failures * 100
+        ).round(2)
 
     total_objects = len(object_catalog)
     max_level = max((obj.level for obj in object_catalog.values()), default=0)
@@ -941,6 +1122,14 @@ def main() -> None:
     total_dep_objects = sum(len(obj.dep_objects) for obj in object_catalog.values())
     avg_dep_tables = (total_dep_tables / total_objects) if total_objects else 0
     avg_dep_objects = (total_dep_objects / total_objects) if total_objects else 0
+    dependency_resolution_pct = (
+        round((resolved_dependency_edges / total_dependency_edges) * 100, 2)
+        if total_dependency_edges
+        else 0
+    )
+    distinct_target_servers = (
+        dependency_server_df["TargetServer"].nunique() if not dependency_server_df.empty else 0
+    )
     unique_reports = (
         report_df[["Server", "Database", "Schema", "Table"]]
         .drop_duplicates()
@@ -956,6 +1145,10 @@ def main() -> None:
         {"Metric": "Combinazioni report-server", "Value": unique_reports},
         {"Metric": "Righe report lineage", "Value": len(report_df)},
         {"Metric": "Fallimenti lineage", "Value": len(failure_records)},
+        {"Metric": "Archi dipendenza totali", "Value": total_dependency_edges},
+        {"Metric": "Archi dipendenza risolti", "Value": resolved_dependency_edges},
+        {"Metric": "Copertura target dipendenze (%)", "Value": dependency_resolution_pct},
+        {"Metric": "Server target dipendenze", "Value": distinct_target_servers},
     ]
 
     if obj_df.empty:
@@ -992,20 +1185,36 @@ def main() -> None:
 
     if report_df.empty:
         report_weight_df = pd.DataFrame(
-            columns=["Database", "ReportRows", "DistinctSourceTables", "DistinctObjects", "SharePct"]
+            columns=[
+                "Database",
+                "ReportRows",
+                "DistinctSourceTables",
+                "DistinctObjects",
+                "DistinctServers",
+                "SharePct",
+            ]
         )
     else:
+        report_weight_source = report_df.copy()
+        report_weight_source.loc[:, "EffectiveDatabase"] = report_weight_source["ObjectDatabase"].replace("", pd.NA)
+        report_weight_source.loc[:, "EffectiveDatabase"] = report_weight_source["EffectiveDatabase"].fillna(
+            report_weight_source["Database"]
+        )
+        report_weight_source.loc[:, "EffectiveDatabase"] = report_weight_source["EffectiveDatabase"].replace(
+            "", "(non rilevato)"
+        )
         report_weight_df = (
-            report_df.groupby("ObjectDatabase")
+            report_weight_source.groupby("EffectiveDatabase")
             .agg(
                 ReportRows=("Table", "size"),
                 DistinctSourceTables=("Table", "nunique"),
                 DistinctObjects=("ObjectName", "nunique"),
+                DistinctServers=("ObjectServer", "nunique"),
             )
             .reset_index()
+            .rename(columns={"EffectiveDatabase": "Database"})
         )
-    report_weight_df.rename(columns={"ObjectDatabase": "Database"}, inplace=True)
-    report_weight_df["Database"].replace("", "(vuoto)", inplace=True)
+    report_weight_df["Database"].replace("", "(non rilevato)", inplace=True)
     total_report_rows = report_weight_df["ReportRows"].sum()
     if total_report_rows:
         report_weight_df["SharePct"] = (
@@ -1021,7 +1230,10 @@ def main() -> None:
         objects_by_type_df.to_excel(writer, sheet_name="OggettiPerTipo", index=False)
         objects_per_db_df.to_excel(writer, sheet_name="DatabaseOggetti", index=False)
         report_weight_df.to_excel(writer, sheet_name="PesoDatabase", index=False)
+        dependency_breakdown_df.to_excel(writer, sheet_name="DipendenzeTipo", index=False)
+        dependency_server_df.to_excel(writer, sheet_name="DipendenzeServer", index=False)
         levels_distribution_df.to_excel(writer, sheet_name="DistribuzioneLivelli", index=False)
+        failure_summary_df.to_excel(writer, sheet_name="SintesiFallimenti", index=False)
         write_guide_sheet(writer, SUMMARY_GUIDE)
     log_progress(f"Metriche riepilogative -> {summary_path}")
     log_progress("Script completato")
