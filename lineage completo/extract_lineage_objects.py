@@ -58,12 +58,17 @@ OBJECT_TYPES_OF_INTEREST = {
 }
 
 WRITE_PATTERNS = (
-    r"\binsert\s+into\s+{target}\b",
-    r"\bupdate\s+{target}\b",
-    r"\bdelete\s+from\s+{target}\b",
+    r"\binsert\s+into\s+{target}",
+    r"\bupdate\s+{target}",
+    r"\bdelete\s+from\s+{target}",
+    r"\bmerge\s+into\s+{target}",
 )
 
 INVALID_EXCEL_CHARS = {chr(i) for i in range(32)} - {"\t", "\n", "\r"}
+
+COMMENT_BLOCK_RE = re.compile(r"/\*.*?\*/", flags=re.S)
+COMMENT_LINE_RE = re.compile(r"--[^\n\r]*")
+SQL_IDENTIFIER_TRANSLATION = str.maketrans({"[": "", "]": "", "`": "", '"': ""})
 
 
 def sanitize_for_excel(value: object) -> str:
@@ -71,6 +76,11 @@ def sanitize_for_excel(value: object) -> str:
     if not text:
         return ""
     return "".join(ch for ch in text if ch not in INVALID_EXCEL_CHARS)
+
+
+def strip_sql_comments(sql: str) -> str:
+    without_block = re.sub(COMMENT_BLOCK_RE, " ", sql)
+    return re.sub(COMMENT_LINE_RE, " ", without_block)
 
 
 REPORT_GUIDE = [
@@ -257,17 +267,23 @@ def list_server_databases(server: str, driver: str) -> List[str]:
 def classify_motivo(sql_definition: Optional[str], target_schema: str, target_table: str) -> str:
     if not sql_definition:
         return "Sconosciuto"
-    lowered = sql_definition.lower()
-    schema = re.escape((target_schema or "dbo").lower())
-    table = re.escape(target_table.lower())
-    candidates = {
-        f"{schema}\\.{table}",
-        f"[{(target_schema or 'dbo').lower()}].[{target_table.lower()}]",
-        table,
-    }
+    table_raw = (target_table or "").strip().lower()
+    if not table_raw:
+        return "Sconosciuto"
+    schema_raw = (target_schema or "dbo").strip().lower() or "dbo"
+    normalized_sql = strip_sql_comments(sql_definition)
+    normalized_sql = normalized_sql.lower().translate(SQL_IDENTIFIER_TRANSLATION)
+    candidate_tokens: List[str] = []
+    schema_table = f"{schema_raw}.{table_raw}"
+    if schema_table not in candidate_tokens:
+        candidate_tokens.append(schema_table)
+    if table_raw not in candidate_tokens:
+        candidate_tokens.append(table_raw)
+    escaped_candidates = [re.escape(token) for token in candidate_tokens if token]
     for template in WRITE_PATTERNS:
-        for candidate in candidates:
-            if re.search(template.format(target=candidate), lowered):
+        for candidate in escaped_candidates:
+            target_pattern = f"(?<!\\w){candidate}(?!\\w)"
+            if re.search(template.format(target=target_pattern), normalized_sql):
                 return "Scrittura"
     return "Lettura"
 
