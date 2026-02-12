@@ -51,6 +51,7 @@ DEFAULT_PATH_OUTPUT = (
     r"\7. Reverse engineering\Lineage completo\lineage_path_matrix.xlsx"
 )
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
+MAX_EXCEL_ROWS = 1_048_576
 
 OBJECT_TYPES_OF_INTEREST = {
     "VIEW",
@@ -80,6 +81,14 @@ def sanitize_for_excel(value: object) -> str:
     if not text:
         return ""
     return "".join(ch for ch in text if ch not in INVALID_EXCEL_CHARS)
+
+
+def sanitize_for_filename(value: object, fallback: str = "file") -> str:
+    text = normalize(value)
+    if not text:
+        text = fallback
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", text)
+    return cleaned[:120] or fallback
 
 
 def strip_sql_comments(sql: str) -> str:
@@ -711,6 +720,15 @@ def make_object_key(server: str, database: str, schema: str, name: str) -> Objec
     )
 
 
+def make_object_key_from_values(server: object, database: object, schema: object, name: object) -> ObjectKey:
+    return (
+        normalize(server).lower(),
+        normalize(database).lower(),
+        normalize(schema).lower(),
+        normalize(name).lower(),
+    )
+
+
 def build_candidate_databases(
     server: str,
     primary: str,
@@ -1198,6 +1216,102 @@ class LineageRunner:
                 )
         return rows
 
+    def _root_keys_for_file(self, file_name: str) -> List[ObjectKey]:
+        keys: List[ObjectKey] = []
+        for root in self.lineage_roots:
+            if root.get("FileName") != file_name:
+                continue
+            raw_key = root.get("RootObjectKey")
+            if (
+                isinstance(raw_key, tuple)
+                and len(raw_key) == 4
+                and all(isinstance(part, str) for part in raw_key)
+            ):
+                keys.append(cast(ObjectKey, raw_key))
+        return keys
+
+    def _collect_reachable_object_keys(self, root_keys: Iterable[ObjectKey]) -> Set[ObjectKey]:
+        max_depth = max(1, self.args.max_depth)
+        visited: Set[ObjectKey] = set()
+        stack: List[Tuple[ObjectKey, int]] = [(key, 1) for key in root_keys]
+        while stack:
+            current_key, depth = stack.pop()
+            if current_key in visited:
+                continue
+            visited.add(current_key)
+            current_obj = self.object_catalog.get(current_key)
+            if current_obj is None:
+                continue
+            if depth >= max_depth:
+                continue
+            for dep_server, dep_db, dep_schema, dep_name, _ in current_obj.dep_objects:
+                target_server = dep_server or current_obj.server
+                target_db = dep_db or current_obj.database
+                schema_norm = (dep_schema or "dbo").strip() or "dbo"
+                dep_key = make_object_key(target_server, target_db, schema_norm, dep_name)
+                if dep_key not in visited:
+                    stack.append((dep_key, depth + 1))
+        return visited
+
+    def export_per_file_lineage(
+        self,
+        report_df: pd.DataFrame,
+        dep_df: pd.DataFrame,
+        path_df: pd.DataFrame,
+    ) -> None:
+        if report_df.empty:
+            self.log_progress("Export per-file saltato: nessun FileName disponibile")
+            return
+
+        per_file_dir = Path(self.args.report_output).parent / "lineage_by_file"
+        per_file_dir.mkdir(parents=True, exist_ok=True)
+
+        dep_object_keys: Optional[pd.Series] = None
+        if not dep_df.empty:
+            dep_object_keys = dep_df.apply(
+                lambda row: make_object_key_from_values(
+                    row.get("ObjectServer"),
+                    row.get("ObjectDatabase"),
+                    row.get("ObjectSchema"),
+                    row.get("ObjectName"),
+                ),
+                axis=1,
+            )
+
+        file_names = report_df["FileName"].fillna("")
+        unique_files = sorted(file_names.unique())
+        path_file_names: Optional[pd.Series] = None
+        if not path_df.empty:
+            path_file_names = path_df["FileName"].fillna("")
+
+        for file_name in unique_files:
+            file_report = report_df[file_names == file_name]
+            root_keys = self._root_keys_for_file(file_name)
+            reachable_keys = self._collect_reachable_object_keys(root_keys) if root_keys else set()
+
+            if dep_object_keys is not None and reachable_keys:
+                dep_mask = dep_object_keys.isin(reachable_keys)
+                file_dep = dep_df[dep_mask]
+            else:
+                file_dep = dep_df.iloc[0:0]
+
+            if path_file_names is None:
+                file_paths = path_df
+            else:
+                file_paths = path_df[path_file_names == file_name]
+
+            safe_file_name = sanitize_for_filename(file_name or "senzanome")
+            file_output = per_file_dir / f"Lineage_{safe_file_name}.xlsx"
+            with pd.ExcelWriter(file_output) as writer:
+                file_report.to_excel(writer, sheet_name="ReportLineage", index=False)
+                file_dep.to_excel(writer, sheet_name="DependencyEdges", index=False)
+                if not file_paths.empty:
+                    file_paths.to_excel(writer, sheet_name="LineagePaths", index=False)
+                write_guide_sheet(writer, REPORT_GUIDE)
+            self.log_progress(
+                f"Lineage per FileName '{file_name or '(vuoto)'}' -> {file_output}"
+            )
+
     def export_outputs(self, dep_rows: List[Dict[str, object]]) -> None:
         args = self.args
         report_df = pd.DataFrame(self.report_records, columns=REPORT_COLUMNS)
@@ -1235,9 +1349,11 @@ class LineageRunner:
             args.max_depth,
         )
         path_df = pd.DataFrame(path_rows, columns=path_columns)
-        path_output = Path(args.path_output)
-        export_single_sheet_with_guide(path_df, path_output, "LineagePaths", LINEAGE_PATH_GUIDE)
-        self.log_progress(f"Percorsi lineage: {len(path_rows)} righe -> {path_output}")
+        self.log_progress(
+            "Export LineagePaths aggregato disattivato: mantenuti solo i workbook per FileName"
+        )
+
+        self.export_per_file_lineage(report_df, dep_df, path_df)
 
         dep_metrics_df = dep_df.copy()
         if dep_metrics_df.empty:
