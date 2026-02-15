@@ -17,7 +17,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Deque, Dict, Iterable, List, Optional, Set, Tuple, TypedDict, Union, cast
+from typing import Callable, Deque, Dict, Iterable, List, Optional, Set, Tuple, TypedDict, Union, cast
 
 import pandas as pd
 import pyodbc
@@ -52,6 +52,37 @@ DEFAULT_PATH_OUTPUT = (
 )
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
 MAX_EXCEL_ROWS = 1_048_576
+DEFAULT_FALLBACK_DBS = [
+    "AMS",
+    "AMS_MANUAL_TABLES",
+    "ANALISI",
+    "ANALYTICS",
+    "BAD0_Online",
+    "BAD0OnlineFM",
+    "BASEDATI_BI",
+    "BASEDATI_BI_STORICI_2015",
+    "BASEDATI_BI_STORICI_ANTE2015",
+    "CORESQL7",
+    "CORESQL7ARK",
+    "CORESQL7ARKFM",
+    "DWH",
+    "EPC_BI",
+    "EPC_PCT",
+    "EPC_STG",
+    "GESTITO",
+    "MASTER",
+    "MSDB",
+    "REPLICA",
+    "S1040",
+    "S1053",
+    "S1057",
+    "S1057B",
+    "S1229",
+    "S1242",
+    "S1259",
+    "TEMPDB",
+    "UTIL",
+]
 
 OBJECT_TYPES_OF_INTEREST = {
     "VIEW",
@@ -138,23 +169,29 @@ def build_lineage_path_columns(max_depth: int) -> List[str]:
         "RootTable",
         "RootSourceType",
     ]
+    first_prefix = "L1Object"
+    columns.extend(
+        [
+            f"{first_prefix}Server",
+            f"{first_prefix}Database",
+            f"{first_prefix}Schema",
+            f"{first_prefix}Name",
+            f"{first_prefix}Type",
+            f"{first_prefix}ExtractionLevel",
+        ]
+    )
+
     for level in range(1, max_depth + 1):
-        prefix = f"L{level}Object"
         dep_prefix = f"L{level}Dependency"
         columns.extend(
             [
-                f"{prefix}Server",
-                f"{prefix}Database",
-                f"{prefix}Schema",
-                f"{prefix}Name",
-                f"{prefix}Type",
-                f"{prefix}ExtractionLevel",
                 f"{dep_prefix}Server",
                 f"{dep_prefix}Database",
                 f"{dep_prefix}Schema",
                 f"{dep_prefix}Name",
                 f"{dep_prefix}Type",
                 f"{dep_prefix}ExtractionLevel",
+                f"{dep_prefix}Scope",
             ]
         )
     return columns
@@ -219,6 +256,7 @@ DEPENDENCY_COLUMNS = [
     "DependencySchema",
     "DependencyName",
     "DependencyExtractionLevel",
+    "DependencyScope",
 ]
 
 OBJECT_CATALOG_COLUMNS = [
@@ -276,6 +314,13 @@ def normalize(value: object) -> str:
     return text
 
 
+def normalize_db_name(value: object) -> str:
+    text = normalize(value)
+    if text.startswith("[") and text.endswith("]") and len(text) > 2:
+        return text[1:-1]
+    return text
+
+
 def format_two_part_name(schema: str, name: str) -> str:
     schema_clean = (schema or "dbo").strip() or "dbo"
     name_clean = (name or "").strip()
@@ -285,8 +330,9 @@ def format_two_part_name(schema: str, name: str) -> str:
 
 
 class ConnectionPool:
-    def __init__(self, driver: str) -> None:
+    def __init__(self, driver: str, timeout: int) -> None:
         self.driver = driver
+        self.timeout = max(1, timeout)
         self._pool: Dict[Tuple[str, str], pyodbc.Connection] = {}
 
     def get(self, server: str, database: str) -> Optional[pyodbc.Connection]:
@@ -301,7 +347,7 @@ class ConnectionPool:
                 "Trusted_Connection=yes;"
             )
             try:
-                self._pool[key] = pyodbc.connect(conn_str, timeout=15)
+                self._pool[key] = pyodbc.connect(conn_str, timeout=self.timeout)
             except pyodbc.Error as exc:
                 print(f"[ERR] Connessione fallita {server_clean}/{database_clean}: {exc}")
                 return None
@@ -316,10 +362,10 @@ class ConnectionPool:
         self._pool.clear()
 
 
-def list_server_databases(server: str, driver: str) -> List[str]:
+def list_server_databases(server: str, driver: str, timeout: int) -> List[str]:
     conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE=master;Trusted_Connection=yes;"
     try:
-        with pyodbc.connect(conn_str, timeout=10) as conn:
+        with pyodbc.connect(conn_str, timeout=timeout) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT name FROM sys.databases "
@@ -413,10 +459,21 @@ def detect_source_object_type(conn: pyodbc.Connection, schema: str, table: str) 
     return map_object_type(row[0] or "")
 
 
-def resolve_dependency_type(ref_type: Optional[str], ref_class: Optional[str], ref_db: str) -> str:
+def resolve_dependency_type(
+    ref_type: Optional[str],
+    ref_class: Optional[str],
+    ref_db: str,
+    parent_db: str,
+) -> str:
     if ref_type:
         return ref_type
-    if ref_db:
+
+    ref_db_norm = normalize(ref_db).lower()
+    parent_db_norm = normalize(parent_db).lower()
+    if ref_db_norm and parent_db_norm and ref_db_norm == parent_db_norm:
+        ref_db_norm = ""
+
+    if ref_db_norm:
         return "EXTERNAL_OBJECT"
     if ref_class:
         return ref_class.upper()
@@ -474,6 +531,9 @@ def fetch_object_dependencies(
     object_id: int,
     object_schema: str,
     object_name: str,
+    object_server: str,
+    object_database: str,
+    connection_resolver: Optional[Callable[[str, str], Optional[pyodbc.Connection]]] = None,
 ) -> Tuple[List[Tuple[str, str, str, str]], List[Tuple[str, str, str, str, str]]]:
     query = (
         "SELECT"
@@ -507,17 +567,21 @@ def fetch_object_dependencies(
     tables: List[Tuple[str, str, str, str]] = []
     objects: List[Tuple[str, str, str, str, str]] = []
     inference_cache: Dict[Tuple[str, str], Optional[str]] = {}
+    parent_db_norm = normalize(object_database).lower()
+    parent_server_norm = normalize(object_server).lower()
+
     for ref_schema, ref_name, ref_type, ref_database, ref_server, ref_class in base_rows:
         if not ref_name:
             continue
         schema_part = (ref_schema or "dbo").strip() or "dbo"
-        database_part = (ref_database or "").strip()
-        server_part = (ref_server or "").strip()
+        database_part = normalize_db_name(ref_database)
+        server_part = normalize(ref_server)
+        server_part_norm = server_part.lower()
         if ref_type == "USER_TABLE":
             tables.append((server_part, database_part, schema_part, ref_name))
             continue
 
-        resolved_type = resolve_dependency_type(ref_type, ref_class, database_part)
+        resolved_type = resolve_dependency_type(ref_type, ref_class, database_part, object_database)
         if resolved_type in {"UNKNOWN", "OBJECT_OR_COLUMN"} and not database_part and not server_part:
             cache_key = (schema_part.lower(), ref_name.lower())
             if cache_key not in inference_cache:
@@ -528,6 +592,18 @@ def fetch_object_dependencies(
                 continue
             if inferred:
                 resolved_type = inferred
+
+        if resolved_type == "EXTERNAL_OBJECT" and database_part:
+            target_server = server_part or object_server
+            target_server_norm = (server_part_norm or parent_server_norm)
+            if connection_resolver and target_server and target_server_norm == parent_server_norm:
+                cross_conn = connection_resolver(target_server, database_part)
+                if cross_conn is not None:
+                    inferred_type = lookup_object_type(cross_conn, schema_part, ref_name)
+                    if inferred_type:
+                        resolved_type = inferred_type
+                        server_part = target_server
+                        server_part_norm = target_server_norm
 
         objects.append(
             (
@@ -551,8 +627,17 @@ def build_lineage_object(
     conn: pyodbc.Connection,
     object_id: int,
     level: int,
+    connection_resolver: Optional[Callable[[str, str], Optional[pyodbc.Connection]]] = None,
 ) -> LineageObject:
-    dep_tables, dep_objects = fetch_object_dependencies(conn, object_id, object_schema, object_name)
+    dep_tables, dep_objects = fetch_object_dependencies(
+        conn,
+        object_id,
+        object_schema,
+        object_name,
+        server,
+        database,
+        connection_resolver,
+    )
     return LineageObject(
         server=server,
         database=database,
@@ -573,6 +658,7 @@ def fetch_referencing_objects(
     target_schema: str,
     target_table: str,
     level: int,
+    connection_resolver: Optional[Callable[[str, str], Optional[pyodbc.Connection]]] = None,
 ) -> List[LineageObject]:
     query = (
         "SELECT"
@@ -604,7 +690,8 @@ def fetch_referencing_objects(
                 definition,
                 conn,
                 object_id,
-                    level,
+                level,
+                connection_resolver,
             )
         )
     cursor.close()
@@ -618,6 +705,7 @@ def fetch_object_by_name(
     schema: str,
     name: str,
     level: int,
+    connection_resolver: Optional[Callable[[str, str], Optional[pyodbc.Connection]]] = None,
 ) -> Optional[LineageObject]:
     lookup = (
         "SELECT o.object_id, o.type_desc, OBJECT_DEFINITION(o.object_id)"
@@ -646,6 +734,7 @@ def fetch_object_by_name(
         conn,
         object_id,
         level,
+        connection_resolver,
     )
 
 
@@ -693,9 +782,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--driver", default=DEFAULT_DRIVER, help="Driver ODBC da utilizzare")
     parser.add_argument(
+        "--connect-timeout",
+        type=int,
+        default=5,
+        help="Secondi massimi di attesa per aprire una connessione SQL",
+    )
+    parser.add_argument(
         "--fallback-db",
         action="append",
-        default=[],
+        default=DEFAULT_FALLBACK_DBS,
         help="Database aggiuntivi da provare quando quello indicato nella riga non restituisce risultati",
     )
     parser.add_argument(
@@ -736,6 +831,7 @@ def build_candidate_databases(
     scan_all: bool,
     driver: str,
     server_db_cache: Dict[str, List[str]],
+    connect_timeout: int,
 ) -> List[str]:
     ordered: List[str] = []
     seen: set[str] = set()
@@ -755,7 +851,7 @@ def build_candidate_databases(
     if scan_all:
         cache_key = server.lower()
         if cache_key not in server_db_cache:
-            server_db_cache[cache_key] = list_server_databases(server, driver)
+            server_db_cache[cache_key] = list_server_databases(server, driver, connect_timeout)
         for db in server_db_cache[cache_key]:
             add_value(db)
 
@@ -786,6 +882,30 @@ def format_object_list(items: Iterable[Tuple[str, str, str, str, str]]) -> str:
         return f"{schema}.{name}"
 
     return " ; ".join(format_entry(server, db, schema, name) for server, db, schema, name, _ in items)
+
+
+def classify_dependency_scope(
+    parent_server: object,
+    parent_database: object,
+    dependency_server: object,
+    dependency_database: object,
+) -> str:
+    parent_server_norm = normalize(parent_server).lower()
+    parent_db_norm = normalize(parent_database).lower()
+    dep_server_norm = normalize(dependency_server).lower()
+    dep_db_norm = normalize(dependency_database).lower()
+
+    if dep_server_norm and parent_server_norm and dep_server_norm != parent_server_norm:
+        return "CROSS_SERVER"
+    if dep_db_norm and parent_db_norm:
+        if dep_db_norm != parent_db_norm:
+            return "CROSS_DB"
+        return "SAME_DB"
+    if dep_db_norm and not parent_db_norm:
+        return "CROSS_DB"
+    if not dep_db_norm and parent_db_norm:
+        return "SAME_DB"
+    return "UNKNOWN"
 
 
 def generate_lineage_paths(
@@ -848,12 +968,13 @@ def generate_lineage_paths(
             rows.append(row_state.copy())
             return
 
-        row_state[f"L{level}ObjectServer"] = sanitize_for_excel(current_obj.server)
-        row_state[f"L{level}ObjectDatabase"] = sanitize_for_excel(current_obj.database)
-        row_state[f"L{level}ObjectSchema"] = sanitize_for_excel(current_obj.object_schema)
-        row_state[f"L{level}ObjectName"] = sanitize_for_excel(current_obj.object_name)
-        row_state[f"L{level}ObjectType"] = sanitize_for_excel(current_obj.object_type)
-        row_state[f"L{level}ObjectExtractionLevel"] = current_obj.level
+        if level == 1:
+            row_state[f"L{level}ObjectServer"] = sanitize_for_excel(current_obj.server)
+            row_state[f"L{level}ObjectDatabase"] = sanitize_for_excel(current_obj.database)
+            row_state[f"L{level}ObjectSchema"] = sanitize_for_excel(current_obj.object_schema)
+            row_state[f"L{level}ObjectName"] = sanitize_for_excel(current_obj.object_name)
+            row_state[f"L{level}ObjectType"] = sanitize_for_excel(current_obj.object_type)
+            row_state[f"L{level}ObjectExtractionLevel"] = current_obj.level
 
         dependencies = enumerate_dependencies(current_obj)
         if not dependencies:
@@ -868,6 +989,13 @@ def generate_lineage_paths(
             next_row[f"L{level}DependencyName"] = sanitize_for_excel(dep["name"])
             next_row[f"L{level}DependencyType"] = sanitize_for_excel(dep["type"])
             next_row[f"L{level}DependencyExtractionLevel"] = dep["extraction_level"]
+            scope = classify_dependency_scope(
+                current_obj.server,
+                current_obj.database,
+                dep["server"] or current_obj.server,
+                dep["database"] or current_obj.database,
+            )
+            next_row[f"L{level}DependencyScope"] = scope
             next_obj = dep["next_obj"]
             if next_obj is not None and level < max_depth:
                 next_key = make_object_key(
@@ -906,7 +1034,7 @@ class LineageRunner:
         self.args = args
         self.df = df
         self.excel_path = excel_path
-        self.pool = ConnectionPool(args.driver)
+        self.pool = ConnectionPool(args.driver, args.connect_timeout)
         self.object_catalog: Dict[ObjectKey, LineageObject] = {}
         self.pending: Deque[LineageObject] = deque()
         self.report_records: List[Dict[str, object]] = []
@@ -917,6 +1045,12 @@ class LineageRunner:
         self.total_rows = len(df)
         self.progress_interval = max(1, self.total_rows // 20) if self.total_rows else 1
         self.fallback_dbs = [normalize(db) for db in args.fallback_db if normalize(db)]
+        self.column_aliases: Dict[str, str] = {}
+        for col in df.columns:
+            display = str(col).strip()
+            canonical = self._canonical_column_name(display)
+            if canonical and canonical not in self.column_aliases:
+                self.column_aliases[canonical] = display
 
     def log_progress(self, message: str) -> None:
         elapsed = int(time.time() - self.start_time)
@@ -935,6 +1069,17 @@ class LineageRunner:
             f"{current_row}/{self.total_rows} righe ({pct:.1f}%) - "
             f"oggetti catalogo: {len(self.object_catalog)} - fallimenti: {len(self.failure_records)}"
         )
+
+    @staticmethod
+    def _canonical_column_name(name: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", name.lower())
+
+    def _get_column_value(self, row: pd.Series, column_name: str) -> Optional[object]:
+        canonical = self._canonical_column_name(column_name)
+        actual = self.column_aliases.get(canonical)
+        if actual is None:
+            return None
+        return row.get(actual)
 
     def register_object(self, obj: LineageObject) -> LineageObject:
         key = make_object_key(obj.server, obj.database, obj.object_schema, obj.object_name)
@@ -956,12 +1101,13 @@ class LineageRunner:
     def process_input_rows(self) -> None:
         for row_idx, (_, row) in enumerate(self.df.iterrows(), start=1):
             try:
-                file_name = normalize(row.get("FileName"))
-                path_file = normalize(row.get("Path_File"))
-                server = normalize(self.args.override_server or row.get("Server"))
-                database_hint = normalize(row.get("Database"))
-                schema = normalize(row.get("Schema")) or "dbo"
-                table = normalize(row.get("Table"))
+                file_name = normalize(self._get_column_value(row, "FileName"))
+                path_file = normalize(self._get_column_value(row, "Path_File"))
+                row_server = self._get_column_value(row, "Server")
+                server = normalize(self.args.override_server or row_server)
+                database_hint = normalize(self._get_column_value(row, "Database"))
+                schema = normalize(self._get_column_value(row, "Schema")) or "dbo"
+                table = normalize(self._get_column_value(row, "Table"))
                 if not server or not table:
                     self.add_failure_record(
                         {
@@ -982,6 +1128,7 @@ class LineageRunner:
                     self.args.scan_all_databases,
                     self.args.driver,
                     self.server_db_cache,
+                    self.args.connect_timeout,
                 )
 
                 objects: List[LineageObject] = []
@@ -1006,6 +1153,7 @@ class LineageRunner:
                                 schema,
                                 table,
                                 level=1,
+                                connection_resolver=self.pool.get,
                             )
                             objects = [fetched] if fetched else []
                         else:
@@ -1016,6 +1164,7 @@ class LineageRunner:
                                 schema,
                                 table,
                                 level=1,
+                                connection_resolver=self.pool.get,
                             )
                     except pyodbc.Error as exc:
                         self.add_failure_record(
@@ -1142,6 +1291,7 @@ class LineageRunner:
                         schema_norm,
                         dep_name,
                         current.level + 1,
+                        connection_resolver=self.pool.get,
                     )
                 except pyodbc.Error as exc:
                     self.add_failure_record(
@@ -1197,6 +1347,12 @@ class LineageRunner:
                 referenced_obj = self.object_catalog.get(dep_key)
                 resolved_type = referenced_obj.object_type if referenced_obj else dep_type
                 dependency_level = referenced_obj.level if referenced_obj else ""
+                inferred_scope = classify_dependency_scope(
+                    obj.server,
+                    obj.database,
+                    target_server,
+                    target_db,
+                )
                 rows.append(
                     {
                         "ObjectServer": sanitize_for_excel(obj.server),
@@ -1212,6 +1368,7 @@ class LineageRunner:
                         "DependencySchema": sanitize_for_excel(schema_norm),
                         "DependencyName": sanitize_for_excel(dep_name),
                         "DependencyExtractionLevel": dependency_level,
+                        "DependencyScope": inferred_scope,
                     }
                 )
         return rows
@@ -1305,8 +1462,22 @@ class LineageRunner:
             with pd.ExcelWriter(file_output) as writer:
                 file_report.to_excel(writer, sheet_name="ReportLineage", index=False)
                 file_dep.to_excel(writer, sheet_name="DependencyEdges", index=False)
-                if not file_paths.empty:
+                total_rows = len(file_paths)
+                if total_rows <= MAX_EXCEL_ROWS:
                     file_paths.to_excel(writer, sheet_name="LineagePaths", index=False)
+                else:
+                    chunk_index = 1
+                    for start in range(0, total_rows, MAX_EXCEL_ROWS):
+                        end = min(start + MAX_EXCEL_ROWS, total_rows)
+                        chunk = file_paths.iloc[start:end]
+                        sheet_label = f"LineagePaths_{chunk_index}"
+                        chunk.to_excel(writer, sheet_name=sheet_label, index=False)
+                        chunk_index += 1
+                    self.log_progress(
+                        "LineagePaths per FileName '"
+                        + (file_name or "(vuoto)")
+                        + f"' suddiviso in {chunk_index - 1} fogli da max {MAX_EXCEL_ROWS} righe"
+                    )
                 write_guide_sheet(writer, REPORT_GUIDE)
             self.log_progress(
                 f"Lineage per FileName '{file_name or '(vuoto)'}' -> {file_output}"
@@ -1315,11 +1486,24 @@ class LineageRunner:
     def export_outputs(self, dep_rows: List[Dict[str, object]]) -> None:
         args = self.args
         report_df = pd.DataFrame(self.report_records, columns=REPORT_COLUMNS)
+        dep_df = pd.DataFrame(dep_rows, columns=DEPENDENCY_COLUMNS)
+
+        path_rows, path_columns = generate_lineage_paths(
+            self.lineage_roots,
+            self.object_catalog,
+            args.max_depth,
+        )
+        path_df = pd.DataFrame(path_rows, columns=path_columns)
+        self.log_progress(
+            "Export LineagePaths aggregato disattivato: mantenuti solo i workbook per FileName"
+        )
+
+        self.export_per_file_lineage(report_df, dep_df, path_df)
+
         report_path = Path(args.report_output)
         export_single_sheet_with_guide(report_df, report_path, "ReportLineage", REPORT_GUIDE)
         self.log_progress(f"Report→Oggetto: {len(self.report_records)} righe -> {report_path}")
 
-        dep_df = pd.DataFrame(dep_rows, columns=DEPENDENCY_COLUMNS)
         dep_path = Path(args.dependency_output)
         dep_path.parent.mkdir(parents=True, exist_ok=True)
         with pd.ExcelWriter(dep_path) as writer:
@@ -1342,18 +1526,6 @@ class LineageRunner:
                     )
             write_guide_sheet(writer, DEPENDENCY_GUIDE)
         self.log_progress(f"Dipendenze normalizzate: {len(dep_rows)} righe -> {dep_path}")
-
-        path_rows, path_columns = generate_lineage_paths(
-            self.lineage_roots,
-            self.object_catalog,
-            args.max_depth,
-        )
-        path_df = pd.DataFrame(path_rows, columns=path_columns)
-        self.log_progress(
-            "Export LineagePaths aggregato disattivato: mantenuti solo i workbook per FileName"
-        )
-
-        self.export_per_file_lineage(report_df, dep_df, path_df)
 
         dep_metrics_df = dep_df.copy()
         if dep_metrics_df.empty:
@@ -1603,15 +1775,15 @@ class LineageRunner:
         try:
             self.process_input_rows()
             self.expand_dependencies()
+
+            if not self.report_records:
+                self.log_progress("Nessun oggetto derivato individuato")
+                return
+
+            dep_rows = self.build_dependency_rows()
+            self.export_outputs(dep_rows)
         finally:
             self.pool.close()
-
-        if not self.report_records:
-            self.log_progress("Nessun oggetto derivato individuato")
-            return
-
-        dep_rows = self.build_dependency_rows()
-        self.export_outputs(dep_rows)
 
 
 def main() -> None:
